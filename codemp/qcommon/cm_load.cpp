@@ -625,6 +625,7 @@ static void CM_LoadMap_Actual( const char *name, qboolean clientload, int *check
 	static unsigned	last_checksum;
 	char			origName[MAX_OSPATH];
 	void			*newBuff = 0;
+	void			*patchedBuf = 0;
 
 	if ( !name || !name[0] ) {
 		Com_Error( ERR_DROP, "CM_LoadMap: NULL name" );
@@ -713,6 +714,31 @@ static void CM_LoadMap_Actual( const char *name, qboolean clientload, int *check
 	last_checksum = LittleLong (Com_BlockChecksum (buf, iBSPLen));
 	if ( checksum )
 		*checksum = last_checksum;
+
+	// look for a patched map
+	patchedBuf = NULL;
+	fileHandle_t p;
+	const int patchLen = FS_FOpenFileRead( va( "%s.patched", name ), &p, qfalse );
+	if ( p )
+	{
+		Com_Printf( "Found patch file %s.patched\n", name );
+		patchedBuf = Z_Malloc( patchLen, TAG_FILESYS );
+		FS_Read( patchedBuf, patchLen, p );
+		FS_FCloseFile( p );
+
+		// Use the patched binary stream, checksum will still be the old one
+		if ( patchedBuf ) {
+			buf = ( int* )patchedBuf;
+
+			if ( &cm == &cmg )
+			{
+				gpvCachedMapDiskImage = patchedBuf;
+				patchedBuf = 0;
+			}
+		} else {
+			Com_Printf( "Could not load patch file %s.patch\n", name );
+		}
+	}
 
 	header = *(dheader_t *)buf;
 	for (size_t i=0 ; i<sizeof(dheader_t)/4 ; i++) {
