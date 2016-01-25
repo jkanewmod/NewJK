@@ -728,6 +728,7 @@ static void CM_LoadMap_Actual( const char *name, qboolean clientload, int *check
 
 		// Use the patched binary stream, checksum will still be the old one
 		if ( patchedBuf ) {
+			Z_Free( buf ); // free the old buffer
 			buf = ( int* )patchedBuf;
 
 			if ( &cm == &cmg )
@@ -737,6 +738,7 @@ static void CM_LoadMap_Actual( const char *name, qboolean clientload, int *check
 			}
 		} else {
 			Com_Printf( "Could not load patch file %s.patch\n", name );
+			Z_Free( patchedBuf );
 		}
 	}
 
