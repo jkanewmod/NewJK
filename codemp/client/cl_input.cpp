@@ -1228,6 +1228,9 @@ void CL_CmdButtons( usercmd_t *cmd ) {
 	if ( kg.anykeydown && Key_GetCatcher( ) == 0 ) {
 		cmd->buttons |= BUTTON_ANY;
 	}
+
+	if (cl_useToggle->integer)
+		cmd->buttons |= BUTTON_USE;
 }
 
 

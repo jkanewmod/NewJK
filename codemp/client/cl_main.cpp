@@ -37,6 +37,8 @@ along with this program; if not, see <http://www.gnu.org/licenses/>.
 #include "snd_local.h"
 #include "sys/sys_loadlib.h"
 
+cvar_t	*cl_useToggle;
+
 cvar_t	*cl_renderer;
 
 cvar_t	*cl_nodelta;
@@ -2678,6 +2680,7 @@ void CL_Init( void ) {
 	//
 	// register our variables
 	//
+	cl_useToggle = Cvar_Get("cl_useToggle", "0", CVAR_TEMP);
 	cl_noprint = Cvar_Get( "cl_noprint", "0", 0 );
 	cl_motd = Cvar_Get ("cl_motd", "1", CVAR_ARCHIVE, "Display welcome message from master server on the bottom of connection screen" );
 	cl_motdServer[0] = Cvar_Get( "cl_motdServer1", UPDATE_SERVER_NAME, 0 );

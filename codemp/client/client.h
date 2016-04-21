@@ -362,6 +362,8 @@ extern	refexport_t		*re;		// interface to refresh .dll
 //
 // cvars
 //
+extern	cvar_t	*cl_useToggle;
+
 extern	cvar_t	*cl_nodelta;
 extern	cvar_t	*cl_debugMove;
 extern	cvar_t	*cl_noprint;

@@ -318,7 +318,14 @@ void Com_Quit_f( void ) {
 	Sys_Quit ();
 }
 
-
+void Com_UseToggle_f(void) {
+	char buf[MAX_TOKEN_CHARS] = { 0 };
+	Cvar_VariableStringBuffer("cl_useToggle", buf, sizeof(buf));
+	if (atoi(buf))
+		Cvar_Set("cl_useToggle", "0");
+	else
+		Cvar_Set("cl_useToggle", "1");
+}
 
 /*
 ============================================================================
@@ -1175,6 +1182,7 @@ void Com_Init( char *commandLine ) {
 			Cmd_AddCommand ("freeze", Com_Freeze_f);
 		}
 		Cmd_AddCommand ("quit", Com_Quit_f, "Quits the game" );
+		Cmd_AddCommand ("nm_useToggle", Com_UseToggle_f, "Toggles +use on and off");
 #ifndef FINAL_BUILD
 		Cmd_AddCommand ("changeVectors", MSG_ReportChangeVectors_f );
 #endif
