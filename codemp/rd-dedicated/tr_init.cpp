@@ -341,7 +341,7 @@ void R_Register( void )
 	r_depthbits							= ri->Cvar_Get( "r_depthbits",						"0",						CVAR_ARCHIVE|CVAR_LATCH, "" );
 	r_overBrightBits					= ri->Cvar_Get( "r_overBrightBits",					"0",						CVAR_ARCHIVE|CVAR_LATCH, "" );
 	r_ignorehwgamma						= ri->Cvar_Get( "r_ignorehwgamma",					"0",						CVAR_ARCHIVE|CVAR_LATCH, "" );
-	r_mode								= ri->Cvar_Get( "r_mode",							"4",						CVAR_ARCHIVE|CVAR_LATCH, "" );
+	r_mode								= ri->Cvar_Get( "r_mode",							"-2",						CVAR_ARCHIVE|CVAR_LATCH, "" );
 	r_fullscreen						= ri->Cvar_Get( "r_fullscreen",						"0",						CVAR_ARCHIVE|CVAR_LATCH, "" );
 	r_noborder							= ri->Cvar_Get( "r_noborder",						"0",						CVAR_ARCHIVE|CVAR_LATCH, "" );
 	r_centerWindow						= ri->Cvar_Get( "r_centerWindow",					"0",						CVAR_ARCHIVE|CVAR_LATCH, "" );
