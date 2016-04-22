@@ -104,6 +104,8 @@ cvar_t	*cl_consoleKeys;
 
 cvar_t  *cl_lanForcePackets;
 
+cvar_t	*cl_drawRecording;
+
 vec3_t cl_windVec;
 
 
@@ -2758,6 +2760,8 @@ void CL_Init( void ) {
 	Cvar_Get( "cl_maxPing", "800", CVAR_ARCHIVE, "Max. ping for servers when searching the serverlist" );
 
 	cl_lanForcePackets = Cvar_Get ("cl_lanForcePackets", "1", CVAR_ARCHIVE);
+
+	cl_drawRecording = Cvar_Get("cl_drawRecording", "1", CVAR_ARCHIVE, "Show 'recording' message for demos");
 
 	// enable the ja_guid player identifier in userinfo by default in OpenJK
 	cl_enableGuid = Cvar_Get("cl_enableGuid", "1", CVAR_ARCHIVE, "Enable GUID userinfo identifier" );
