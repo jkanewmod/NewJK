@@ -321,10 +321,14 @@ void Com_Quit_f( void ) {
 void Com_UseToggle_f(void) {
 	char buf[MAX_TOKEN_CHARS] = { 0 };
 	Cvar_VariableStringBuffer("cl_useToggle", buf, sizeof(buf));
-	if (atoi(buf))
+	if (atoi(buf)) {
 		Cvar_Set("cl_useToggle", "0");
-	else
+		Com_Printf(S_COLOR_RED"+USE DISABLED\n");
+	}
+	else {
 		Cvar_Set("cl_useToggle", "1");
+		Com_Printf(S_COLOR_GREEN"+USE ENABLED\n");
+	}
 }
 
 /*
