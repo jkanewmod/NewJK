@@ -2120,6 +2120,16 @@ void CL_CheckUserinfo( void ) {
 
 }
 
+//turn off cl_useToggle at intermission
+static void CL_CheckIntermissionUseToggle(void) {
+	if (cl.snap.valid && cl.snap.ps.pm_type == PM_INTERMISSION) {
+		char buf[MAX_TOKEN_CHARS] = { 0 };
+		Cvar_VariableStringBuffer("cl_useToggle", buf, sizeof(buf));
+		if (buf && buf[0] && atoi(buf))
+			Cvar_Set("cl_useToggle", "0");
+	}
+}
+
 /*
 ==================
 CL_Frame
@@ -2222,6 +2232,8 @@ void CL_Frame ( int msec ) {
 		// save the current screen
 		CL_TakeVideoFrame( );
 	}
+
+	CL_CheckIntermissionUseToggle();
 }
 
 
