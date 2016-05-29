@@ -331,52 +331,33 @@ void Com_UseToggle_f(void) {
 	}
 }
 
-void Com_MNext_f(void) {
+//Simulate hardware media keys
+void Com_MediaKeys_f(const int key) {
 #ifdef _WIN32
 	INPUT ip;
 	ip.type = INPUT_KEYBOARD;
 	ip.ki.wScan = ip.ki.time = ip.ki.dwExtraInfo = ip.ki.dwFlags = 0;
-	ip.ki.wVk = 0xB0;
+	ip.ki.wVk = key;
 	SendInput(1, &ip, sizeof(INPUT));
 	ip.ki.dwFlags = KEYEVENTF_KEYUP;
 	SendInput(1, &ip, sizeof(INPUT));
 #endif
+}
+
+void Com_MNext_f(void) {
+	Com_MediaKeys_f(0xB0);
 }
 
 void Com_MPrev_f(void) {
-#ifdef _WIN32
-	INPUT ip;
-	ip.type = INPUT_KEYBOARD;
-	ip.ki.wScan = ip.ki.time = ip.ki.dwExtraInfo = ip.ki.dwFlags = 0;
-	ip.ki.wVk = 0xB1;
-	SendInput(1, &ip, sizeof(INPUT));
-	ip.ki.dwFlags = KEYEVENTF_KEYUP;
-	SendInput(1, &ip, sizeof(INPUT));
-#endif
+	Com_MediaKeys_f(0xB1);
 }
 
 void Com_MStop_f(void) {
-#ifdef _WIN32
-	INPUT ip;
-	ip.type = INPUT_KEYBOARD;
-	ip.ki.wScan = ip.ki.time = ip.ki.dwExtraInfo = ip.ki.dwFlags = 0;
-	ip.ki.wVk = 0xB2;
-	SendInput(1, &ip, sizeof(INPUT));
-	ip.ki.dwFlags = KEYEVENTF_KEYUP;
-	SendInput(1, &ip, sizeof(INPUT));
-#endif
+	Com_MediaKeys_f(0xB2);
 }
 
 void Com_MPause_f(void) {
-#ifdef _WIN32
-	INPUT ip;
-	ip.type = INPUT_KEYBOARD;
-	ip.ki.wScan = ip.ki.time = ip.ki.dwExtraInfo = ip.ki.dwFlags = 0;
-	ip.ki.wVk = 0xB3;
-	SendInput(1, &ip, sizeof(INPUT));
-	ip.ki.dwFlags = KEYEVENTF_KEYUP;
-	SendInput(1, &ip, sizeof(INPUT));
-#endif
+	Com_MediaKeys_f(0xB3);
 }
 
 /*
