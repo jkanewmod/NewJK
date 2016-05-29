@@ -683,8 +683,8 @@ void Console_Key( int key ) {
 			Com_sprintf( g_consoleField.buffer, sizeof( g_consoleField.buffer ), "%s", temp );
 			g_consoleField.cursor--;
 		}
-	//	else
-	//		Field_AutoComplete( &g_consoleField );
+		else if (cl_autoComplete->integer)
+			Field_AutoComplete( &g_consoleField );
 
 		// print executed command
 		Com_Printf( "%c%s\n", CONSOLE_PROMPT_CHAR, g_consoleField.buffer );
@@ -736,7 +736,6 @@ void Console_Key( int key ) {
 
 	// tab completion
 	if ( key == A_TAB ) {
-		Field_AutoComplete( &g_consoleField );
 		return;
 	}
 
