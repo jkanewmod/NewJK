@@ -106,7 +106,7 @@ cvar_t  *cl_lanForcePackets;
 
 cvar_t	*cl_drawRecording;
 cvar_t	*cl_drawColorCodes;
-cvar_t	*cl_autoComplete;
+cvar_t	*cl_enterAutoComplete;
 
 vec3_t cl_windVec;
 
@@ -2777,7 +2777,7 @@ void CL_Init( void ) {
 
 	cl_drawRecording = Cvar_Get("cl_drawRecording", "1", CVAR_ARCHIVE, "Show 'recording' message for demos");
 	cl_drawColorCodes = Cvar_Get("cl_drawColorCodes", "0", CVAR_ARCHIVE, "Show color code text (^ 1, etc)");
-	cl_autoComplete = Cvar_Get("cl_autoComplete", "1", CVAR_ARCHIVE, "Press enter to automatically complete console commands");
+	cl_enterAutoComplete = Cvar_Get("cl_enterAutoComplete", "1", CVAR_ARCHIVE, "Press enter to automatically complete console commands");
 
 	// enable the ja_guid player identifier in userinfo by default in OpenJK
 	cl_enableGuid = Cvar_Get("cl_enableGuid", "1", CVAR_ARCHIVE, "Enable GUID userinfo identifier" );
