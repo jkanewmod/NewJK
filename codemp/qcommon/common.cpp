@@ -331,6 +331,54 @@ void Com_UseToggle_f(void) {
 	}
 }
 
+void Com_MNext_f(void) {
+#ifdef _WIN32
+	INPUT ip;
+	ip.type = INPUT_KEYBOARD;
+	ip.ki.wScan = ip.ki.time = ip.ki.dwExtraInfo = ip.ki.dwFlags = 0;
+	ip.ki.wVk = 0xB0;
+	SendInput(1, &ip, sizeof(INPUT));
+	ip.ki.dwFlags = KEYEVENTF_KEYUP;
+	SendInput(1, &ip, sizeof(INPUT));
+#endif
+}
+
+void Com_MPrev_f(void) {
+#ifdef _WIN32
+	INPUT ip;
+	ip.type = INPUT_KEYBOARD;
+	ip.ki.wScan = ip.ki.time = ip.ki.dwExtraInfo = ip.ki.dwFlags = 0;
+	ip.ki.wVk = 0xB1;
+	SendInput(1, &ip, sizeof(INPUT));
+	ip.ki.dwFlags = KEYEVENTF_KEYUP;
+	SendInput(1, &ip, sizeof(INPUT));
+#endif
+}
+
+void Com_MStop_f(void) {
+#ifdef _WIN32
+	INPUT ip;
+	ip.type = INPUT_KEYBOARD;
+	ip.ki.wScan = ip.ki.time = ip.ki.dwExtraInfo = ip.ki.dwFlags = 0;
+	ip.ki.wVk = 0xB2;
+	SendInput(1, &ip, sizeof(INPUT));
+	ip.ki.dwFlags = KEYEVENTF_KEYUP;
+	SendInput(1, &ip, sizeof(INPUT));
+#endif
+}
+
+void Com_MPause_f(void) {
+#ifdef _WIN32
+	INPUT ip;
+	ip.type = INPUT_KEYBOARD;
+	ip.ki.wScan = ip.ki.time = ip.ki.dwExtraInfo = ip.ki.dwFlags = 0;
+	ip.ki.wVk = 0xB3;
+	SendInput(1, &ip, sizeof(INPUT));
+	ip.ki.dwFlags = KEYEVENTF_KEYUP;
+	SendInput(1, &ip, sizeof(INPUT));
+#endif
+}
+
 /*
 ============================================================================
 
@@ -1187,6 +1235,10 @@ void Com_Init( char *commandLine ) {
 		}
 		Cmd_AddCommand ("quit", Com_Quit_f, "Quits the game" );
 		Cmd_AddCommand ("nm_useToggle", Com_UseToggle_f, "Toggles +use on and off");
+		Cmd_AddCommand ("mnext", Com_MNext_f, "Simulates hardware 'next track' key");
+		Cmd_AddCommand ("mprev", Com_MPrev_f, "Simulates hardware 'previous track' key");
+		Cmd_AddCommand ("mstop", Com_MStop_f, "Simulates hardware 'stop media' key");
+		Cmd_AddCommand ("mpause", Com_MPause_f, "Simulates hardware 'pause media' key");
 #ifndef FINAL_BUILD
 		Cmd_AddCommand ("changeVectors", MSG_ReportChangeVectors_f );
 #endif
