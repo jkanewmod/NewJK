@@ -736,6 +736,7 @@ void Console_Key( int key ) {
 
 	// tab completion
 	if ( key == A_TAB ) {
+		Field_AutoComplete(&g_consoleField);
 		return;
 	}
 
