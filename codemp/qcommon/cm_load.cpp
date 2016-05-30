@@ -737,7 +737,7 @@ static void CM_LoadMap_Actual( const char *name, qboolean clientload, int *check
 				patchedBuf = 0;
 			}
 		} else {
-			Com_Printf( "Could not load patch file %s.patch\n", name );
+			Com_Printf( "Could not load patch file %s.patched\n", name );
 			Z_Free( patchedBuf );
 		}
 	}
