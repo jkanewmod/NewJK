@@ -586,7 +586,7 @@ cvar_t *Cvar_Set2( const char *var_name, const char *value, uint32_t defaultFlag
 	{
 		if ( (var->flags & (CVAR_SYSTEMINFO|CVAR_SERVER_CREATED)) && CL_ConnectedToRemoteServer() )
 		{
-			Com_Printf ("%s can only be set by server.\n", var_name);
+			//Com_Printf ("%s can only be set by server.\n", var_name);
 			return var;
 		}
 
@@ -757,7 +757,7 @@ void Cvar_VM_Set( const char *var_name, const char *value, vmSlots_t vmslot )
 
 	if ( vmslot != VM_GAME && (flags & CVAR_SYSTEMINFO) && CL_ConnectedToRemoteServer() )
 	{
-		Com_Printf ("%s can only be set by server.\n", var_name);
+		//Com_Printf ("%s can only be set by server.\n", var_name);
 		return;
 	}
 
