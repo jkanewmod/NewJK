@@ -2775,7 +2775,7 @@ void CL_Init( void ) {
 
 	cl_lanForcePackets = Cvar_Get ("cl_lanForcePackets", "1", CVAR_ARCHIVE);
 
-	cl_drawRecording = Cvar_Get("cl_drawRecording", "1", CVAR_ARCHIVE, "Show 'recording' message for demos");
+	cl_drawRecording = Cvar_Get("cl_drawRecording", "0", CVAR_ARCHIVE, "Show 'recording' message for demos");
 	cl_drawColorCodes = Cvar_Get("cl_drawColorCodes", "0", CVAR_ARCHIVE, "Show color code text (^ 1, etc)");
 	cl_enterAutoComplete = Cvar_Get("cl_enterAutoComplete", "1", CVAR_ARCHIVE, "Press enter to automatically complete console commands");
 
