@@ -2001,7 +2001,7 @@ qboolean CompleteCommandOld(field_t *edit)
 
 	Com_Memcpy(&temp, edit, sizeof(field_t));
 
-	if (matchCount == 1) {
+	if (matchCount == 1 || !Q_stricmp(edit->buffer, shortestMatch)) {
 		Com_sprintf(edit->buffer, sizeof(edit->buffer), "%s", shortestMatch);
 		if (Cmd_Argc() == 1) {
 			Q_strcat(edit->buffer, sizeof(edit->buffer), " ");
