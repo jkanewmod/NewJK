@@ -1286,7 +1286,7 @@ void Com_Init( char *commandLine ) {
 
 		com_bootlogo = Cvar_Get( "com_bootlogo", "0", CVAR_ARCHIVE, "Show intro movies" );
 
-		s = va("%s %s %s", JK_VERSION_OLD, PLATFORM_STRING, __DATE__ );
+		s = va("%s %s %s", JK_VERSION, PLATFORM_STRING, __DATE__ );
 		com_version = Cvar_Get ("version", s, CVAR_ROM | CVAR_SERVERINFO );
 
 		SE_Init();
