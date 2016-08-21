@@ -223,7 +223,8 @@ typedef enum uiExportLegacy_e {
 	UI_CONSOLE_COMMAND,
 	UI_DRAW_CONNECT_SCREEN,
 	UI_HASUNIQUECDKEY,
-	UI_MENU_RESET
+	UI_MENU_RESET,
+	UI_POST_CONNECT = 1000
 } uiExportLegacy_t;
 
 typedef struct uiImport_s {

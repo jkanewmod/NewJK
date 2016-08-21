@@ -119,6 +119,7 @@ qboolean UIVM_ConsoleCommand( int realTime ) {
 
 	return uie->ConsoleCommand( realTime );
 }
+
 void UIVM_DrawConnectScreen( qboolean overlay ) {
 	if ( uivm->isLegacy ) {
 		VM_Call( uivm, UI_DRAW_CONNECT_SCREEN, overlay );
@@ -127,6 +128,12 @@ void UIVM_DrawConnectScreen( qboolean overlay ) {
 	VMSwap v( uivm );
 
 	uie->DrawConnectScreen( overlay );
+}
+
+void UIVM_PostConnect( void ) {
+	if ( uivm->isLegacy ) {
+		VM_Call( uivm, UI_POST_CONNECT );
+	}
 }
 
 //
