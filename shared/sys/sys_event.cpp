@@ -97,11 +97,11 @@ void Sys_QueEvent( int time, sysEventType_t type, int value, int value2, int ptr
 		// Spam less often from Com_PushEvent
 #ifndef _DEBUG
 		if ( !printedWarning ) {
-			Com_Printf( "Sys_QueEvent: overflow (event type %i) (value: %i) (value2: %i)\n", type, value, value2 );
+			//Com_Printf( "Sys_QueEvent: overflow (event type %i) (value: %i) (value2: %i)\n", type, value, value2 );
 			printedWarning = true;
 		}
 #else
-		Com_Printf( "Sys_QueEvent: overflow (event type %i) (value: %i) (value2: %i)\n", type, value, value2 );
+		//Com_Printf( "Sys_QueEvent: overflow (event type %i) (value: %i) (value2: %i)\n", type, value, value2 );
 #endif
 		// we are discarding an event, but don't leak memory
 		if ( ev->evPtr ) {
