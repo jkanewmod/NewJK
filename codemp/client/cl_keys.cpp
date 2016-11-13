@@ -1357,7 +1357,7 @@ void CL_KeyDownEvent( int key, unsigned time )
 		}
 
 		if ( !(Key_GetCatcher() & KEYCATCH_UI) ) {
-			if ( cls.state == CA_ACTIVE && !clc.demoplaying )
+			if ( cls.state == CA_ACTIVE )
 				UIVM_SetActiveMenu( UIMENU_INGAME );
 			else {
 				CL_Disconnect_f();
