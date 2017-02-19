@@ -136,6 +136,19 @@ void UIVM_PostConnect( void ) {
 	}
 }
 
+void UIVM_ListCvar( int numSpaces ) {
+	if ( uivm->isLegacy ) {
+		VM_Call( uivm, UI_LIST_CVAR, numSpaces );
+	}
+}
+
+void UIVM_EnterCvar( void ) {
+	if ( uivm->isLegacy ) {
+		VM_Call( uivm, UI_ENTER_CVAR );
+	}
+}
+
+
 //
 // ui syscalls
 //	only used by legacy mods!

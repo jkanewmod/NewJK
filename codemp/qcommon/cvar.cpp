@@ -510,6 +510,7 @@ Cvar_Print
 Prints the value, default, and latched string of the given variable
 ============
 */
+extern void UIVM_EnterCvar( void );
 void Cvar_Print( cvar_t *v ) {
 	Com_Printf( S_COLOR_GREY "Cvar " S_COLOR_WHITE "%s = " S_COLOR_GREY "\"" S_COLOR_WHITE "%s" S_COLOR_GREY "\"" S_COLOR_WHITE, v->name, v->string );
 
@@ -525,7 +526,13 @@ void Cvar_Print( cvar_t *v ) {
 	if ( v->latchedString )
 		Com_Printf( "     latched = " S_COLOR_GREY "\"" S_COLOR_WHITE "%s" S_COLOR_GREY "\"\n", v->latchedString );
 
-	if ( v->description )
+	char nmVer[MAX_STRING_CHARS] = { 0 };
+	Cvar_VariableStringBuffer( "nm_ver", nmVer, sizeof( nmVer ) );
+	if ( VALIDSTRING( nmVer ) ) {
+		Cvar_Set( "cl_cvarInfo", v->name );
+		UIVM_EnterCvar( );
+	}
+	else if ( v->description )
 		Com_Printf( "%s\n", v->description );
 }
 
@@ -1137,6 +1144,7 @@ void Cvar_WriteVariables( fileHandle_t f ) {
 Cvar_List_f
 ============
 */
+extern void UIVM_ListCvar( int numSpaces );
 void Cvar_List_f( void ) {
 	cvar_t *var = NULL;
 	int i = 0;
@@ -1156,6 +1164,8 @@ void Cvar_List_f( void ) {
 		cvars.push_back( var );
 	}
 
+	char nmVer[MAX_STRING_CHARS] = { 0 };
+	Cvar_VariableStringBuffer( "nm_ver", nmVer, sizeof( nmVer ) );
 
 	// sort list alphabetically
 	std::sort( cvars.begin(), cvars.end(), CvarSort );
@@ -1166,6 +1176,7 @@ void Cvar_List_f( void ) {
 		++itr )
 	{
 		var = (*itr);
+		
 		if (var->flags & CVAR_SERVERINFO)	Com_Printf( "S" );	else Com_Printf( " " );
 		if (var->flags & CVAR_SYSTEMINFO)	Com_Printf( "s" );	else Com_Printf( " " );
 		if (var->flags & CVAR_USERINFO)		Com_Printf( "U" );	else Com_Printf( " " );
@@ -1179,7 +1190,13 @@ void Cvar_List_f( void ) {
 		Com_Printf( S_COLOR_WHITE " %s = " S_COLOR_GREY "\"" S_COLOR_WHITE "%s" S_COLOR_GREY "\"" S_COLOR_WHITE, var->name, var->string );
 		if ( var->latchedString )
 			Com_Printf( ", latched = " S_COLOR_GREY "\"" S_COLOR_WHITE "%s" S_COLOR_GREY "\"" S_COLOR_WHITE, var->latchedString );
+
 		Com_Printf( "\n" );
+
+		if (VALIDSTRING(nmVer)) {
+			Cvar_Set("cl_cvarInfo", var->name);
+			UIVM_ListCvar( 10 );
+		}
 	}
 
 	Com_Printf( "\n%i total cvars\n", i );
