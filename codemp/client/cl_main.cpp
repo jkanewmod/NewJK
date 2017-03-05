@@ -511,7 +511,7 @@ void CL_PlayDemo_f( void ) {
 	char		name[MAX_OSPATH], extension[32];
 	char		*arg;
 
-	if (Cmd_Argc() != 2) {
+	if (Cmd_Argc() < 2) {
 		Com_Printf ("demo <demoname>\n");
 		return;
 	}
@@ -521,7 +521,7 @@ void CL_PlayDemo_f( void ) {
 	Cvar_Set( "sv_killserver", "2" );
 
 	// open the demo file
-	arg = Cmd_Argv(1);
+	arg = Cmd_Args();
 
 	CL_Disconnect( qtrue );
 
