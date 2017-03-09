@@ -1937,98 +1937,6 @@ void Field_CompleteFilename( const char *dir, const char *ext, qboolean stripExt
 
 /*
 ===============
-CompleteCommandOld
-===============
-*/
-static void keyConcatArgs(field_t *field) {
-	int		i;
-	char	*arg;
-
-	for (i = 1; i < Cmd_Argc(); i++) {
-		Q_strcat(field->buffer, sizeof(field->buffer), " ");
-		arg = Cmd_Argv(i);
-		while (*arg) {
-			if (*arg == ' ') {
-				Q_strcat(field->buffer, sizeof(field->buffer), "\"");
-				break;
-			}
-			arg++;
-		}
-		Q_strcat(field->buffer, sizeof(field->buffer), Cmd_Argv(i));
-		if (*arg == ' ') {
-			Q_strcat(field->buffer, sizeof(field->buffer), "\"");
-		}
-	}
-}
-
-static void ConcatRemaining(const char *src, const char *start, field_t *field) {
-	char *str;
-
-	str = (char *)strstr(src, start);
-	if (!str) {
-		keyConcatArgs(field);
-		return;
-	}
-
-	str += strlen(start);
-	Q_strcat(field->buffer, sizeof(field->buffer), str);
-}
-
-qboolean CompleteCommandOld(field_t *edit)
-{
-	field_t		temp;
-
-	// only look at the first token for completion purposes
-	Cmd_TokenizeString(edit->buffer);
-	if (Cmd_Argv(1) && Cmd_Argv(1)[0]) // don't bother for multi-argument commands
-		return qfalse;
-	completionString = Cmd_Argv(0);
-	if (completionString[0] == '\\' || completionString[0] == '/') {
-		completionString++;
-	}
-	matchCount = 0;
-	shortestMatch[0] = 0;
-
-	if (strlen(completionString) == 0) {
-		return qfalse;
-	}
-
-	Cmd_CommandCompletion(FindMatches);
-	Cvar_CommandCompletion(FindMatches);
-
-	if (matchCount == 0) {
-		return qfalse;	// no matches
-	}
-
-	Com_Memcpy(&temp, edit, sizeof(field_t));
-
-	if (matchCount == 1 || !Q_stricmp(edit->buffer, shortestMatch)) {
-		Com_sprintf(edit->buffer, sizeof(edit->buffer), "%s", shortestMatch);
-		if (Cmd_Argc() == 1) {
-			Q_strcat(edit->buffer, sizeof(edit->buffer), " ");
-		}
-		else {
-			ConcatRemaining(temp.buffer, completionString, edit);
-		}
-		edit->cursor = strlen(edit->buffer);
-		return qfalse;
-	}
-
-	// multiple matches, complete to shortest
-	Com_sprintf(edit->buffer, sizeof(edit->buffer), "%s", shortestMatch);
-	edit->cursor = strlen(edit->buffer);
-	ConcatRemaining(temp.buffer, completionString, edit);
-
-	Com_Printf("]%s\n", edit->buffer);
-
-	// run through again, printing matches
-	Cmd_CommandCompletion(PrintMatches);
-	Cvar_CommandCompletion(PrintMatches);
-	return qtrue;
-}
-
-/*
-===============
 Field_CompleteCommand
 ===============
 */
@@ -2095,23 +2003,16 @@ void Field_CompleteCommand( char *cmd, qboolean doCommands, qboolean doCvars )
 ===============
 Field_AutoComplete
 
-Perform Tab/Enter expansion
-Returns qtrue if we need to stop (enter auto-completion found multiple matches)
+Perform Tab expansion
 ===============
 */
-qboolean Field_AutoComplete( field_t *field, qboolean enter ) {
+void Field_AutoComplete( field_t *field ) {
 	if ( !field || !field->buffer[0] )
-		return qfalse;
+		return;
 
 	completionField = field;
-	qboolean returnMe = qfalse;
 
-	if (enter)
-		returnMe = CompleteCommandOld(field);
-	else
-		Field_CompleteCommand( completionField->buffer, qtrue, qtrue );
-
-	return returnMe;
+	Field_CompleteCommand( completionField->buffer, qtrue, qtrue );
 }
 
 /*
