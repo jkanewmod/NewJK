@@ -683,7 +683,7 @@ void Console_Key( int key ) {
 			Com_sprintf( g_consoleField.buffer, sizeof( g_consoleField.buffer ), "%s", temp );
 			g_consoleField.cursor--;
 		}
-		else if (cl_enterAutoComplete->integer)
+		else if (cl_autoComplete->integer)
 			Field_AutoComplete( &g_consoleField );
 
 		// print executed command

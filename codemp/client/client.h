@@ -417,7 +417,7 @@ extern  cvar_t  *cl_lanForcePackets;
 
 extern	cvar_t	*cl_drawRecording;
 extern	cvar_t	*cl_drawColorCodes;
-extern	cvar_t	*cl_enterAutoComplete;
+extern	cvar_t	*cl_autoComplete;
 
 //=================================================
 
