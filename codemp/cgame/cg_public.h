@@ -435,7 +435,9 @@ typedef enum cgameImportLegacy_e {
 	CG_RE_INIT_RENDERER_TERRAIN,
 	CG_R_WEATHER_CONTENTS_OVERRIDE,
 	CG_R_WORLDEFFECTCOMMAND,
-	CG_WE_ADDWEATHERZONE
+	CG_WE_ADDWEATHERZONE,
+	// newmod start
+	CG_CVAR_FLAGS = 5000
 } cgameImportLegacy_t;
 
 typedef enum cgameExportLegacy_e {

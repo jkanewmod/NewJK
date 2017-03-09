@@ -1684,6 +1684,9 @@ intptr_t CL_CgameSystemCalls( intptr_t *args ) {
 		re->AddWeatherZone( (float *)VMA(1), (float *)VMA(2) );
 		return 0;
 
+	case CG_CVAR_FLAGS:
+		return Cvar_Flags( ( const char * )VMA( 1 ) );
+
 	default:
 		assert(0); // bk010102
 		Com_Error( ERR_DROP, "Bad cgame system trap: %ld", (long int) args[0] );
