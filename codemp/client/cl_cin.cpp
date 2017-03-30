@@ -1637,6 +1637,7 @@ void CIN_DrawCinematic (int handle) {
 }
 
 void CL_PlayCinematic_f(void) {
+#if 0
 	Com_DPrintf("CL_PlayCinematic_f\n");
 	if (cls.state == CA_CINEMATIC) {
 		SCR_StopCinematic();
@@ -1665,6 +1666,7 @@ void CL_PlayCinematic_f(void) {
 	{
 		Com_Printf(S_COLOR_RED "PlayCinematic(): Failed to open \"%s\"\n", arg);
 	}
+#endif
 }
 
 
