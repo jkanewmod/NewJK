@@ -345,22 +345,6 @@ void Com_MediaKeys_f(const int key) {
 #endif
 }
 
-void Com_MNext_f(void) {
-	Com_MediaKeys_f(0xB0);
-}
-
-void Com_MPrev_f(void) {
-	Com_MediaKeys_f(0xB1);
-}
-
-void Com_MStop_f(void) {
-	Com_MediaKeys_f(0xB2);
-}
-
-void Com_MPause_f(void) {
-	Com_MediaKeys_f(0xB3);
-}
-
 /*
 ============================================================================
 
@@ -1217,10 +1201,6 @@ void Com_Init( char *commandLine ) {
 		}
 		Cmd_AddCommand ("quit", Com_Quit_f, "Quits the game" );
 		Cmd_AddCommand ("nm_useToggle", Com_UseToggle_f, "Toggles +use on and off");
-		Cmd_AddCommand ("mnext", Com_MNext_f, "Simulates hardware 'next track' key");
-		Cmd_AddCommand ("mprev", Com_MPrev_f, "Simulates hardware 'previous track' key");
-		Cmd_AddCommand ("mstop", Com_MStop_f, "Simulates hardware 'stop media' key");
-		Cmd_AddCommand ("mpause", Com_MPause_f, "Simulates hardware 'pause media' key");
 #ifndef FINAL_BUILD
 		Cmd_AddCommand ("changeVectors", MSG_ReportChangeVectors_f );
 #endif

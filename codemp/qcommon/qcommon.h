@@ -755,10 +755,6 @@ void		QDECL Com_OPrintf( const char *fmt, ...); // Outputs to the VC / Windows D
 void 		NORETURN QDECL Com_Error( int code, const char *fmt, ... );
 void 		NORETURN Com_Quit_f( void );
 void		NORETURN Com_UseToggle_f( void );
-void		NORETURN Com_MNext_f(void);
-void		NORETURN Com_MPrev_f(void);
-void		NORETURN Com_MStop_f(void);
-void		NORETURN Com_MPause_f(void);
 int			Com_EventLoop( void );
 int			Com_Milliseconds( void );	// will be journaled properly
 uint32_t	Com_BlockChecksum( const void *buffer, int length );
