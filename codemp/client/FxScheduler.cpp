@@ -401,6 +401,19 @@ struct primitiveType_s { const char *name; EPrimType type; } primitiveTypes[] = 
 };
 static const size_t numPrimitiveTypes = ARRAY_LEN( primitiveTypes );
 
+// hack for known projectile filenames, we will force their life to 1
+static char projectileFilenames[][32] = {
+	"atst/shot", "atst/shot_red", "atst/side_alt_shot", "atst/side_main_shot", "blaster/npcshot", "blaster/shot",
+	"bowcaster/shot", "bryar/crackleShot", "bryar/npcshot", "bryar/shot", "concussion/shot", "demp2/projectile",
+	"emplaced/shot", "emplaced/shotnpc", "eweb/shot", "eweb/shotnpc", "flechette/alt_shot", "flechette/shot",
+	"noghri_stick/shot", "repeater/alt_projectile", "repeater/projectile", "rocket/shot", "turret/hoth_shot",
+	"turret/shot", "turret/turb_shot", "tusken/shot"
+};
+
+static int compareFilenames(const void *a, const void *b) {
+	return Q_stricmp((const char *)a, (const char *)b);
+}
+
 int CFxScheduler::ParseEffect( const char *file, CGPGroup *base )
 {
 	CGPGroup			*primitiveGroup;
@@ -418,6 +431,14 @@ int CFxScheduler::ParseEffect( const char *file, CGPGroup *base )
 		// failure
 		return 0;
 	}
+
+	// hack for projectiles
+	void *isProjectile = NULL;
+	if (VALIDSTRING(file))
+	{
+		isProjectile = bsearch(file, projectileFilenames, ARRAY_LEN(projectileFilenames), sizeof(*projectileFilenames), compareFilenames);
+	}
+
 	if ((pair = base->GetPairs())!=0)
 	{
 		grpName = pair->GetName();
@@ -451,6 +472,11 @@ int CFxScheduler::ParseEffect( const char *file, CGPGroup *base )
 
 			prim->mType = type;
 			prim->ParsePrimitive( primitiveGroup );
+
+			if (isProjectile)
+			{
+				prim->ParseLife("1");
+			}
 
 			// Add our primitive template to the effect list
 			AddPrimitiveToEffect( effect, prim );
