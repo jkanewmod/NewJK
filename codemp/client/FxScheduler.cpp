@@ -470,13 +470,13 @@ int CFxScheduler::ParseEffect( const char *file, CGPGroup *base )
 		{
 			prim = new CPrimitiveTemplate;
 
-			prim->mType = type;
-			prim->ParsePrimitive( primitiveGroup );
-
 			if (isProjectile)
 			{
 				prim->ParseLife("1");
 			}
+
+			prim->mType = type;
+			prim->ParsePrimitive( primitiveGroup );
 
 			// Add our primitive template to the effect list
 			AddPrimitiveToEffect( effect, prim );
