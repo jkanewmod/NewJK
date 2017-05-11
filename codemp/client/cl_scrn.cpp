@@ -184,7 +184,7 @@ void SCR_DrawStringExt( int x, int y, float size, const char *string, float *set
 	s = string;
 	xx = x;
 	while ( *s ) {
-		if ( !cl_drawColorCodes->integer || !noColorEscape && Q_IsColorString( s ) ) {
+		if ( Q_IsColorString( s ) ) {
 			s += 2;
 			continue;
 		}
@@ -205,10 +205,8 @@ void SCR_DrawStringExt( int x, int y, float size, const char *string, float *set
 				color[3] = setColor[3];
 				re->SetColor( color );
 			}
-			if ( !cl_drawColorCodes->integer || !noColorEscape ) {
-				s += 2;
-				continue;
-			}
+			s += 2;
+			continue;
 		}
 		SCR_DrawChar( xx, y, size, *s );
 		xx += size;
@@ -257,10 +255,8 @@ void SCR_DrawSmallStringExt( int x, int y, const char *string, float *setColor, 
 				color[3] = setColor[3];
 				re->SetColor( color );
 			}
-			if ( !cl_drawColorCodes->integer || !noColorEscape ) {
-				s += 2;
-				continue;
-			}
+			s += 2;
+			continue;
 		}
 		SCR_DrawSmallChar( xx, y, *s );
 		xx += SMALLCHAR_WIDTH;

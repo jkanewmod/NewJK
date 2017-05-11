@@ -463,12 +463,7 @@ void Field_VariableSizeDraw( field_t *edit, int x, int y, int width, int size, q
 			cursorChar = 10;
 		}
 
-		if (!cl_drawColorCodes->integer) {
-			i = drawLen - SCR_Strlen(str);
-		}
-		else {
-			i = drawLen - strlen(str);
-		}
+		i = drawLen - SCR_Strlen(str);
 
 		if ( size == SMALLCHAR_WIDTH ) {
 			SCR_DrawSmallChar( x + ( edit->cursor - prestep - i ) * size, y, cursorChar );
