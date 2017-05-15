@@ -426,9 +426,9 @@ void Com_StartupVariable( const char *match ) {
 		if(!match || !strcmp(s, match))
 		{
 			if((unsigned)Cvar_Flags(s) == CVAR_NONEXISTENT)
-				Cvar_Get(s, Cmd_Argv(2), CVAR_USER_CREATED);
+				Cvar_Get(s, Cmd_ArgsFrom(2), CVAR_USER_CREATED);
 			else
-				Cvar_Set2(s, Cmd_Argv(2), qfalse);
+				Cvar_Set2(s, Cmd_ArgsFrom(2), qfalse);
 		}
 	}
 }
@@ -1243,6 +1243,12 @@ void Com_WriteConfig_f( void ) {
 	if(!COM_CompareExtension(filename, ".cfg"))
 	{
 		Com_Printf( "Com_WriteConfig_f: Only the \".cfg\" extension is supported by this command!\n" );
+		return;
+	}
+
+	if(!FS_FilenameCompare(filename, "mpdefault.cfg") || !FS_FilenameCompare(filename, "default.cfg"))
+	{
+		Com_Printf( S_COLOR_YELLOW "Com_WriteConfig_f: The filename \"%s\" is reserved! Please choose another name.\n", filename );
 		return;
 	}
 
