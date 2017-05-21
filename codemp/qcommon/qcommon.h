@@ -571,7 +571,7 @@ issues.
 #ifdef DEDICATED
 #	define Q3CONFIG_CFG PRODUCT_NAME "_server.cfg"
 #else
-#	define Q3CONFIG_CFG PRODUCT_NAME ".cfg"
+#	define Q3CONFIG_CFG "jampconfig.cfg"
 #endif
 
 qboolean FS_Initialized();
