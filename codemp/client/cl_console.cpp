@@ -36,7 +36,7 @@ console_t	con;
 
 cvar_t		*con_conspeed;
 cvar_t		*con_notifytime;
-cvar_t		*con_opacity; // background alpha multiplier
+cvar_t		*cl_consoleOpacity; // background alpha multiplier
 cvar_t		*con_autoclear;
 
 #define	DEFAULT_CONSOLE_WIDTH	78
@@ -362,7 +362,7 @@ void Con_Init (void) {
 	con_conspeed = Cvar_Get ("scr_conspeed", "3", 0, "Console open/close speed");
 	Cvar_CheckRange (con_conspeed, 1.0f, 100.0f, qfalse);
 
-	con_opacity = Cvar_Get ("con_opacity", "1.0", CVAR_ARCHIVE, "Opacity of console background");
+	cl_consoleOpacity = Cvar_Get ("con_opacity", "1.0", CVAR_ARCHIVE, "Opacity of console background");
 	con_autoclear = Cvar_Get ("con_autoclear", "1", CVAR_ARCHIVE, "Automatically clear console input on close");
 
 	Field_Clear( &g_consoleField );
@@ -721,7 +721,7 @@ void Con_DrawSolidConsole( float frac ) {
 		if (frac < 1.0f)
 		{
 			vec4_t con_color;
-			MAKERGBA(con_color, 1.0f, 1.0f, 1.0f, Com_Clamp(0.0f, 1.0f, con_opacity->value));
+			MAKERGBA(con_color, 1.0f, 1.0f, 1.0f, Com_Clamp(0.0f, 1.0f, cl_consoleOpacity->value));
 			re->SetColor(con_color);
 		}
 		else
