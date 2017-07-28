@@ -386,6 +386,26 @@ static serverInfo_t *LAN_GetServerPtr( int source, int n ) {
 	return NULL;
 }
 
+// remove colors and anything that is not 0-9 or Az-Zz
+static void CleanLanString(char *string) {
+	char*	d;
+	char*	s;
+	int		c;
+
+	s = string;
+	d = string;
+	while ((c = *s) != 0) {
+		if (Q_IsColorString(s)) {
+			s++;
+		}
+		else if ((c >= '0' && c <= '9') || (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z')) {
+			*d++ = c;
+		}
+		s++;
+	}
+	*d = '\0';
+}
+
 /*
 ====================
 LAN_CompareServers
@@ -401,14 +421,33 @@ int LAN_CompareServers( int source, int sortKey, int sortDir, int s1, int s2 ) {
 		return 0;
 	}
 
+	char clean[2][MAX_HOSTNAMELENGTH];
+	memset(&clean, 0, sizeof(clean));
+
 	res = 0;
 	switch( sortKey ) {
 		case SORT_HOST:
-			res = Q_stricmp( server1->hostName, server2->hostName );
+			if ( server1->hostName[0] ) {
+				Q_strncpyz( clean[0], server1->hostName, sizeof( clean[0] ) );
+				CleanLanString( clean[0] );
+			}
+			if ( server2->hostName[0] ) {
+				Q_strncpyz( clean[1], server2->hostName, sizeof( clean[1] ) );
+				CleanLanString( clean[1] );
+			}
+			res = Q_stricmp( clean[0], clean[1] );
 			break;
 
 		case SORT_MAP:
-			res = Q_stricmp( server1->mapName, server2->mapName );
+			if ( server1->mapName[0] ) {
+				Q_strncpyz( clean[0], server1->mapName, sizeof( clean[0] ) );
+				CleanLanString( clean[0] );
+			}
+			if ( server2->mapName[0] ) {
+				Q_strncpyz( clean[1], server2->mapName, sizeof( clean[1] ) );
+				CleanLanString( clean[1] );
+			}
+			res = Q_stricmp( clean[0], clean[1] );
 			break;
 		case SORT_CLIENTS:
 			if (server1->clients < server2->clients) {
