@@ -1113,9 +1113,11 @@ void R_ScreenShotTGA_f (void) {
 	if ( !strcmp( ri->Cmd_Argv(1), "silent" ) )
 		silent = qtrue;
 
-	if ( ri->Cmd_Argc() == 2 && !silent ) {
+	if ( ri->Cmd_Argc() >= 2 && !silent ) {
 		// explicit filename
-		Com_sprintf( checkname, sizeof( checkname ), "screenshots/%s.tga", ri->Cmd_Argv( 1 ) );
+		char args[MAX_OSPATH] = { 0 };
+		ri->Cmd_ArgsBuffer(args, sizeof(args));
+		Com_sprintf( checkname, sizeof( checkname ), "screenshots/%s.tga", args );
 	}
 	else {
 		// timestamp the file
@@ -1157,9 +1159,11 @@ void R_ScreenShotPNG_f (void) {
 	if ( !strcmp( ri->Cmd_Argv(1), "silent" ) )
 		silent = qtrue;
 
-	if ( ri->Cmd_Argc() == 2 && !silent ) {
+	if ( ri->Cmd_Argc() >= 2 && !silent ) {
 		// explicit filename
-		Com_sprintf( checkname, sizeof( checkname ), "screenshots/%s.png", ri->Cmd_Argv( 1 ) );
+		char args[MAX_OSPATH] = { 0 };
+		ri->Cmd_ArgsBuffer(args, sizeof(args));
+		Com_sprintf( checkname, sizeof( checkname ), "screenshots/%s.png", args );
 	}
 	else {
 		// timestamp the file
@@ -1188,9 +1192,11 @@ void R_ScreenShot_f (void) {
 	if ( !strcmp( ri->Cmd_Argv(1), "silent" ) )
 		silent = qtrue;
 
-	if ( ri->Cmd_Argc() == 2 && !silent ) {
+	if ( ri->Cmd_Argc() >= 2 && !silent ) {
 		// explicit filename
-		Com_sprintf( checkname, sizeof( checkname ), "screenshots/%s.jpg", ri->Cmd_Argv( 1 ) );
+		char args[MAX_OSPATH] = { 0 };
+		ri->Cmd_ArgsBuffer(args, sizeof(args));
+		Com_sprintf( checkname, sizeof( checkname ), "screenshots/%s.jpg", args );
 	}
 	else {
 		// timestamp the file
