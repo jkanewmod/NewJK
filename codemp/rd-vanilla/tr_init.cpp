@@ -1123,9 +1123,10 @@ void R_ScreenShotTGA_f (void) {
 		// timestamp the file
 		R_ScreenshotFilename( checkname, sizeof( checkname ), ".tga" );
 
-		if ( ri->FS_FileExists( checkname ) ) {
-			ri->Printf( PRINT_ALL, "ScreenShot: Couldn't create a file\n");
-			return;
+		int num = 1;
+		while ( ri->FS_FileExists( checkname ) ) {
+			num++;
+			R_ScreenshotFilename( checkname, sizeof( checkname ), va( " (%i).tga", num ) );
  		}
 	}
 
@@ -1169,9 +1170,10 @@ void R_ScreenShotPNG_f (void) {
 		// timestamp the file
 		R_ScreenshotFilename( checkname, sizeof( checkname ), ".png" );
 
-		if ( ri->FS_FileExists( checkname ) ) {
-			ri->Printf( PRINT_ALL, "ScreenShot: Couldn't create a file\n");
-			return;
+		int num = 1;
+		while ( ri->FS_FileExists( checkname ) ) {
+			num++;
+			R_ScreenshotFilename( checkname, sizeof( checkname ), va( " (%i).png", num ) );
  		}
 	}
 
@@ -1201,10 +1203,10 @@ void R_ScreenShot_f (void) {
 	else {
 		// timestamp the file
 		R_ScreenshotFilename( checkname, sizeof( checkname ), ".jpg" );
-
-		if ( ri->FS_FileExists( checkname ) ) {
-			ri->Printf( PRINT_ALL, "ScreenShot: Couldn't create a file\n" );
-			return;
+		int num = 1;
+		while ( ri->FS_FileExists( checkname ) ) {
+			num++;
+			R_ScreenshotFilename( checkname, sizeof( checkname ), va( " (%i).jpg", num ) );
  		}
 	}
 
