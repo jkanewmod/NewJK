@@ -397,7 +397,7 @@ struct primitiveType_s { const char *name; EPrimType type; } primitiveTypes[] = 
 	{ "fxrunner", FxRunner },
 	{ "light", Light },
 	{ "cameraShake", CameraShake },
-	{ "flash", ScreenFlash },
+	{ "flashdarthplagueis", ScreenFlash },
 };
 static const size_t numPrimitiveTypes = ARRAY_LEN( primitiveTypes );
 
