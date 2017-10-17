@@ -1128,10 +1128,7 @@ void CL_Rcon_f( void ) {
 		rcon_address = clc.netchan.remoteAddress;
 	} else {
 		if (!strlen(rconAddress->string)) {
-			Com_Printf ("You must either be connected,\n"
-						"or set the 'rconAddress' cvar\n"
-						"to issue rcon commands\n");
-
+			Com_Printf ("You must either be connected, or set the 'rconAddress' cvar to issue rcon commands.\n");\
 			return;
 		}
 		NET_StringToAdr (rconAddress->string, &rcon_address);
