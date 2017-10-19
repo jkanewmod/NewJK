@@ -225,7 +225,7 @@ void CL_StopRecord_f( void ) {
 	int		len;
 
 	if ( !clc.demorecording ) {
-		Com_Printf ("Not recording a demo.\n");
+		Com_Printf ("*Not recording a demo.\n");
 		return;
 	}
 
@@ -237,7 +237,7 @@ void CL_StopRecord_f( void ) {
 	clc.demofile = 0;
 	clc.demorecording = qfalse;
 	clc.spDemoRecording = qfalse;
-	Com_Printf ("Stopped demo.\n");
+	Com_Printf ("*Stopped demo.\n");
 }
 
 /*
