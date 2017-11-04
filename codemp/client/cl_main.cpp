@@ -282,7 +282,7 @@ void CL_Record_f( void ) {
 
 	if ( clc.demorecording ) {
 		if (!clc.spDemoRecording) {
-			Com_Printf ("Already recording.\n");
+			Com_Printf ("*Already recording.\n");
 		}
 		return;
 	}
@@ -315,7 +315,7 @@ void CL_Record_f( void ) {
 
 	// open the demo file
 
-	Com_Printf ("recording to %s.\n", name);
+	Com_Printf ("*Recording to %s.\n", name);
 	clc.demofile = FS_FOpenFileWrite( name );
 	if ( !clc.demofile ) {
 		Com_Printf ("ERROR: couldn't open.\n");
