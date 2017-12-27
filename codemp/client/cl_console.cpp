@@ -586,7 +586,7 @@ void Con_DrawNotify (void)
 	currentColor = 7;
 	re->SetColor( g_color_table[currentColor] );
 
-	v = 0;
+	v = cl_consoleFeedYBase->integer + cl_consoleFeedYOffset->integer;
 	for (i= con.current-NUM_CON_TIMES+1 ; i<=con.current ; i++)
 	{
 		if (i < 0)

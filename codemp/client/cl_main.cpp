@@ -45,6 +45,8 @@ cvar_t	*cl_nodelta;
 cvar_t	*cl_debugMove;
 
 cvar_t	*cl_noprint;
+cvar_t	*cl_consoleFeedYBase;
+cvar_t	*cl_consoleFeedYOffset;
 cvar_t	*cl_motd;
 cvar_t	*cl_motdServer[MAX_MASTER_SERVERS];
 
@@ -2691,6 +2693,8 @@ void CL_Init( void ) {
 	//
 	cl_useToggle = Cvar_Get("cl_useToggle", "0", CVAR_TEMP, "Toggles +use on and off");
 	cl_noprint = Cvar_Get( "cl_noprint", "0", 0 );
+	cl_consoleFeedYBase = Cvar_Get( "cl_consoleFeedYBase", "0", 0 );
+	cl_consoleFeedYOffset = Cvar_Get( "cl_consoleFeedYOffset", "0", 0 );
 	cl_motd = Cvar_Get ("cl_motd", "1", CVAR_ARCHIVE, "Display welcome message from master server on the bottom of connection screen" );
 	cl_motdServer[0] = Cvar_Get( "cl_motdServer1", UPDATE_SERVER_NAME, 0 );
 	cl_motdServer[1] = Cvar_Get( "cl_motdServer2", JKHUB_UPDATE_SERVER_NAME, 0 );
