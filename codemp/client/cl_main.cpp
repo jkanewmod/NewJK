@@ -89,6 +89,8 @@ cvar_t	*cl_motdString;
 
 cvar_t	*cl_allowDownload;
 cvar_t	*cl_allowAltEnter;
+cvar_t	*cl_shiftToggleConsole;
+cvar_t	*cl_allowOSClose;
 cvar_t	*cl_allowEnterCompletion;
 cvar_t	*cl_conXOffset;
 cvar_t	*cl_inGameVideo;
@@ -2733,7 +2735,7 @@ void CL_Init( void ) {
 
 	// 0: legacy mouse acceleration
 	// 1: new implementation
-	cl_mouseAccelStyle = Cvar_Get( "cl_mouseAccelStyle", "0", CVAR_ARCHIVE, "Mouse accelration style (0:legacy, 1:QuakeLive)" );
+	cl_mouseAccelStyle = Cvar_Get( "cl_mouseAccelStyle", "0", CVAR_ARCHIVE, "Mouse acceleration style (0:legacy, 1:QuakeLive)" );
 	// offset for the power function (for style 1, ignored otherwise)
 	// this should be set to the max rate value
 	cl_mouseAccelOffset = Cvar_Get( "cl_mouseAccelOffset", "5", CVAR_ARCHIVE, "Mouse acceleration offset for style 1" );
@@ -2742,6 +2744,8 @@ void CL_Init( void ) {
 	cl_framerate	= Cvar_Get ("cl_framerate", "0", CVAR_TEMP);
 	cl_allowDownload = Cvar_Get ("cl_allowDownload", "0", CVAR_ARCHIVE, "Allow downloading custom paks from server");
 	cl_allowAltEnter = Cvar_Get ("cl_allowAltEnter", "1", CVAR_ARCHIVE, "Enables use of ALT+ENTER keyboard combo to toggle fullscreen" );
+	cl_shiftToggleConsole = Cvar_Get("cl_shiftToggleConsole", "1", CVAR_ARCHIVE, "Require SHIFT to open console");
+	cl_allowOSClose = Cvar_Get("cl_allowOSClose", "0", CVAR_ARCHIVE, "Allow closing Jedi Academy via the OS (e.g. hotkeys)" );
 	cl_allowEnterCompletion = Cvar_Get("cl_allowEnterCompletion", "1", CVAR_ARCHIVE, "Enables autocomplete when pressing enter");
 
 	cl_autolodscale = Cvar_Get( "cl_autolodscale", "1", CVAR_ARCHIVE );

@@ -378,9 +378,15 @@ static fakeAscii_t IN_TranslateSDLToJKKey( SDL_Keysym *keysym, qboolean down ) {
 		{
 			SDL_Keycode translated = SDL_GetKeyFromScancode( SDL_SCANCODE_GRAVE );
 
-			if ( (translated != SDLK_CARET) || (translated == SDLK_CARET && (keysym->mod & KMOD_SHIFT)) )
+			if (translated != SDLK_CARET && ((!cl_shiftToggleConsole->integer) ||
+				(cl_shiftToggleConsole->integer == 1 && (keysym->mod & KMOD_SHIFT || Key_GetCatcher() & KEYCATCH_CONSOLE)) ||
+				(cl_shiftToggleConsole->integer != 1 && keysym->mod & KMOD_SHIFT)))
 			{
 				// Console keys can't be bound or generate characters
+				key = A_CONSOLE;
+			}
+			else if (translated == SDLK_CARET && keysym->mod & KMOD_SHIFT)
+			{
 				key = A_CONSOLE;
 			}
 		}
@@ -834,16 +840,8 @@ static void IN_ProcessEvents( void )
 						uint32_t utf32 = ConvertUTF8ToUTF32( c, &c );
 						if( utf32 != 0 )
 						{
-							if( IN_IsConsoleKey( A_NULL, utf32 ) )
-							{
-								Sys_QueEvent( 0, SE_KEY, A_CONSOLE, qtrue, 0, NULL );
-								Sys_QueEvent( 0, SE_KEY, A_CONSOLE, qfalse, 0, NULL );
-							}
-							else
-							{
-								uint8_t encoded = ConvertUTF32ToExpectedCharset( utf32 );
-								Sys_QueEvent( 0, SE_CHAR, encoded, 0, 0, NULL );
-							}
+							uint8_t encoded = ConvertUTF32ToExpectedCharset( utf32 );
+							Sys_QueEvent( 0, SE_CHAR, encoded, 0, 0, NULL );
 						}
 					}
 				}
@@ -890,7 +888,8 @@ static void IN_ProcessEvents( void )
 				break;
 
 			case SDL_QUIT:
-				//Cbuf_ExecuteText(EXEC_NOW, "quit Closed window\n");
+				if ( cl_allowOSClose->integer || com_minimized->integer || com_unfocused->integer || ( Key_GetCatcher( ) & KEYCATCH_CONSOLE ) || !lastKeyDown )
+					Cbuf_ExecuteText(EXEC_NOW, "quit Closed window\n");
 				break;
 
 			case SDL_WINDOWEVENT:

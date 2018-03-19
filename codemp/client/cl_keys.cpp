@@ -1314,10 +1314,32 @@ void CL_KeyDownEvent( int key, unsigned time )
 		return;
 	}
 
+	qboolean shiftDown = kg.keys[A_SHIFT].down;
+
 	// console key is hardcoded, so the user can never unbind it
-	if ( key == A_CONSOLE || (kg.keys[A_SHIFT].down && key == A_ESCAPE) ) {
+	if (key == A_CONSOLE && ((!cl_shiftToggleConsole->integer) ||
+		(cl_shiftToggleConsole->integer == 1 && (shiftDown || Key_GetCatcher() & KEYCATCH_CONSOLE)) ||
+		(cl_shiftToggleConsole->integer != 1 && shiftDown))) {
 		Con_ToggleConsole_f();
-		Key_ClearStates ();
+		Key_ClearStates();
+		if (shiftDown) { // re-press shift to avoid annoyance of having to lift finger to toggle again
+			kg.keys[A_SHIFT].down = qtrue;
+			kg.keys[A_SHIFT].repeats++;
+			kg.keyDownCount++;
+			kg.anykeydown = qtrue;
+		}
+		return;
+	}
+
+	if (key == A_ESCAPE && shiftDown) {
+		Con_ToggleConsole_f();
+		Key_ClearStates();
+		if (shiftDown) { // re-press shift to avoid annoyance of having to lift finger to toggle again
+			kg.keys[A_SHIFT].down = qtrue;
+			kg.keys[A_SHIFT].repeats++;
+			kg.keyDownCount++;
+			kg.anykeydown = qtrue;
+		}
 		return;
 	}
 
@@ -1331,7 +1353,7 @@ void CL_KeyDownEvent( int key, unsigned time )
 
 	// escape is always handled special
 	if ( key == A_ESCAPE ) {
-		if ( !kg.keys[A_SHIFT].down && ( Key_GetCatcher( ) & KEYCATCH_CONSOLE ) ) {
+		if ( !shiftDown && ( Key_GetCatcher( ) & KEYCATCH_CONSOLE ) ) {
 			Con_ToggleConsole_f();
 			Key_ClearStates();
 			return;

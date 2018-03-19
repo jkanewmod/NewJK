@@ -43,6 +43,10 @@ cvar_t		*con_autoclear;
 
 vec4_t	console_color = {0.509f, 0.609f, 0.847f, 1.0f};
 
+void Con_ToggleConsoleFake_f (void) {
+	// this is so that the toggleconsole command does nothing without saying unrecognized command
+}
+
 /*
 ================
 Con_ToggleConsole_f
@@ -372,7 +376,7 @@ void Con_Init (void) {
 		historyEditLines[i].widthInChars = g_console_field_width;
 	}
 
-	Cmd_AddCommand( "toggleconsole", Con_ToggleConsole_f, "Show/hide console" );
+	Cmd_AddCommand( "toggleconsole", Con_ToggleConsoleFake_f, "Show/hide console" );
 	Cmd_AddCommand( "togglemenu", Con_ToggleMenu_f, "Show/hide the menu" );
 	Cmd_AddCommand( "messagemode", Con_MessageMode_f, "Global Chat" );
 	Cmd_AddCommand( "messagemode2", Con_MessageMode2_f, "Team Chat" );
