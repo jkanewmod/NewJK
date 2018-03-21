@@ -252,7 +252,7 @@ void RE_AddRefEntityToScene( const refEntity_t *ent ) {
 
 		if (!ghoul2[0].mModel)
 		{
-			ri->Printf( PRINT_ALL, "Your ghoul2 instance has no model!\n");
+			ri->Printf( PRINT_DEVELOPER, "Your ghoul2 instance has no model!\n");
 		}
 	}
 
