@@ -514,6 +514,8 @@ void CL_PlayDemo_f( void ) {
 	char		name[MAX_OSPATH], extension[32];
 	char		*arg;
 
+	Cvar_Set("demoname", "");
+
 	if (Cmd_Argc() < 2) {
 		Com_Printf ("demo <demoname>\n");
 		return;
@@ -547,13 +549,14 @@ void CL_PlayDemo_f( void ) {
 		}
 		return;
 	}
-	Q_strncpyz( clc.demoName, Cmd_Argv(1), sizeof( clc.demoName ) );
+	Q_strncpyz( clc.demoName, arg, sizeof( clc.demoName ) );
+	Cvar_Set("demoname", arg);
 
 	Con_Close();
 
 	cls.state = CA_CONNECTED;
 	clc.demoplaying = qtrue;
-	Q_strncpyz( cls.servername, Cmd_Argv(1), sizeof( cls.servername ) );
+	Q_strncpyz( cls.servername, arg, sizeof( cls.servername ) );
 
 	// read demo messages until connected
 	while ( cls.state >= CA_CONNECTED && cls.state < CA_PRIMED ) {
@@ -2810,6 +2813,8 @@ void CL_Init( void ) {
 	Cvar_Get ("char_color_red",  "255", CVAR_USERINFO | CVAR_ARCHIVE, "Player tint (Red)" );
 	Cvar_Get ("char_color_green",  "255", CVAR_USERINFO | CVAR_ARCHIVE, "Player tint (Green)" );
 	Cvar_Get ("char_color_blue",  "255", CVAR_USERINFO | CVAR_ARCHIVE, "Player tint (Blue)" );
+
+	Cvar_Get("demoname", "", CVAR_ROM, "Name of currently playing demo");
 
 	// cgame might not be initialized before menu is used
 	Cvar_Get ("cg_viewsize", "100", CVAR_ARCHIVE );
