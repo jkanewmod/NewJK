@@ -401,13 +401,14 @@ struct primitiveType_s { const char *name; EPrimType type; } primitiveTypes[] = 
 };
 static const size_t numPrimitiveTypes = ARRAY_LEN( primitiveTypes );
 
-// hack for known projectile filenames, we will force their life to 1 (concussion is intentionally omitted)
-static char projectileFilenames[][32] = {
+// hack for some known broken effects, we will force their life to 1
+// concussion and laser mine are intentionally omitted
+static char brokenEffectFilenames[][32] = {
 	"atst/shot", "atst/shot_red", "atst/side_alt_shot", "atst/side_main_shot", "blaster/npcshot", "blaster/shot",
-	"bowcaster/shot", "bryar/crackleShot", "bryar/npcshot", "demp2/projectile", "emplaced/shot", "emplaced/shotnpc",
-	"eweb/shot", "eweb/shotnpc", "flechette/alt_shot", "flechette/shot", "noghri_stick/shot", "repeater/alt_projectile",
+	"bryar/crackleShot", "bryar/npcshot", "emplaced/shot", "emplaced/shotnpc", "eweb/shot", "eweb/shotnpc",
+	"flechette/alt_shot", "flechette/shot", "mp/itemcone", "noghri_stick/shot", "repeater/alt_projectile",
 	"repeater/projectile", "rocket/shot", "ships/imp_blastershot", "ships/imp_torpshot", "ships/mine", "ships/reb_blastershot",
-	"ships/reb_torpshot", "ships/swoop_blastershot", "turret/hoth_shot", "turret/shot", "turret/turb_shot", "tusken/shot",
+	"ships/reb_torpshot", "ships/swoop_blastershot", "turret/hoth_shot", "turret/shot", "turret/turb_shot", "tusken/shot"
 };
 
 static int compareFilenames(const void *a, const void *b) {
@@ -436,7 +437,7 @@ int CFxScheduler::ParseEffect( const char *file, CGPGroup *base )
 	void *isProjectile = NULL;
 	if (VALIDSTRING(file))
 	{
-		isProjectile = bsearch(file, projectileFilenames, ARRAY_LEN(projectileFilenames), sizeof(*projectileFilenames), compareFilenames);
+		isProjectile = bsearch(file, brokenEffectFilenames, ARRAY_LEN(brokenEffectFilenames), sizeof(*brokenEffectFilenames), compareFilenames);
 	}
 
 	if ((pair = base->GetPairs())!=0)
@@ -478,8 +479,8 @@ int CFxScheduler::ParseEffect( const char *file, CGPGroup *base )
 			prim->mType = type;
 			prim->ParsePrimitive( primitiveGroup );
 
-			// additional hack for base bryar shot, or custom effects based on it
-			if (!Q_stricmp(file, "bryar/shot") && prim->mLife.GetMin() == 10.0f && prim->mLife.GetMax() == 10.0f)
+			// additional hack for some files that had life 10 added by raven
+			if ((!Q_stricmp(file, "bryar/shot") || !Q_stricmp(file, "demp2/projectile") || !Q_stricmp(file, "bowcaster/shot")) && prim->mLife.GetMin() == 10.0f && prim->mLife.GetMax() == 10.0f)
 			{
 				prim->ParseLife("1");
 			}
