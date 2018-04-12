@@ -740,11 +740,12 @@ void Con_DrawSolidConsole( float frac ) {
 	re->SetColor( console_color );
 	re->DrawStretchPic( 0, y, SCREEN_WIDTH, 2, 0, 0, 0, 0, cls.whiteShader );
 
-	i = strlen( JK_VERSION );
+	char *version = va("NewJK version %s", NEWJK_VERSION);
+	i = strlen( version );
 
 	for (x=0 ; x<i ; x++) {
 		SCR_DrawSmallChar( cls.glconfig.vidWidth - ( i - x + 1 ) * SMALLCHAR_WIDTH,
-			(lines-(SMALLCHAR_HEIGHT+SMALLCHAR_HEIGHT/2)), JK_VERSION[x] );
+			(lines-(SMALLCHAR_HEIGHT+SMALLCHAR_HEIGHT/2)), version[x] );
 	}
 
 
