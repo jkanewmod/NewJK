@@ -740,8 +740,13 @@ void Con_DrawSolidConsole( float frac ) {
 	re->SetColor( console_color );
 	re->DrawStretchPic( 0, y, SCREEN_WIDTH, 2, 0, 0, 0, 0, cls.whiteShader );
 
-	char *version = va("NewJK version %s", NEWJK_VERSION);
-	i = strlen( version );
+	static char version[MAX_STRING_CHARS] = { 0 };
+	static int len = 0;
+	if (!version[0]) {
+		Q_strncpyz(version, va("NewJK version %s", NEWJK_VERSION), sizeof(version));
+		len = strlen(version);
+	}
+	i = len;
 
 	for (x=0 ; x<i ; x++) {
 		SCR_DrawSmallChar( cls.glconfig.vidWidth - ( i - x + 1 ) * SMALLCHAR_WIDTH,
