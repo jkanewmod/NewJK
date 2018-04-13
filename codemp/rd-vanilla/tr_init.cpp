@@ -1715,6 +1715,32 @@ void R_Init( void ) {
 	ri->Cvar_Get("newjkrendererversion", NEWJK_VERSION, CVAR_ROM, "");
 	ri->Cvar_Set("newjkrendererversion", NEWJK_VERSION);
 
+	// check executable/renderer mismatch
+	char version[MAX_STRING_CHARS];
+	ri->Cvar_VariableStringBuffer("version", version, sizeof(version));
+	if (version[0] && !Q_stricmpn(version, "NewJK (", 7) && strlen(version) > 7 && isdigit(*(version + 7))) {
+		// trim the beginning and ending parts
+		memmove(version, version + 7, strlen(version));
+		char *p = version;
+		int numPeriods = 0;
+		while (*p) {
+			if (isdigit(*p)) {
+				p++;
+			}
+			else if (*p == '.' && numPeriods < 2) {
+				numPeriods++;
+				p++;
+			}
+			else {
+				*p = 0;
+				break;
+			}
+		}
+
+		if (Q_stricmp(version, NEWJK_VERSION))
+			Com_Error(ERR_FATAL, "Your NewJK version (%s) and NewJK renderer version (%s) are not the same. Please reinstall NewJK.", version, NEWJK_VERSION);
+	}
+
 	int i;
 	byte *ptr;
 
