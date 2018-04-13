@@ -1709,8 +1709,12 @@ Ghoul2 Insert End
 R_Init
 ===============
 */
+#include "qcommon/game_version.h"
 extern void R_InitWorldEffects(void); //tr_WorldEffects.cpp
 void R_Init( void ) {
+	ri->Cvar_Get("newjkrendererversion", NEWJK_VERSION, CVAR_ROM, "");
+	ri->Cvar_Set("newjkrendererversion", NEWJK_VERSION);
+
 	int i;
 	byte *ptr;
 
