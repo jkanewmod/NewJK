@@ -376,7 +376,8 @@ void Con_Init (void) {
 		historyEditLines[i].widthInChars = g_console_field_width;
 	}
 
-	Cmd_AddCommand( "toggleconsole", Con_ToggleConsoleFake_f, "Show/hide console" );
+	Cmd_AddCommand( "toggleconsole", Con_ToggleConsoleFake_f, "" );
+	Cmd_AddCommand( "toggleconsole2", Con_ToggleConsole_f, "Toggles the console on/off" );
 	Cmd_AddCommand( "togglemenu", Con_ToggleMenu_f, "Show/hide the menu" );
 	Cmd_AddCommand( "messagemode", Con_MessageMode_f, "Global Chat" );
 	Cmd_AddCommand( "messagemode2", Con_MessageMode2_f, "Team Chat" );
