@@ -1186,6 +1186,7 @@ void Com_Init( char *commandLine ) {
 
 		// get the developer cvar set as early as possible
 		com_developer = Cvar_Get("developer", "0", CVAR_TEMP, "Developer mode" );
+		cvar_t *com_printInfo = Cvar_Get("com_printInfo", "1", 0, "");
 
 		// done early so bind command exists
 		CL_InitKeyCommands();
@@ -1323,6 +1324,7 @@ void Com_Init( char *commandLine ) {
 
 		com_fullyInitialized = qtrue;
 		Com_Printf ("--- Common Initialization Complete ---\n");
+		Cvar_Set("com_printInfo", "0");
 	}
 	catch ( int code )
 	{

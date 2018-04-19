@@ -1386,6 +1386,9 @@ GfxInfo_f
 extern bool g_bTextureRectangleHack;
 void GfxInfo_f( void )
 {
+	if (!ri->Cvar_VariableIntegerValue("com_printInfo"))
+		return;
+
 	const char *enablestrings[] =
 	{
 		"disabled",

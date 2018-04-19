@@ -2820,27 +2820,35 @@ FS_Path_f
 void FS_Path_f( void ) {
 	searchpath_t	*s;
 	int				i;
+	qboolean print = Cvar_VariableIntegerValue("com_printInfo") ? qtrue : qfalse;
 
-	Com_Printf ("Current search path:\n");
+	if (print)
+		Com_Printf ("Current search path:\n");
 	for (s = fs_searchpaths; s; s = s->next) {
 		if (s->pack) {
-			Com_Printf ("%s (%i files)\n", s->pack->pakFilename, s->pack->numfiles);
+			if (print)
+				Com_Printf ("%s (%i files)\n", s->pack->pakFilename, s->pack->numfiles);
 			if ( fs_numServerPaks ) {
 				if ( !FS_PakIsPure(s->pack) ) {
-					Com_Printf( "    not on the pure list\n" );
+					if (print)
+						Com_Printf( "    not on the pure list\n" );
 				} else {
-					Com_Printf( "    on the pure list\n" );
+					if (print)
+						Com_Printf( "    on the pure list\n" );
 				}
 			}
 		} else {
-			Com_Printf ("%s%c%s\n", s->dir->path, PATH_SEP, s->dir->gamedir );
+			if (print)
+				Com_Printf ("%s%c%s\n", s->dir->path, PATH_SEP, s->dir->gamedir );
 		}
 	}
 
-	Com_Printf( "\n" );
+	if (print)
+		Com_Printf( "\n" );
 	for ( i = 1 ; i < MAX_FILE_HANDLES ; i++ ) {
 		if ( fsh[i].handleFiles.file.o ) {
-			Com_Printf( "handle %i: %s\n", i, fsh[i].name );
+			if (print)
+				Com_Printf( "handle %i: %s\n", i, fsh[i].name );
 		}
 	}
 }
@@ -3347,8 +3355,10 @@ static void FS_ReorderPurePaks()
 */
 void FS_Startup( const char *gameName ) {
 	const char *homePath;
+	qboolean print = Cvar_VariableIntegerValue("com_printInfo") ? qtrue : qfalse;
 
-	Com_Printf( "----- FS_Startup -----\n" );
+	if (print)
+		Com_Printf( "----- FS_Startup -----\n" );
 
 	fs_packFiles = 0;
 
@@ -3432,14 +3442,16 @@ void FS_Startup( const char *gameName ) {
 
 	fs_gamedirvar->modified = qfalse; // We just loaded, it's not modified
 
-	Com_Printf( "----------------------\n" );
+	if (print)
+		Com_Printf( "----------------------\n" );
 
 #ifdef FS_MISSING
 	if (missingFiles == NULL) {
 		missingFiles = fopen( "\\missing.txt", "ab" );
 	}
 #endif
-	Com_Printf( "%d files in pk3 files\n", fs_packFiles );
+	if (print)
+		Com_Printf( "%d files in pk3 files\n", fs_packFiles );
 }
 
 /*

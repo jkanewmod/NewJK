@@ -229,7 +229,6 @@ void CL_StopRecord_f( void ) {
 	int		len;
 
 	if ( !clc.demorecording ) {
-		Com_Printf ("*Not recording a demo.\n");
 		return;
 	}
 
@@ -241,7 +240,6 @@ void CL_StopRecord_f( void ) {
 	clc.demofile = 0;
 	clc.demorecording = qfalse;
 	clc.spDemoRecording = qfalse;
-	Com_Printf ("*Stopped demo.\n");
 }
 
 /*
@@ -1501,9 +1499,8 @@ void CL_InitDownloads(void) {
 		{
 			// NOTE TTimo I would rather have that printed as a modal message box
 			//   but at this point while joining the game we don't know wether we will successfully join or not
-			Com_Printf( "\nWARNING: You are missing some files referenced by the server:\n%s"
-				"You might not be able to join the game\n"
-				"Go to the setting menu to turn on autodownload, or get the file elsewhere\n\n", missingfiles );
+			Com_Printf( "WARNING: You are missing some files referenced by the server:\n%s"
+				"You might not be able to join the game; go to the setting menu to turn on autodownload, or get the file elsewhere\n", missingfiles );
 		}
 	}
 	else if ( FS_ComparePaks( clc.downloadList, sizeof( clc.downloadList ) , qtrue ) ) {

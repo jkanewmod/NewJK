@@ -137,17 +137,25 @@ vm_t *VM_CreateLegacy( vmSlots_t vmSlot, intptr_t( *systemCalls )(intptr_t *) ) 
 	FS_FindPureDLL( vm->name );
 	vm->dllHandle = Sys_LoadLegacyGameDll( vm->name, &vm->legacy.main, VM_DllSyscall );
 
-	Com_Printf( "VM_CreateLegacy: %s" ARCH_STRING DLL_EXT, vm->name );
+	qboolean print = Cvar_VariableIntegerValue("com_printInfo") ? qtrue : qfalse;
+	if (print)
+		Com_Printf( "VM_CreateLegacy: %s" ARCH_STRING DLL_EXT, vm->name );
 	if ( vm->dllHandle ) {
-		if ( com_developer->integer )
-			Com_Printf( " succeeded [0x%" PRIxPTR "]\n", (uintptr_t)vm->dllHandle );
-		else
-			Com_Printf( " succeeded\n" );
+		if (print) {
+			if (com_developer->integer)
+				Com_Printf(" succeeded [0x%" PRIxPTR "]\n", (uintptr_t)vm->dllHandle);
+			else
+				Com_Printf(" succeeded\n");
+		}
+		else {
+			Com_Printf("\n");
+		}
 		return vm;
 	}
 
 	VM_Free( vm );
-	Com_Printf( " failed!\n" );
+	if (print)
+		Com_Printf( " failed!\n" );
 	return NULL;
 }
 
@@ -176,17 +184,22 @@ vm_t *VM_Create( vmSlots_t vmSlot ) {
 	FS_FindPureDLL( vm->name );
 	vm->dllHandle = Sys_LoadGameDll( vm->name, &vm->GetModuleAPI );
 
-	Com_Printf( "VM_Create: %s" ARCH_STRING DLL_EXT, vm->name );
+	qboolean print = Cvar_VariableIntegerValue("com_printInfo") ? qtrue : qfalse;
+	if (print)
+		Com_Printf( "VM_Create: %s" ARCH_STRING DLL_EXT, vm->name );
 	if ( vm->dllHandle ) {
 		if ( com_developer->integer )
-			Com_Printf( " succeeded [0x%" PRIxPTR "+0x%" PRIxPTR "]\n", vm->dllHandle, (intptr_t)vm->GetModuleAPI - (intptr_t)vm->dllHandle );
+			if (print)
+				Com_Printf( " succeeded [0x%" PRIxPTR "+0x%" PRIxPTR "]\n", vm->dllHandle, (intptr_t)vm->GetModuleAPI - (intptr_t)vm->dllHandle );
 		else
-			Com_Printf( " succeeded\n" );
+			if (print)
+				Com_Printf( " succeeded\n" );
 		return vm;
 	}
 
 	VM_Free( vm );
-	Com_Printf( " failed!\n" );
+	if (print)
+		Com_Printf( " failed!\n" );
 	return NULL;
 }
 

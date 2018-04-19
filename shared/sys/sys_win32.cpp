@@ -162,7 +162,8 @@ char *Sys_DefaultHomePath( void )
 #else
 	if ( Cvar_VariableIntegerValue( "fs_portable" ) )
 	{
-		Com_Printf( "fs_portable enabled, skipping fs_homepath support\n" );
+		if (Cvar_VariableIntegerValue("com_printInfo"))
+			Com_Printf( "fs_portable enabled, skipping fs_homepath support\n" );
 		return NULL;
 	}
 
