@@ -188,12 +188,15 @@ vm_t *VM_Create( vmSlots_t vmSlot ) {
 	if (print)
 		Com_Printf( "VM_Create: %s" ARCH_STRING DLL_EXT, vm->name );
 	if ( vm->dllHandle ) {
-		if ( com_developer->integer )
-			if (print)
-				Com_Printf( " succeeded [0x%" PRIxPTR "+0x%" PRIxPTR "]\n", vm->dllHandle, (intptr_t)vm->GetModuleAPI - (intptr_t)vm->dllHandle );
-		else
-			if (print)
-				Com_Printf( " succeeded\n" );
+		if (print) {
+			if (com_developer->integer)
+					Com_Printf(" succeeded [0x%" PRIxPTR "+0x%" PRIxPTR "]\n", vm->dllHandle, (intptr_t)vm->GetModuleAPI - (intptr_t)vm->dllHandle);
+				else
+					Com_Printf(" succeeded\n");
+		}
+		else {
+			Com_Printf("\n");
+		}
 		return vm;
 	}
 
