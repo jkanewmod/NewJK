@@ -586,7 +586,7 @@ void Con_DrawNotify (void)
 	int		time;
 	int		skip;
 	int		currentColor;
-	const char* chattext;
+	char	chattext[32];
 
 	currentColor = 7;
 	re->SetColor( g_color_table[currentColor] );
@@ -673,17 +673,21 @@ void Con_DrawNotify (void)
 	if ( Key_GetCatcher( ) & KEYCATCH_MESSAGE )
 	{
 		if (chat_team)
-		{
-			chattext = SE_GetString("MP_SVGAME", "SAY_TEAM");
-			SCR_DrawBigString (8, v, chattext, 1.0f, qfalse );
-			skip = strlen(chattext)+1;
-		}
+			Q_strncpyz(chattext, SE_GetString("MP_SVGAME", "SAY_TEAM"), sizeof(chattext));
 		else
-		{
-			chattext = SE_GetString("MP_SVGAME", "SAY");
-			SCR_DrawBigString (8, v, chattext, 1.0f, qfalse );
-			skip = strlen(chattext)+1;
-		}
+			Q_strncpyz(chattext, SE_GetString("MP_SVGAME", "SAY"), sizeof(chattext));
+
+		// remove ':' char
+		int chattextLen = strlen(chattext);
+		if (chattext[0] && chattext[chattextLen - 1] == ':')
+			chattext[chattextLen - 1] = '\0';
+
+		// append digits remaining and re-append ':' char
+		int digitsRemaining = Com_Clampi(0, 149, 149 - strlen(chatField.buffer));
+		Q_strncpyz(chattext, va("%s (%d):", chattext, digitsRemaining), sizeof(chattext));
+
+		SCR_DrawBigString(8, v, chattext, 1.0f, qfalse);
+		skip = strlen(chattext) + 1;
 
 		Field_BigDraw( &chatField, skip * BIGCHAR_WIDTH, v,
 			SCREEN_WIDTH - ( skip + 1 ) * BIGCHAR_WIDTH, qtrue, qtrue );

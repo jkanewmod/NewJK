@@ -627,15 +627,16 @@ void Field_CharEvent( field_t *edit, int ch ) {
 		return;
 	}
 
+	int max = edit == &chatField ? 151 : MAX_EDIT_LINE;
 	if ( kg.key_overstrikeMode ) {
 		// - 2 to leave room for the leading slash and trailing \0
-		if ( edit->cursor == MAX_EDIT_LINE - 2 )
+		if ( edit->cursor == max - 2 )
 			return;
 		edit->buffer[edit->cursor] = ch;
 		edit->cursor++;
 	} else {	// insert mode
 		// - 2 to leave room for the leading slash and trailing \0
-		if ( len == MAX_EDIT_LINE - 2 ) {
+		if ( len == max - 2 ) {
 			return; // all full
 		}
 		memmove( edit->buffer + edit->cursor + 1,
