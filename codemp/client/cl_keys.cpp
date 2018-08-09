@@ -627,6 +627,13 @@ void Field_CharEvent( field_t *edit, int ch ) {
 		return;
 	}
 
+	if (ch == '%' && edit == &chatField) {
+		Field_CharEvent(edit, 176);
+		Field_CharEvent(edit, '/');
+		Field_CharEvent(edit, '.');
+		return;
+	}
+
 	int max = edit == &chatField ? 151 : MAX_EDIT_LINE;
 	if ( kg.key_overstrikeMode ) {
 		// - 2 to leave room for the leading slash and trailing \0
