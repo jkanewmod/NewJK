@@ -706,7 +706,11 @@ void Con_DrawNotify (void)
 
 		// append digits remaining and re-append ':' char
 		int digitsRemaining = Com_Clampi(0, 149, 149 - strlen(chatField.buffer));
-		char *fullPrompt = va("%s%s" S_COLOR_WHITE " (%d)%s:", chat_team ? S_COLOR_CYAN : S_COLOR_WHITE, chat_team ? teamPrompt : prompt, digitsRemaining, extraSpace ? " " : "");
+		char *fullPrompt = va("%s%s" S_COLOR_WHITE "%s%s:",
+			chat_team ? S_COLOR_CYAN : S_COLOR_WHITE,
+			chat_team ? teamPrompt : prompt,
+			digitsRemaining <= 50 ? va(" (%d)", digitsRemaining) : "",
+			extraSpace ? " " : "");
 
 		SCR_DrawBigString(8, v, fullPrompt, 1.0f, qfalse);
 		skip = strlen(fullPrompt) + 1 - 4/*two color codes*/;
