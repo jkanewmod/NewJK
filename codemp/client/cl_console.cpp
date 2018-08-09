@@ -586,7 +586,6 @@ void Con_DrawNotify (void)
 	int		time;
 	int		skip;
 	int		currentColor;
-	char	chattext[32];
 
 	currentColor = 7;
 	re->SetColor( g_color_table[currentColor] );
@@ -672,22 +671,45 @@ void Con_DrawNotify (void)
 	// draw the chat line
 	if ( Key_GetCatcher( ) & KEYCATCH_MESSAGE )
 	{
-		if (chat_team)
-			Q_strncpyz(chattext, SE_GetString("MP_SVGAME", "SAY_TEAM"), sizeof(chattext));
-		else
-			Q_strncpyz(chattext, SE_GetString("MP_SVGAME", "SAY"), sizeof(chattext));
+		static qboolean extraSpace = qfalse;
+		static char language[32] = { 0 }, teamPrompt[32] = { 0 }, prompt[32] = { 0 };
 
-		// remove ':' char
-		int chattextLen = strlen(chattext);
-		if (chattext[0] && chattext[chattextLen - 1] == ':')
-			chattext[chattextLen - 1] = '\0';
+		if (strcmp(language, se_language->string)) { // (re)initialize
+			extraSpace = qfalse;
+			Q_strncpyz(language, se_language->string, sizeof(language));
+			Q_strncpyz(teamPrompt, SE_GetString("MP_SVGAME", "SAY_TEAM"), sizeof(teamPrompt));
+			if (teamPrompt[0]) {
+				if (!strcmp(teamPrompt, "Say Team:") || !strcmp(teamPrompt, "Team-Text:")) {
+					Q_strncpyz(teamPrompt, "Team", sizeof(teamPrompt));
+				} else if (!strcmp(teamPrompt, "A équipe :")) {
+					Q_strncpyz(teamPrompt, "Équipe", sizeof(teamPrompt));
+					extraSpace = qtrue;
+				} else if (!strcmp(teamPrompt, "Dice equipo:")) {
+					Q_strncpyz(teamPrompt, "Equipo", sizeof(teamPrompt));
+				}
+				char *colon = strchr(teamPrompt, ':');
+				if (colon)
+					*colon = '\0';
+			}
+
+			Q_strncpyz(prompt, SE_GetString("MP_SVGAME", "SAY"), sizeof(prompt));
+			if (prompt[0]) {
+				if (!strcmp(prompt, "Dire :")) {
+					Q_strncpyz(prompt, "Dire", sizeof(prompt));
+					extraSpace = qtrue;
+				}
+				char *colon = strchr(prompt, ':');
+				if (colon)
+					*colon = '\0';
+			}
+		}
 
 		// append digits remaining and re-append ':' char
 		int digitsRemaining = Com_Clampi(0, 149, 149 - strlen(chatField.buffer));
-		Q_strncpyz(chattext, va("%s (%d):", chattext, digitsRemaining), sizeof(chattext));
+		char *fullPrompt = va("%s%s" S_COLOR_WHITE " (%d)%s:", chat_team ? S_COLOR_CYAN : S_COLOR_WHITE, chat_team ? teamPrompt : prompt, digitsRemaining, extraSpace ? " " : "");
 
-		SCR_DrawBigString(8, v, chattext, 1.0f, qfalse);
-		skip = strlen(chattext) + 1;
+		SCR_DrawBigString(8, v, fullPrompt, 1.0f, qfalse);
+		skip = strlen(fullPrompt) + 1 - 4/*two color codes*/;
 
 		Field_BigDraw( &chatField, skip * BIGCHAR_WIDTH, v,
 			SCREEN_WIDTH - ( skip + 1 ) * BIGCHAR_WIDTH, qtrue, qtrue );
