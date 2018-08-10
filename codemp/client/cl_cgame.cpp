@@ -745,14 +745,22 @@ void CL_SetCGameTime( void ) {
 
 	// get our current view of time
 
-	if ( clc.demoplaying && cl_freezeDemo->integer ) {
-		// cl_freezeDemo is used to lock a demo in place for single frame advances
+	if ( clc.demoplaying && !com_timescale->value ) {
+		// timescale 0 is used to lock a demo in place for single frame advances
+		cl.serverTimeDelta -= cls.frametime;
 	} else
 	{
 		// cl_timeNudge is a user adjustable cvar that allows more
 		// or less latency to be added in the interest of better
 		// smoothness or better responsiveness.
-		int tn = Com_Clampi(-1000, 1000, cl_timeNudge->integer);
+		const char *autoStr;
+		int tn;
+		if (VALIDSTRING(cl_timeNudge->string) && (autoStr = Q_stristr(cl_timeNudge->string, "auto=")) && *(autoStr + 5) && atoi(autoStr + 5) >= 0) {
+			tn = atoi(autoStr + 5) - Cvar_VariableIntegerValue("ping");
+		} else {
+			tn = cl_timeNudge->integer;
+		}
+		tn = Com_Clampi(-1000, 1000, tn);
 
 		cl.serverTime = cls.realtime + cl.serverTimeDelta - tn;
 
