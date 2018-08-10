@@ -597,12 +597,24 @@ void Field_CharEvent( field_t *edit, int ch ) {
 
 	if ( ch == 'h' - 'a' + 1 )	{	// ctrl-h is backspace
 		if ( edit->cursor > 0 ) {
-			memmove( edit->buffer + edit->cursor - 1,
-				edit->buffer + edit->cursor, len + 1 - edit->cursor );
-			edit->cursor--;
-			if ( edit->cursor < edit->scroll )
-			{
-				edit->scroll--;
+			if (edit == &chatField && edit->cursor > 2 &&
+				*(edit->buffer + edit->cursor - 1) == '.' && *(edit->buffer + edit->cursor - 2) == '/' && *(edit->buffer + edit->cursor - 3) == -80) {
+				memmove(edit->buffer + edit->cursor - 3,
+					edit->buffer + edit->cursor, len + 3 - edit->cursor);
+				edit->cursor -= 3;
+				if (edit->cursor < edit->scroll)
+				{
+					edit->scroll -= 3;
+				}
+			}
+			else {
+				memmove(edit->buffer + edit->cursor - 1,
+					edit->buffer + edit->cursor, len + 1 - edit->cursor);
+				edit->cursor--;
+				if (edit->cursor < edit->scroll)
+				{
+					edit->scroll--;
+				}
 			}
 		}
 		return;
