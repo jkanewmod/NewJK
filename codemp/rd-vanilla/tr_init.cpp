@@ -269,18 +269,14 @@ void RE_GetBModelVerts( int bmodelIndex, vec3_t *verts, vec3_t normal );
 
 void R_Splash()
 {
-	image_t *pImage;
-/*	const char* s = ri->Cvar_VariableString("se_language");
-	if (Q_stricmp(s,"english"))
-	{
-		pImage = R_FindImageFile( "menu/splash_eur", qfalse, qfalse, qfalse, GL_CLAMP);
-	}
-	else
-	{
-		pImage = R_FindImageFile( "menu/splash", qfalse, qfalse, qfalse, GL_CLAMP);
-	}
-*/
-	pImage = R_FindImageFile( "menu/splash", qfalse, qfalse, qfalse, GL_CLAMP);
+	image_t *pImage = NULL;
+
+	float ratio = (float)(SCREEN_WIDTH * glConfig.vidHeight) / (float)(SCREEN_HEIGHT * glConfig.vidWidth);
+	if (ratio >= 0.74f && ratio <= 0.76f)
+		pImage = R_FindImageFile("menu/splash_16_9", qfalse, qfalse, qfalse, GL_CLAMP);
+	if (!pImage)
+		pImage = R_FindImageFile("menu/splash", qfalse, qfalse, qfalse, GL_CLAMP);
+
 	extern void	RB_SetGL2D (void);
 	RB_SetGL2D();
 	if (pImage )
