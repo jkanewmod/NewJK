@@ -607,6 +607,16 @@ void Field_CharEvent( field_t *edit, int ch ) {
 					edit->scroll -= 3;
 				}
 			}
+			else if (edit == &chatField && edit->cursor > 1 &&
+				*(edit->buffer + edit->cursor - 1) == '\'' && *(edit->buffer + edit->cursor - 2) == '\'') {
+				memmove(edit->buffer + edit->cursor - 2,
+					edit->buffer + edit->cursor, len + 2 - edit->cursor);
+				edit->cursor -= 2;
+				if (edit->cursor < edit->scroll)
+				{
+					edit->scroll -= 2;
+				}
+			}
 			else {
 				memmove(edit->buffer + edit->cursor - 1,
 					edit->buffer + edit->cursor, len + 1 - edit->cursor);
@@ -643,6 +653,12 @@ void Field_CharEvent( field_t *edit, int ch ) {
 		Field_CharEvent(edit, 176);
 		Field_CharEvent(edit, '/');
 		Field_CharEvent(edit, '.');
+		return;
+	}
+
+	if (ch == '"' && edit == &chatField) {
+		Field_CharEvent(edit, '\'');
+		Field_CharEvent(edit, '\'');
 		return;
 	}
 
