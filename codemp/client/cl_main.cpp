@@ -2297,7 +2297,14 @@ void CL_InitRenderer( void ) {
 	cls.charSetShader = re->RegisterShaderNoMip("gfx/2d/charsgrid_med");
 
 	cls.whiteShader = re->RegisterShader( "white" );
-	cls.consoleShader = re->RegisterShader( "console" );
+
+	cls.consoleShader = 0;
+	float ratio = (float)(SCREEN_WIDTH * cls.glconfig.vidHeight) / (float)(SCREEN_HEIGHT * cls.glconfig.vidWidth);
+	if (ratio >= 0.74f && ratio <= 0.76f)
+		cls.consoleShader = re->RegisterShader("console_16_9");
+	if (!cls.consoleShader)
+		cls.consoleShader = re->RegisterShader( "console" );
+
 	g_console_field_width = cls.glconfig.vidWidth / SMALLCHAR_WIDTH - 2;
 	g_consoleField.widthInChars = g_console_field_width;
 }
