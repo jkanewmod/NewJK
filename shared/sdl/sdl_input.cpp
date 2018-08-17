@@ -804,6 +804,16 @@ static void IN_ProcessEvents( void )
 	if( !SDL_WasInit( SDL_INIT_VIDEO ) )
 			return;
 
+#ifdef _WIN32
+	if (com_unfocused->integer == 1) {
+		int doAlert = Cvar_VariableIntegerValue("cl_alertWindow");
+		if (doAlert) {
+			GLimp_Alert();
+			Cvar_Set("cl_alertWindow", "0");
+		}
+	}
+#endif
+
 	while( SDL_PollEvent( &e ) )
 	{
 		switch( e.type )

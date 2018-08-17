@@ -142,6 +142,14 @@ void GLimp_Minimize(void)
 	SDL_MinimizeWindow( screen );
 }
 
+#ifdef _WIN32
+static HWND flashWindowHandle = 0;
+void GLimp_Alert(void) {
+	if (flashWindowHandle)
+		FlashWindow(flashWindowHandle, qtrue);
+}
+#endif
+
 void WIN_Present( window_t *window )
 {
 	if ( window->api == GRAPHICS_API_OPENGL )
@@ -787,6 +795,7 @@ window_t WIN_Init( const windowDesc_t *windowDesc, glconfig_t *glConfig )
 		switch(info.subsystem) {
 			case SDL_SYSWM_WINDOWS:
 				window.handle = info.info.win.window;
+				flashWindowHandle = info.info.win.window;
 				break;
 
 			default:

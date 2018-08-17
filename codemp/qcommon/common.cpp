@@ -1186,6 +1186,8 @@ void Com_Init( char *commandLine ) {
 
 		// get the developer cvar set as early as possible
 		com_developer = Cvar_Get("developer", "0", CVAR_TEMP, "Developer mode" );
+		Cvar_Get("cl_alertWindow", "0", CVAR_ROM | CVAR_INTERNAL, "");
+		Cvar_Set("cl_alertWindow", "0");
 		cvar_t *com_printInfo = Cvar_Get("com_printInfo", "1", 0, "");
 
 		// done early so bind command exists
