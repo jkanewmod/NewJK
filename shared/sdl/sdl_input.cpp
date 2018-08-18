@@ -33,6 +33,7 @@ static qboolean mouseAvailable = qfalse;
 static qboolean mouseActive = qfalse;
 
 static cvar_t *in_mouse             = NULL;
+static cvar_t *in_raw				= NULL;
 static cvar_t *in_nograb;
 
 cvar_t *in_joystick          		= NULL;
@@ -616,11 +617,17 @@ void IN_Init( void *windowData )
 
 	// mouse variables
 	in_mouse = Cvar_Get( "in_mouse", "1", CVAR_ARCHIVE );
+	in_raw = Cvar_Get("in_raw", "1", CVAR_ARCHIVE, "Raw mouse input");
 	in_nograb = Cvar_Get( "in_nograb", "0", CVAR_ARCHIVE );
 
 	SDL_StartTextInput( );
 
 	mouseAvailable = (qboolean)( in_mouse->value != 0 );
+	if (in_raw->integer)
+		SDL_SetHint("SDL_MOUSE_RELATIVE_MODE_WARP", "0");
+	else
+		SDL_SetHint("SDL_MOUSE_RELATIVE_MODE_WARP", "1");
+
 	IN_DeactivateMouse( );
 
 	int appState = SDL_GetWindowFlags( SDL_window );
