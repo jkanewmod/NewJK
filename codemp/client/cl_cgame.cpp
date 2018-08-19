@@ -762,6 +762,9 @@ void CL_SetCGameTime( void ) {
 		}
 		tn = Com_Clampi(-1000, 1000, tn);
 
+		if (tn < 0 && (cl.snap.ps.pm_type == PM_SPECTATOR || cl.snap.ps.pm_flags & PMF_FOLLOW))
+			tn = 0; // disable negative timenudge when spectating
+
 		cl.serverTime = cls.realtime + cl.serverTimeDelta - tn;
 
 		// guarantee that time will never flow backwards, even if
