@@ -756,7 +756,7 @@ void CL_SetCGameTime( void ) {
 		const char *autoStr;
 		int tn;
 		if (VALIDSTRING(cl_timeNudge->string) && (autoStr = Q_stristr(cl_timeNudge->string, "auto=")) && *(autoStr + 5) && atoi(autoStr + 5) >= 0) {
-			tn = atoi(autoStr + 5) - Cvar_VariableIntegerValue("ping");
+			tn = Com_Clampi(-300, 1000, atoi(autoStr + 5) - Cvar_VariableIntegerValue("ping"));
 		} else {
 			tn = cl_timeNudge->integer;
 		}
