@@ -925,6 +925,7 @@ static void IN_ProcessEvents( void )
 					case SDL_WINDOWEVENT_FOCUS_GAINED:
 					{
 						Cvar_SetValue( "com_unfocused", 0 );
+						S_StopSounds();
 						SNDDMA_Activate( qtrue );
 						break;
 					}
