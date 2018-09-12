@@ -745,7 +745,7 @@ void CL_SetCGameTime( void ) {
 
 	// get our current view of time
 
-	if ( clc.demoplaying && !com_timescale->value ) {
+	if ( clc.demoplaying && (!com_timescale->value || cl_paused->integer) ) {
 		// timescale 0 is used to lock a demo in place for single frame advances
 		cl.serverTimeDelta -= cls.frametime;
 	} else
