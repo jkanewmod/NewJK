@@ -2116,8 +2116,8 @@ void CL_CheckUserinfo( void ) {
 	if ( cls.state < CA_CONNECTED ) {
 		return;
 	}
-	// don't overflow the reliable command buffer when paused
-	if ( CL_CheckPaused() ) {
+	// don't overflow the reliable command buffer when paused on a local server
+	if ( sv_paused->integer && com_sv_running->integer && CL_CheckPaused() ) {
 		return;
 	}
 	// send a reliable userinfo update if needed
