@@ -571,7 +571,7 @@ void CL_DemoRestart_f(void) {
 		return;
 	}
 
-	Com_Printf("Restarting demo \"%s\".", demoname);
+	Com_Printf("Restarting demo \"%s\".\n", demoname);
 	Cbuf_ExecuteText(EXEC_APPEND, va("demo \"%s\"\n", demoname));
 }
 
