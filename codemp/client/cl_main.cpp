@@ -564,6 +564,17 @@ void CL_PlayDemo_f( void ) {
 	clc.firstDemoFrameSkipped = qfalse;
 }
 
+void CL_DemoRestart_f(void) {
+	char *demoname = Cvar_VariableString("demoname");
+	if (!VALIDSTRING(demoname)) {
+		Com_Printf("No demo available to restart.\n");
+		return;
+	}
+
+	Com_Printf("Restarting demo \"%s\".", demoname);
+	Cbuf_ExecuteText(EXEC_NOW, va("demo \"%s\"", demoname));
+}
+
 
 /*
 ====================
@@ -2830,6 +2841,7 @@ void CL_Init( void ) {
 	Cmd_AddCommand ("record", CL_Record_f, "Record a demo" );
 	Cmd_AddCommand ("demo", CL_PlayDemo_f, "Playback a demo" );
 	Cmd_SetCommandCompletionFunc( "demo", CL_CompleteDemoName );
+	Cmd_AddCommand ("demo_restart", CL_DemoRestart_f, "Restart the current demo" );
 	Cmd_AddCommand ("stoprecord", CL_StopRecord_f, "Stop recording a demo" );
 	Cmd_AddCommand ("configstrings", CL_Configstrings_f, "Prints the configstrings list" );
 	Cmd_AddCommand ("clientinfo", CL_Clientinfo_f, "Prints the userinfo variables" );
@@ -2908,6 +2920,7 @@ void CL_Shutdown( void ) {
 	Cmd_RemoveCommand ("disconnect");
 	Cmd_RemoveCommand ("record");
 	Cmd_RemoveCommand ("demo");
+	Cmd_RemoveCommand ("demo_restart");
 	Cmd_RemoveCommand ("cinematic");
 	Cmd_RemoveCommand ("stoprecord");
 	Cmd_RemoveCommand ("connect");
