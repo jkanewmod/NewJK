@@ -481,7 +481,7 @@ void RB_BeginDrawingView (void) {
 				// try clearing first with the portal sky fog color, then the world fog color, then finally a default
 				clearBits |= GL_COLOR_BUFFER_BIT;
 				//rwwFIXMEFIXME: Clear with fog color if there is one
-				qglClearColor ( 0.5, 0.5, 0.5, 1.0 );
+				qglClearColor(r_fastSkyR->value, r_fastSkyG->value, r_fastSkyB->value, 1.0f);
 			}
 		}
 	}
@@ -490,11 +490,7 @@ void RB_BeginDrawingView (void) {
 		if ( r_fastsky->integer && !( backEnd.refdef.rdflags & RDF_NOWORLDMODEL ) && !g_bRenderGlowingObjects )
 		{
 			clearBits |= GL_COLOR_BUFFER_BIT;	// FIXME: only if sky shaders have been used
-#ifdef _DEBUG
-			qglClearColor( 0.8f, 0.7f, 0.4f, 1.0f );	// FIXME: get color of sky
-#else
-			qglClearColor( 0.0f, 0.0f, 0.0f, 1.0f );	// FIXME: get color of sky
-#endif
+			qglClearColor(r_fastSkyR->value, r_fastSkyG->value, r_fastSkyB->value, 1.0f);	// FIXME: get color of sky
 		}
 	}
 
