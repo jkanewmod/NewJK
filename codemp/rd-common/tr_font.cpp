@@ -1673,6 +1673,210 @@ void RE_Font_DrawString(int ox, int oy, const char *psText, const float *rgba, c
 	//let it remember the old color //RE_SetColor(NULL);
 }
 
+void RE_Font_DrawString_Float(float ox, float oy, const char *psText, const float *rgba, const int iFontHandle, int iMaxPixelWidth, const float fScale)
+{
+	static qboolean gbInShadow = qfalse;	// MUST default to this
+	float				fox, foy, fx, fy;
+	int					colour, offset;
+	const glyphInfo_t	*pLetter;
+	qhandle_t			hShader;
+
+	assert(psText);
+
+	if (iFontHandle & STYLE_BLINK)
+	{
+		if ((ri->Milliseconds() >> 7) & 1)
+		{
+			return;
+		}
+	}
+
+	//	// test code only
+	//	if (GetLanguageEnum() == eTaiwanese)
+	//	{
+	//		psText = "Wp:¶}·F§a ¿p·G´µ¡A§Æ±æ§A¹³¥L­Ì»¡ªº¤@¼Ë¦æ¡C";
+	//	}
+	//	else
+	//	if (GetLanguageEnum() == eChinese)
+	//	{
+	//		//psText = "Ó¶±øÕ½³¡II  Ô¼º²?ÄªÁÖË¹  ÈÎÎñÊ§°Ü  ÄãÒªÌ×ÓÃ»­ÃæÉè¶¨µÄ±ä¸üÂð£¿  Ô¤Éè,S3 Ñ¹Ëõ,DXT1 Ñ¹Ëõ,DXT5 Ñ¹Ëõ,16 Bit,32 Bit";
+	//		psText = "Ó¶±øÕ½³¡II";
+	//	}
+	//	else
+	//	if (GetLanguageEnum() == eThai)
+	//	{
+	//		//psText = "ÁÒµÃ°Ò¹¼ÅÔµÀÑ³±ìÍØµÊÒË¡ÃÃÁÃËÑÊÊÓËÃÑºÍÑ¡¢ÃÐä·Â·Õèãªé¡Ñº¤ÍÁ¾ÔÇàµÍÃì";
+	//		psText = "ÁÒµÃ°Ò¹¼ÅÔµ";
+	//		psText = "ÃËÑÊÊÓËÃÑº";
+	//		psText = "ÃËÑÊÊÓËÃÑº   ÍÒ_¡Ô¹_¤ÍÃì·_1415";
+	//	}
+	//	else
+	//	if (GetLanguageEnum() == eKorean)
+	//	{
+	//		psText = "Wp:¼îÅ¸ÀÓÀÌ´Ù ¸Ö¸°. ±×µéÀÌ ¸»ÇÑ´ë·Î ³×°¡ ÀßÇÒÁö ±â´ëÇÏ°Ú´Ù.";
+	//	}
+	//	else
+	//	if (GetLanguageEnum() == eJapanese)
+	//	{
+	//		static char sBlah[200];
+	//		sprintf(sBlah,va("%c%c%c%c%c%c%c%c",0x82,0xA9,0x82,0xC8,0x8A,0xBF,0x8E,0x9A));
+	//		psText = &sBlah[0];
+	//	}
+	//	else
+	//	if (GetLanguageEnum() == eRussian)
+	//	{
+	////		//psText = "Íà âåðøèíå õîëìà ñòîèò ñòàðûé äîì ñ ïðèâèäåíèÿìè è áàøíÿ ñ âîëøåáíûìè ÷àñàìè."
+	//		psText = "Íà âåðøèíå õîëìà ñòîèò";
+	//	}
+	//	else
+	//	if (GetLanguageEnum() == ePolish)
+	//	{
+	//		psText = "za³o¿ony w 1364 roku, jest najstarsz¹ polsk¹ uczelni¹ i nale¿y...";
+	//		psText = "za³o¿ony nale¿y";
+	//	}
+
+
+	CFontInfo *curfont = GetFont(iFontHandle);
+	if (!curfont || !psText)
+	{
+		return;
+	}
+
+	float fScaleAsian = fScale;
+	float fAsianYAdjust = 0.0f;
+	if (Language_IsAsian() && fScale > 0.7f)
+	{
+		fScaleAsian = fScale * 0.75f;
+		fAsianYAdjust = ((curfont->GetPointSize() * fScale) - (curfont->GetPointSize() * fScaleAsian)) / 2.0f;
+	}
+
+	// Draw a dropshadow if required
+	if (iFontHandle & STYLE_DROPSHADOW)
+	{
+		offset = Round(curfont->GetPointSize() * fScale * 0.075f);
+
+		const vec4_t v4DKGREY2 = { 0.15f, 0.15f, 0.15f, rgba ? rgba[3] : 1.0f };
+
+		gbInShadow = qtrue;
+		RE_Font_DrawString_Float(ox + offset, oy + offset, psText, v4DKGREY2, iFontHandle & SET_MASK, iMaxPixelWidth, fScale);
+		gbInShadow = qfalse;
+	}
+
+	RE_SetColor(rgba);
+
+	// Now we take off the training wheels and become a big font renderer
+	// It's all floats from here on out
+	fox = ox;
+	foy = oy;
+
+	fx = fox;
+	foy += curfont->mbRoundCalcs ? Round((curfont->GetHeight() - (curfont->GetDescender() >> 1)) * fScale) : (curfont->GetHeight() - (curfont->GetDescender() >> 1)) * fScale;
+
+	qboolean bNextTextWouldOverflow = qfalse;
+	while (*psText && !bNextTextWouldOverflow)
+	{
+		int iAdvanceCount;
+		unsigned int uiLetter = AnyLanguage_ReadCharFromString(psText, &iAdvanceCount, NULL);
+		psText += iAdvanceCount;
+
+		switch (uiLetter)
+		{
+		case 10:						//linefeed
+			fx = fox;
+			foy += curfont->mbRoundCalcs ? Round(curfont->GetPointSize() * fScale) : curfont->GetPointSize() * fScale;
+			if (Language_IsAsian())
+			{
+				foy += 4.0f;	// this only comes into effect when playing in asian for "A long time ago in a galaxy" etc, all other text is line-broken in feeder functions
+			}
+			break;
+		case 13:						// Return
+			break;
+		case 32:						// Space
+			pLetter = curfont->GetLetter(' ');
+			fx += curfont->mbRoundCalcs ? Round(pLetter->horizAdvance * fScale) : pLetter->horizAdvance * fScale;
+			bNextTextWouldOverflow = (iMaxPixelWidth != -1 && ((fx - fox) > (float)iMaxPixelWidth)) ? qtrue : qfalse; // yeuch
+			break;
+		case '_':	// has a special word-break usage if in Thai (and followed by a thai char), and should not be displayed, else treat as normal
+			if (GetLanguageEnum() == eThai && ((unsigned char *)psText)[0] >= TIS_GLYPHS_START)
+			{
+				break;
+			}
+			// else drop through and display as normal...
+		case '^':
+			if (uiLetter != '_')	// necessary because of fallthrough above
+			{
+				if (*psText >= '0' &&
+					*psText <= '9')
+				{
+					colour = ColorIndex(*psText++);
+					if (!gbInShadow)
+					{
+						vec4_t color;
+						Com_Memcpy(color, g_color_table[colour], sizeof(color));
+						color[3] = rgba ? rgba[3] : 1.0f;
+						RE_SetColor(color);
+					}
+					break;
+				}
+			}
+			//purposely falls thrugh
+		default:
+			pLetter = curfont->GetLetter(uiLetter, &hShader);			// Description of pLetter
+			if (!pLetter->width)
+			{
+				pLetter = curfont->GetLetter('.');
+			}
+
+			float fThisScale = uiLetter > (unsigned)g_iNonScaledCharRange ? fScaleAsian : fScale;
+
+			// sigh, super-language-specific hack...
+			//
+			if (uiLetter == TIS_SARA_AM && GetLanguageEnum() == eThai)
+			{
+				fx -= curfont->mbRoundCalcs ? Round(7.0f * fThisScale) : 7.0f * fThisScale;
+			}
+
+			float fAdvancePixels = curfont->mbRoundCalcs ? Round(pLetter->horizAdvance * fThisScale) : pLetter->horizAdvance * fThisScale;
+			bNextTextWouldOverflow = (iMaxPixelWidth != -1 && (((fx + fAdvancePixels) - fox) > (float)iMaxPixelWidth)) ? qtrue : qfalse; // yeuch
+			if (!bNextTextWouldOverflow)
+			{
+				// this 'mbRoundCalcs' stuff is crap, but the only way to make the font code work. Sigh...
+				//
+				fy = foy - (curfont->mbRoundCalcs ? Round(pLetter->baseline * fThisScale) : pLetter->baseline * fThisScale);
+				if (curfont->m_fAltSBCSFontScaleFactor != -1)
+				{
+					fy += 3.0f; // I'm sick and tired of going round in circles trying to do this legally, so bollocks to it
+				}
+
+				RE_StretchPic(curfont->mbRoundCalcs ? fx + Round(pLetter->horizOffset * fThisScale) : fx + pLetter->horizOffset * fThisScale, // float x
+					(uiLetter > (unsigned)g_iNonScaledCharRange) ? fy - fAsianYAdjust : fy,	// float y
+					curfont->mbRoundCalcs ? Round(pLetter->width * fThisScale) : pLetter->width * fThisScale,	// float w
+					curfont->mbRoundCalcs ? Round(pLetter->height * fThisScale) : pLetter->height * fThisScale, // float h
+					pLetter->s,						// float s1
+					pLetter->t,						// float t1
+					pLetter->s2,					// float s2
+					pLetter->t2,					// float t2
+													//lastcolour.c,
+					hShader							// qhandle_t hShader
+				);
+				if (r_aspectCorrectFonts->integer == 1) {
+					fx += fAdvancePixels
+						* ((float)(SCREEN_WIDTH * glConfig.vidHeight) / (float)(SCREEN_HEIGHT * glConfig.vidWidth));
+				}
+				else if (r_aspectCorrectFonts->integer == 2) {
+					fx += ceilf(fAdvancePixels
+						* ((float)(SCREEN_WIDTH * glConfig.vidHeight) / (float)(SCREEN_HEIGHT * glConfig.vidWidth)));
+				}
+				else {
+					fx += fAdvancePixels;
+				}
+			}
+			break;
+		}
+	}
+	//let it remember the old color //RE_SetColor(NULL);
+}
+
 int RE_RegisterFont(const char *psName)
 {
 	FontIndexMap_t::iterator it = g_mapFontIndexes.find(psName);

@@ -1688,6 +1688,10 @@ intptr_t CL_CgameSystemCalls( intptr_t *args ) {
 	case CG_CVAR_FLAGS:
 		return Cvar_Flags( ( const char * )VMA( 1 ) );
 
+	case CG_R_FONT_DRAWSTRING_FLOAT:
+		re->Font_DrawString_Float(VMF(1), VMF(2), (const char *)VMA(3), (const float *)VMA(4), args[5], args[6], VMF(7));
+		return 0;
+
 	default:
 		assert(0); // bk010102
 		Com_Error( ERR_DROP, "Bad cgame system trap: %ld", (long int) args[0] );
@@ -1777,6 +1781,7 @@ void CL_BindCGame( void ) {
 		cgi.R_DrawRotatePic						= re->DrawRotatePic;
 		cgi.R_DrawRotatePic2					= re->DrawRotatePic2;
 		cgi.R_Font_DrawString					= re->Font_DrawString;
+		cgi.R_Font_DrawString_Float				= re->Font_DrawString_Float;
 		cgi.R_Font_HeightPixels					= re->Font_HeightPixels;
 		cgi.R_Font_StrLenChars					= re->Font_StrLenChars;
 		cgi.R_Font_StrLenPixels					= re->Font_StrLenPixels;

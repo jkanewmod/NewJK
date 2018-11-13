@@ -1282,6 +1282,10 @@ intptr_t CL_UISystemCalls( intptr_t *args ) {
 	case UI_G2_ATTACHG2MODEL:
 		return CL_G2API_AttachG2Model(VMA(1), args[2], VMA(3), args[4], args[5]);
 
+	case UI_R_FONT_DRAWSTRING_FLOAT:
+		re->Font_DrawString_Float(VMF(1), VMF(2), (const char *)VMA(3), (const float *)VMA(4), args[5], args[6], VMF(7));
+		return 0;
+
 	default:
 		Com_Error( ERR_DROP, "Bad UI system trap: %ld", (long int) args[0] );
 
@@ -1394,6 +1398,7 @@ void CL_BindUI( void ) {
 		uii.R_ClearScene						= re->ClearScene;
 		uii.R_DrawStretchPic					= re->DrawStretchPic;
 		uii.R_Font_DrawString					= re->Font_DrawString;
+		uii.R_Font_DrawString_Float				= re->Font_DrawString_Float;
 		uii.R_Font_HeightPixels					= re->Font_HeightPixels;
 		uii.R_Font_StrLenChars					= re->Font_StrLenChars;
 		uii.R_Font_StrLenPixels					= re->Font_StrLenPixels;

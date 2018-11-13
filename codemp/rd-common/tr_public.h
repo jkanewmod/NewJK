@@ -109,6 +109,7 @@ typedef struct refexport_s {
 	int					(*Font_StrLenChars)						( const char *text );
 	int					(*Font_HeightPixels)					( const int iFontIndex, const float scale );
 	void				(*Font_DrawString)						( int ox, int oy, const char *text, const float *rgba, const int setIndex, int iCharLimit, const float scale );
+	void				(*Font_DrawString_Float)				( float ox, float oy, const char *text, const float *rgba, const int setIndex, int iCharLimit, const float scale );
 	qboolean			(*Language_IsAsian)						( void );
 	qboolean			(*Language_UsesSpaces)					( void );
 	unsigned int		(*AnyLanguage_ReadCharFromString)		( const char *psText, int *piAdvanceCount, qboolean *pbIsTrailingPunctuation/* = NULL*/ );

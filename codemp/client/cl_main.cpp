@@ -111,6 +111,8 @@ cvar_t  *cl_lanForcePackets;
 
 cvar_t	*cl_drawRecording;
 
+cvar_t	*cl_fpsSaver;
+
 vec3_t cl_windVec;
 
 
@@ -2513,6 +2515,7 @@ void CL_InitRef( void ) {
 
 	// unpause so the cgame definately gets a snapshot and renders a frame
 	Cvar_Set( "cl_paused", "0" );
+	cl_fpsSaver = Cvar_Get("cl_fpsSaver", "0", CVAR_ARCHIVE | CVAR_LATCH);
 }
 
 

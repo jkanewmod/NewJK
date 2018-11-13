@@ -485,6 +485,24 @@ int CFxScheduler::ParseEffect( const char *file, CGPGroup *base )
 				prim->ParseLife("1");
 			}
 
+			if (Cvar_VariableIntegerValue("cl_fpsSaver") & 1) {
+				switch (prim->mType) {
+				case Particle:
+				case Line:
+				case Tail:
+				case Cylinder:
+				case Electricity:
+				case Emitter:
+				case OrientedParticle:
+				case FxRunner:
+					int min = (int)prim->mSpawnCount.GetMin();
+					if (min >= 1)
+						prim->ParseCount("1");
+					else
+						prim->ParseCount(va("%d 1", min)); // allow zero or negative minimum i guess
+				}
+			}
+
 			// Add our primitive template to the effect list
 			AddPrimitiveToEffect( effect, prim );
 		}

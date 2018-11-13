@@ -209,6 +209,8 @@ typedef enum uiImportLegacy_e {
 	UI_G2_GETSURFACENAME,
 	UI_G2_SETSKIN,
 	UI_G2_ATTACHG2MODEL,
+	// newmod start
+	UI_R_FONT_DRAWSTRING_FLOAT = 5001,
 } uiImportLegacy_t;
 
 typedef enum uiExportLegacy_e {
@@ -328,6 +330,7 @@ typedef struct uiImport_s {
 	int				(*R_Font_StrLenChars)					( const char *text );
 	int				(*R_Font_HeightPixels)					( const int iFontIndex, const float scale );
 	void			(*R_Font_DrawString)					( int ox, int oy, const char *text, const float *rgba, const int setIndex, int iCharLimit, const float scale );
+	void			(*R_Font_DrawString_Float)				( float ox, float oy, const char *text, const float *rgba, const int setIndex, int iCharLimit, const float scale );
 	int				(*R_LerpTag)							( orientation_t *tag, clipHandle_t mod, int startFrame, int endFrame, float frac, const char *tagName );
 	void			(*R_ModelBounds)						( clipHandle_t model, vec3_t mins, vec3_t maxs );
 	qhandle_t		(*R_RegisterModel)						( const char *name );

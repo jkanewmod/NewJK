@@ -1563,7 +1563,7 @@ void R_Register( void )
 	r_ext_compiled_vertex_array			= ri->Cvar_Get( "r_ext_compiled_vertex_array",		"1",						CVAR_ARCHIVE|CVAR_LATCH, "" );
 	r_ext_texture_env_add				= ri->Cvar_Get( "r_ext_texture_env_add",			"1",						CVAR_ARCHIVE|CVAR_LATCH, "" );
 	r_ext_texture_filter_anisotropic	= ri->Cvar_Get( "r_ext_texture_filter_anisotropic",	"16",						CVAR_ARCHIVE, "" );
-	r_gammaShaders						= ri->Cvar_Get( "r_gammaShaders",					"0",						CVAR_ARCHIVE|CVAR_LATCH, "" );
+	r_gammaShaders						= ri->Cvar_Get( "r_gammaShaders",					"1",						CVAR_ARCHIVE|CVAR_LATCH, "" );
 	r_environmentMapping				= ri->Cvar_Get( "r_environmentMapping",				"1",						CVAR_ARCHIVE, "" );
 	r_DynamicGlow						= ri->Cvar_Get( "r_DynamicGlow",					"0",						CVAR_ARCHIVE, "" );
 	r_DynamicGlowPasses					= ri->Cvar_Get( "r_DynamicGlowPasses",				"5",						CVAR_ARCHIVE, "" );
@@ -2042,6 +2042,7 @@ Q_EXPORT refexport_t* QDECL GetRefAPI( int apiVersion, refimport_t *rimp ) {
 	re.Font_StrLenChars						= RE_Font_StrLenChars;
 	re.Font_HeightPixels					= RE_Font_HeightPixels;
 	re.Font_DrawString						= RE_Font_DrawString;
+	re.Font_DrawString_Float				= RE_Font_DrawString_Float;
 	re.Language_IsAsian						= Language_IsAsian;
 	re.Language_UsesSpaces					= Language_UsesSpaces;
 	re.AnyLanguage_ReadCharFromString		= AnyLanguage_ReadCharFromString;

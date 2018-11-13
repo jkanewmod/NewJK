@@ -437,7 +437,8 @@ typedef enum cgameImportLegacy_e {
 	CG_R_WORLDEFFECTCOMMAND,
 	CG_WE_ADDWEATHERZONE,
 	// newmod start
-	CG_CVAR_FLAGS = 5000
+	CG_CVAR_FLAGS = 5000,
+	CG_R_FONT_DRAWSTRING_FLOAT,
 } cgameImportLegacy_t;
 
 typedef enum cgameExportLegacy_e {
@@ -564,6 +565,7 @@ typedef struct cgameImport_s {
 	void			(*R_DrawRotatePic)						( float x, float y, float w, float h, float s1, float t1, float s2, float t2, float a1, qhandle_t hShader );	// 0 = white
 	void			(*R_DrawRotatePic2)						( float x, float y, float w, float h, float s1, float t1, float s2, float t2, float a1, qhandle_t hShader );	// 0 = white
 	void			(*R_Font_DrawString)					( int ox, int oy, const char *text, const float *rgba, const int setIndex, int iCharLimit, const float scale );
+	void			(*R_Font_DrawString_Float)				( float ox, float oy, const char *text, const float *rgba, const int setIndex, int iCharLimit, const float scale );
 	int				(*R_Font_HeightPixels)					( const int iFontIndex, const float scale );
 	int				(*R_Font_StrLenChars)					( const char *text );
 	int				(*R_Font_StrLenPixels)					( const char *text, const int iFontIndex, const float scale );
