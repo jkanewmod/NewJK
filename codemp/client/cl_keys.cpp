@@ -1201,7 +1201,7 @@ void Key_Bind_f( void ) {
 	int c = Cmd_Argc();
 
 	if ( c < 2 ) {
-		Com_Printf( "bind <key> [command] : attach a command to a key\noptionally use ctrl+, shift+, or alt+ key modifier" );
+		Com_Printf( "bind <key> [command] : attach a command to a key\noptionally use ctrl+, shift+, or alt+ key modifier\n" );
 		return;
 	}
 
