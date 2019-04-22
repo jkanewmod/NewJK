@@ -319,6 +319,11 @@ void Com_Quit_f( void ) {
 	Sys_Quit ();
 }
 
+extern cvar_t *s_mute;
+void Com_Mute_f(void) {
+	Cvar_Set("s_mute", s_mute->integer ? "0" : "1");
+}
+
 //Simulate hardware media keys
 void Com_MediaKeys_f(const int key) {
 #ifdef _WIN32
@@ -1206,6 +1211,7 @@ void Com_Init( char *commandLine ) {
 			Cmd_AddCommand ("freeze", Com_Freeze_f);
 		}
 		Cmd_AddCommand ("quit", Com_Quit_f, "Quits the game" );
+		Cmd_AddCommand("mute", Com_Mute_f, "Toggles all sound playback");
 		Cmd_AddCommand("mnext", Com_MNext_f, "Simulates hardware 'next track' key");
 		Cmd_AddCommand("mprev", Com_MPrev_f, "Simulates hardware 'previous track' key");
 		Cmd_AddCommand("mstop", Com_MStop_f, "Simulates hardware 'stop media' key");

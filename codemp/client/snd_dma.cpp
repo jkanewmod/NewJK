@@ -172,6 +172,7 @@ int			s_numSfx;
 #define		LOOP_HASH		128
 static	sfx_t		*sfxHash[LOOP_HASH];
 
+cvar_t		*s_mute;
 cvar_t		*s_volume;
 cvar_t		*s_volumeVoice;
 cvar_t		*s_testsound;
@@ -449,6 +450,8 @@ void S_Init( void ) {
 
 	Com_Printf("\n------- sound initialization -------\n");
 
+	s_mute = Cvar_Get("s_mute", "0", CVAR_ROM|CVAR_INTERNAL);
+	Cvar_Set("s_mute", "0");
 	s_volume = Cvar_Get ("s_volume", "0.5", CVAR_ARCHIVE, "Volume" );
 	s_volumeVoice= Cvar_Get ("s_volumeVoice", "1.0", CVAR_ARCHIVE, "Volume for voice channels" );
 	s_musicVolume = Cvar_Get ("s_musicvolume", "0.25", CVAR_ARCHIVE, "Music Volume" );
@@ -4677,6 +4680,8 @@ static qboolean S_UpdateBackgroundTrack_Actual( MusicInfo_t *pMusicInfo, qboolea
 	int		r;
 
 	float fMasterVol = fDefaultVolume; // s_musicVolume->value;
+	if (s_mute->integer)
+		fMasterVol = 0;
 
 	if (bMusic_IsDynamic)
 	{
