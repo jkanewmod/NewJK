@@ -448,7 +448,10 @@ void Field_VariableSizeDraw( field_t *edit, int x, int y, int width, int size, q
 		SCR_DrawSmallStringExt( x, y, str, color, qfalse, noColorEscape );
 	} else {
 		// draw big string with drop shadow
-		SCR_DrawBigString( x, y, str, 1.0, noColorEscape );
+		if (cl_ratioFix->integer == 1)
+			SCR_DrawStringExt2(x*cls.widthRatioCoef, y, BIGCHAR_WIDTH*cls.widthRatioCoef, BIGCHAR_HEIGHT, str, colorWhite, qfalse, qfalse);
+		else
+			SCR_DrawBigString( x, y, str, 1.0, noColorEscape );
 	}
 
 	// draw the cursor
@@ -470,7 +473,10 @@ void Field_VariableSizeDraw( field_t *edit, int x, int y, int width, int size, q
 		} else {
 			str[0] = cursorChar;
 			str[1] = 0;
-			SCR_DrawBigString( x + ( edit->cursor - prestep - i ) * size, y, str, 1.0, qfalse );
+			if (cl_ratioFix->integer)
+				SCR_DrawStringExt2((x + (edit->cursor - prestep - i)*BIGCHAR_WIDTH)*cls.widthRatioCoef, y, BIGCHAR_WIDTH*cls.widthRatioCoef, BIGCHAR_HEIGHT, str, colorWhite, qfalse, qfalse);
+			else
+				SCR_DrawBigString( x + ( edit->cursor - prestep - i ) * size, y, str, 1.0, qfalse );
 		}
 	}
 }

@@ -720,7 +720,10 @@ void Con_DrawNotify (void)
 			digitsRemaining <= 50 ? va(" (%d)", digitsRemaining) : "",
 			extraSpace ? " " : "");
 
-		SCR_DrawBigString(8, v, fullPrompt, 1.0f, qfalse);
+		if (cl_ratioFix->integer == 1)
+			SCR_DrawStringExt2(8 * cls.widthRatioCoef, v, BIGCHAR_WIDTH*cls.widthRatioCoef, BIGCHAR_HEIGHT, fullPrompt, colorWhite, qfalse, qfalse);
+		else
+			SCR_DrawBigString(8, v, fullPrompt, 1.0f, qfalse);
 		skip = strlen(fullPrompt) + 1 - 4/*two color codes*/;
 
 		Field_BigDraw( &chatField, skip * BIGCHAR_WIDTH, v,

@@ -1244,7 +1244,7 @@ const glyphInfo_t *CFontInfo::GetLetter(const unsigned int uiLetter, int *piShad
 		ASSIGN_WITH_ROUNDING( m_AsianGlyph.height,		pGlyph->height );
 		ASSIGN_WITH_ROUNDING( m_AsianGlyph.horizAdvance,pGlyph->horizAdvance );
 //		m_AsianGlyph.horizOffset	= /*Round*/( m_fAltSBCSFontScaleFactor * pGlyph->horizOffset );
-		ASSIGN_WITH_ROUNDING( m_AsianGlyph.width,		pGlyph->width );
+		ASSIGN_WITH_ROUNDING( m_AsianGlyph.width,		pGlyph->width*tr.widthRatioCoef);
 
 		pGlyph = &m_AsianGlyph;
 	}
@@ -1390,10 +1390,10 @@ float RE_Font_StrLenPixelsNew( const char *psText, const int iFontHandle, const 
 
 			float fValue = iPixelAdvance * ((uiLetter > (unsigned)g_iNonScaledCharRange) ? fScaleAsian : fScale);
 
-			if ( r_aspectCorrectFonts->integer == 1 ) {
-				fValue *= ((float)(SCREEN_WIDTH * glConfig.vidHeight) / (float)(SCREEN_HEIGHT * glConfig.vidWidth));
+			if ( r_aspectCorrectFonts->integer == 1 || cl_ratioFix->integer == 1) {
+				fValue *= tr.widthRatioCoef;
 			}
-			else if ( r_aspectCorrectFonts->integer == 2 ) {
+			else if ( r_aspectCorrectFonts->integer == 2 || cl_ratioFix->integer == 2 ) {
 				fValue = ceilf(
 					fValue * ((float)(SCREEN_WIDTH * glConfig.vidHeight) / (float)(SCREEN_HEIGHT * glConfig.vidWidth))
 				);
@@ -1589,7 +1589,10 @@ void RE_Font_DrawString(int ox, int oy, const char *psText, const float *rgba, c
 			break;
 		case 32:						// Space
 			pLetter = curfont->GetLetter(' ');
-			fx += curfont->mbRoundCalcs ? Round(pLetter->horizAdvance * fScale) : pLetter->horizAdvance * fScale;
+			if (cl_ratioFix->integer == 1)
+				fx += curfont->mbRoundCalcs ? Round(pLetter->horizAdvance * fScale) : pLetter->horizAdvance * fScale * tr.widthRatioCoef;
+			else
+				fx += curfont->mbRoundCalcs ? Round(pLetter->horizAdvance * fScale) : pLetter->horizAdvance * fScale;
 			bNextTextWouldOverflow = ( iMaxPixelWidth != -1 && ((fx-fox) > (float)iMaxPixelWidth) ) ? qtrue : qfalse; // yeuch
 			break;
 		case '_':	// has a special word-break usage if in Thai (and followed by a thai char), and should not be displayed, else treat as normal
@@ -1644,24 +1647,37 @@ void RE_Font_DrawString(int ox, int oy, const char *psText, const float *rgba, c
 					fy += 3.0f; // I'm sick and tired of going round in circles trying to do this legally, so bollocks to it
 				}
 
-				RE_StretchPic(curfont->mbRoundCalcs ? fx + Round(pLetter->horizOffset * fThisScale) : fx + pLetter->horizOffset * fThisScale, // float x
-								(uiLetter > (unsigned)g_iNonScaledCharRange) ? fy - fAsianYAdjust : fy,	// float y
-								curfont->mbRoundCalcs ? Round(pLetter->width * fThisScale) : pLetter->width * fThisScale,	// float w
-								curfont->mbRoundCalcs ? Round(pLetter->height * fThisScale) : pLetter->height * fThisScale, // float h
-								pLetter->s,						// float s1
-								pLetter->t,						// float t1
-								pLetter->s2,					// float s2
-								pLetter->t2,					// float t2
-								//lastcolour.c,
-								hShader							// qhandle_t hShader
-								);
-				if ( r_aspectCorrectFonts->integer == 1 ) {
-					fx += fAdvancePixels
-						* ((float)(SCREEN_WIDTH * glConfig.vidHeight) / (float)(SCREEN_HEIGHT * glConfig.vidWidth));
+				if (cl_ratioFix->integer == 1) {
+					RE_StretchPic(curfont->mbRoundCalcs ? fx + Round(pLetter->horizOffset * fThisScale) : fx + pLetter->horizOffset * fThisScale, // float x
+						(uiLetter > (unsigned)g_iNonScaledCharRange) ? fy - fAsianYAdjust : fy,	// float y
+						curfont->mbRoundCalcs ? Round(pLetter->width * fThisScale) : pLetter->width * fThisScale * tr.widthRatioCoef,	// float w
+						curfont->mbRoundCalcs ? Round(pLetter->height * fThisScale) : pLetter->height * fThisScale, // float h
+						pLetter->s,						// float s1
+						pLetter->t,						// float t1
+						pLetter->s2,					// float s2
+						pLetter->t2,					// float t2
+						//lastcolour.c,
+						hShader							// qhandle_t hShader
+					);
 				}
-				else if ( r_aspectCorrectFonts->integer == 2 ) {
-					fx += ceilf( fAdvancePixels
-						* ((float)(SCREEN_WIDTH * glConfig.vidHeight) / (float)(SCREEN_HEIGHT * glConfig.vidWidth)) );
+				else {
+					RE_StretchPic(curfont->mbRoundCalcs ? fx + Round(pLetter->horizOffset * fThisScale) : fx + pLetter->horizOffset * fThisScale, // float x
+						(uiLetter > (unsigned)g_iNonScaledCharRange) ? fy - fAsianYAdjust : fy,	// float y
+						curfont->mbRoundCalcs ? Round(pLetter->width * fThisScale) : pLetter->width * fThisScale,	// float w
+						curfont->mbRoundCalcs ? Round(pLetter->height * fThisScale) : pLetter->height * fThisScale, // float h
+						pLetter->s,						// float s1
+						pLetter->t,						// float t1
+						pLetter->s2,					// float s2
+						pLetter->t2,					// float t2
+						//lastcolour.c,
+						hShader							// qhandle_t hShader
+					);
+				}
+				if ( r_aspectCorrectFonts->integer == 1 || cl_ratioFix->integer == 1) {
+					fx += fAdvancePixels * tr.widthRatioCoef;
+				}
+				else if ( r_aspectCorrectFonts->integer == 2 || cl_ratioFix->integer == 2 ) {
+					fx += ceilf( fAdvancePixels * tr.widthRatioCoef);
 				}
 				else {
 					fx += fAdvancePixels;
@@ -1859,13 +1875,11 @@ void RE_Font_DrawString_Float(float ox, float oy, const char *psText, const floa
 													//lastcolour.c,
 					hShader							// qhandle_t hShader
 				);
-				if (r_aspectCorrectFonts->integer == 1) {
-					fx += fAdvancePixels
-						* ((float)(SCREEN_WIDTH * glConfig.vidHeight) / (float)(SCREEN_HEIGHT * glConfig.vidWidth));
+				if (r_aspectCorrectFonts->integer == 1 || cl_ratioFix->integer == 1) {
+					fx += fAdvancePixels  * tr.widthRatioCoef;
 				}
-				else if (r_aspectCorrectFonts->integer == 2) {
-					fx += ceilf(fAdvancePixels
-						* ((float)(SCREEN_WIDTH * glConfig.vidHeight) / (float)(SCREEN_HEIGHT * glConfig.vidWidth)));
+				else if (r_aspectCorrectFonts->integer == 2 || cl_ratioFix->integer == 2) {
+					fx += ceilf(fAdvancePixels * tr.widthRatioCoef);
 				}
 				else {
 					fx += fAdvancePixels;

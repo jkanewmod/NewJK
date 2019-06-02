@@ -112,6 +112,7 @@ cvar_t  *cl_lanForcePackets;
 cvar_t	*cl_drawRecording;
 
 cvar_t	*cl_fpsSaver;
+cvar_t	*cl_ratioFix;
 
 vec3_t cl_windVec;
 
@@ -2312,8 +2313,8 @@ void CL_InitRenderer( void ) {
 	cls.whiteShader = re->RegisterShader( "white" );
 
 	cls.consoleShader = 0;
-	float ratio = (float)(SCREEN_WIDTH * cls.glconfig.vidHeight) / (float)(SCREEN_HEIGHT * cls.glconfig.vidWidth);
-	if (ratio >= 0.74f && ratio <= 0.76f)
+	cls.widthRatioCoef = (float)(SCREEN_WIDTH * cls.glconfig.vidHeight) / (float)(SCREEN_HEIGHT * cls.glconfig.vidWidth);
+	if (cls.widthRatioCoef >= 0.74f && cls.widthRatioCoef <= 0.76f)
 		cls.consoleShader = re->RegisterShader("console_16_9");
 	if (!cls.consoleShader)
 		cls.consoleShader = re->RegisterShader( "console" );
@@ -2834,6 +2835,8 @@ void CL_Init( void ) {
 
 	// cgame might not be initialized before menu is used
 	Cvar_Get ("cg_viewsize", "100", CVAR_ARCHIVE );
+
+	cl_ratioFix = Cvar_Get("cl_ratioFix", "0", CVAR_ARCHIVE, "Reduce font width on widescreen aspect ratios to 4:3 proportions");
 
 	//
 	// register our commands

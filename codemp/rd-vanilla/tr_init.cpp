@@ -168,6 +168,7 @@ cvar_t	*r_debugSort;
 cvar_t	*r_marksOnTriangleMeshes;
 
 cvar_t	*r_aspectCorrectFonts;
+cvar_t	*cl_ratioFix;
 
 // the limits apply to the sum of all scenes in a frame --
 // the main view, all the 3D icons, etc
@@ -269,6 +270,16 @@ bool g_bTextureRectangleHack = false;
 
 void RE_SetLightStyle(int style, int color);
 void RE_GetBModelVerts( int bmodelIndex, vec3_t *verts, vec3_t normal );
+
+void R_Set2DRatio(void) {
+	if (cl_ratioFix->integer)
+		tr.widthRatioCoef = ((float)(SCREEN_WIDTH * glConfig.vidHeight) / (float)(SCREEN_HEIGHT * glConfig.vidWidth));
+	else
+		tr.widthRatioCoef = 1.0f;
+
+	if (tr.widthRatioCoef > 1)
+		tr.widthRatioCoef = 1.0f;
+}
 
 void R_Splash()
 {
@@ -1671,6 +1682,7 @@ void R_Register( void )
 	r_shadowRange						= ri->Cvar_Get( "r_shadowRange",					"1000",						CVAR_NONE, "" );
 	r_marksOnTriangleMeshes				= ri->Cvar_Get( "r_marksOnTriangleMeshes",			"0",						CVAR_ARCHIVE, "" );
 	r_aspectCorrectFonts				= ri->Cvar_Get( "r_aspectCorrectFonts",				"0",						CVAR_ARCHIVE, "" );
+	cl_ratioFix							= ri->Cvar_Get(	"cl_ratioFix",						"0",						CVAR_ARCHIVE, "" );
 	r_maxpolys							= ri->Cvar_Get( "r_maxpolys",						XSTRING( DEFAULT_MAX_POLYS ),		CVAR_NONE, "" );
 	r_maxpolyverts						= ri->Cvar_Get( "r_maxpolyverts",					XSTRING( DEFAULT_MAX_POLYVERTS ),	CVAR_NONE, "" );
 /*
@@ -1812,6 +1824,7 @@ void R_Init( void ) {
 		RE_SetLightStyle(i, -1);
 	}
 	InitOpenGL();
+	R_Set2DRatio();
 
 	R_InitImages();
 	R_InitShaders(qfalse);

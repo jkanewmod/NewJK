@@ -1056,6 +1056,8 @@ typedef struct trGlobals_s {
 
 	float					rangedFog;
 	float					distanceCull;
+
+	float					widthRatioCoef;
 } trGlobals_t;
 
 struct glconfigExt_t
@@ -1229,6 +1231,7 @@ extern	cvar_t	*r_debugSort;
 extern	cvar_t	*r_marksOnTriangleMeshes;
 
 extern	cvar_t	*r_aspectCorrectFonts;
+extern	cvar_t	*cl_ratioFix;
 
 /*
 Ghoul2 Insert Start
