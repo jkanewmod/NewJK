@@ -332,8 +332,8 @@ static void GLW_InitTextureCompression( void )
 	bool newer_tc, old_tc;
 
 	// Check for available tc methods.
-	newer_tc = ri->GL_ExtensionSupported("GL_ARB_texture_compression") && ri->GL_ExtensionSupported("GL_EXT_texture_compression_s3tc");
-	old_tc = ri->GL_ExtensionSupported("GL_S3_s3tc");
+	newer_tc = ri->GL_ExtensionSupported("GL_ARB_texture_compression") && ri->GL_ExtensionSupported("GL_EXT_texture_compression_s3tc") != 0;
+	old_tc = ri->GL_ExtensionSupported("GL_S3_s3tc") != 0;
 
 	if ( old_tc )
 	{
