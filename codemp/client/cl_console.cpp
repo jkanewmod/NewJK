@@ -578,6 +578,27 @@ void Con_DrawInput (void) {
 
 
 
+int ChatStrLen(void) {
+	int result = 0;
+	for (unsigned char* p = (unsigned char *)chatField.buffer; *p; p++) {
+		switch (*p) {
+		case 172: // €/¬
+			result += 6;
+			break;
+		case '%':
+			result += 3;
+			break;
+		case '"':
+			result += 2;
+			break;
+		default:
+			result += 1;
+			break;
+		}
+	}
+
+	return result;
+}
 
 /*
 ================
@@ -713,7 +734,7 @@ void Con_DrawNotify (void)
 		}
 
 		// append digits remaining and re-append ':' char
-		int digitsRemaining = Com_Clampi(0, 149, 149 - strlen(chatField.buffer));
+		int digitsRemaining = Com_Clampi(0, 149, 149 - ChatStrLen());
 		char *fullPrompt = va("%s%s" S_COLOR_WHITE "%s%s:",
 			chat_team ? S_COLOR_CYAN : S_COLOR_WHITE,
 			chat_team ? teamPrompt : prompt,

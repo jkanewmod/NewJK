@@ -244,6 +244,19 @@ const char *Q_stristr( const char *s, const char *find )
 	return s;
 }
 
+// same as Q_stristr but the needle must be surrounded by \0 or whitespace
+const char *Q_stristrWord(const char *s, const char *find) {
+	const char *found = Q_stristr(s, find);
+	if (!found)
+		return NULL;
+	size_t findLen = strlen(find);
+	if (*(found + findLen) && !isspace((unsigned char)*(found + findLen)))
+		return NULL;
+	if (found > s && *(found - 1) && !isspace((unsigned char)*(found - 1)))
+		return NULL;
+	return found;
+}
+
 int Q_PrintStrlen( const char *string ) {
 	int			len;
 	const char	*p;

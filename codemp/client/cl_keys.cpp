@@ -586,8 +586,10 @@ void Field_KeyDownEvent( field_t *edit, int key ) {
 Field_CharEvent
 ==================
 */
+extern int ChatStrLen(void);
 void Field_CharEvent( field_t *edit, int ch ) {
 	int		len;
+	int max = (edit == &chatField ? 151 : MAX_EDIT_LINE);
 
 	if ( ch == 'v' - 'a' + 1 ) {	// ctrl-v is paste
 		Field_Paste( edit );
@@ -600,37 +602,16 @@ void Field_CharEvent( field_t *edit, int ch ) {
 	}
 
 	len = strlen( edit->buffer );
+	int newChatLen = edit == &chatField ? ChatStrLen() : 0;
 
-	if ( ch == 'h' - 'a' + 1 )	{	// ctrl-h is backspace
-		if ( edit->cursor > 0 ) {
-			if (edit == &chatField && edit->cursor > 2 &&
-				*(edit->buffer + edit->cursor - 1) == '.' && *(edit->buffer + edit->cursor - 2) == '/' && *(edit->buffer + edit->cursor - 3) == -80) {
-				memmove(edit->buffer + edit->cursor - 3,
-					edit->buffer + edit->cursor, len + 3 - edit->cursor);
-				edit->cursor -= 3;
-				if (edit->cursor < edit->scroll)
-				{
-					edit->scroll -= 3;
-				}
-			}
-			else if (edit == &chatField && edit->cursor > 1 &&
-				*(edit->buffer + edit->cursor - 1) == '\'' && *(edit->buffer + edit->cursor - 2) == '\'') {
-				memmove(edit->buffer + edit->cursor - 2,
-					edit->buffer + edit->cursor, len + 2 - edit->cursor);
-				edit->cursor -= 2;
-				if (edit->cursor < edit->scroll)
-				{
-					edit->scroll -= 2;
-				}
-			}
-			else {
-				memmove(edit->buffer + edit->cursor - 1,
-					edit->buffer + edit->cursor, len + 1 - edit->cursor);
-				edit->cursor--;
-				if (edit->cursor < edit->scroll)
-				{
-					edit->scroll--;
-				}
+	if (ch == 'h' - 'a' + 1) {	// ctrl-h is backspace
+		if (edit->cursor > 0) {
+			memmove(edit->buffer + edit->cursor - 1,
+				edit->buffer + edit->cursor, len + 1 - edit->cursor);
+			edit->cursor--;
+			if (edit->cursor < edit->scroll)
+			{
+				edit->scroll--;
 			}
 		}
 		return;
@@ -655,20 +636,42 @@ void Field_CharEvent( field_t *edit, int ch ) {
 		return;
 	}
 
-	if (ch == '%' && edit == &chatField) {
-		Field_CharEvent(edit, 176);
-		Field_CharEvent(edit, '/');
-		Field_CharEvent(edit, '.');
-		return;
+	if (edit == &chatField) {
+		switch (ch) {
+		case 172: // €/¬
+			newChatLen += 6;
+			break;
+		case '%':
+			newChatLen += 3;
+			break;
+		case '"':
+			newChatLen += 2;
+			break;
+		default:
+			newChatLen += 1;
+			break;
+		}
 	}
 
-	if (ch == '"' && edit == &chatField) {
-		Field_CharEvent(edit, '\'');
-		Field_CharEvent(edit, '\'');
+	if (edit == &chatField && newChatLen >= max - 1)
 		return;
+
+	if (edit->cursor > 0 && edit->buffer[edit->cursor - 1] == '^' && Q_stristrWord(cg_languageFix->string, "fr")) {
+		int replaceChar = 0;
+		switch (ch) {
+		case 'A': replaceChar = 'Â'; break;
+		case 'a': replaceChar = 'â'; break;
+		case 'E': replaceChar = 'Ê'; break;
+		case 'e': replaceChar = 'ê'; break;
+		case 'O': replaceChar = 'Ô'; break;
+		case 'o': replaceChar = 'ô'; break;
+		}
+		if (replaceChar) {
+			edit->buffer[edit->cursor - 1] = replaceChar;
+			return;
+		}
 	}
 
-	int max = edit == &chatField ? 151 : MAX_EDIT_LINE;
 	if ( kg.key_overstrikeMode ) {
 		// - 2 to leave room for the leading slash and trailing \0
 		if ( edit->cursor == max - 2 )
@@ -857,6 +860,34 @@ void Message_Key( int key ) {
 
 	if ( key == A_ENTER || key == A_KP_ENTER ) {
 		if ( chatField.buffer[0] && cls.state == CA_ACTIVE ) {
+			if (Q_strchrs(chatField.buffer, "%\"\xAC")) { // replace symbols
+				char buffer[MAX_EDIT_LINE];
+				char* src = buffer, * dst = chatField.buffer;
+
+				Q_strncpyz(buffer, chatField.buffer, sizeof(buffer));
+				memset(&chatField.buffer[0], 0, sizeof(chatField.buffer));
+
+				while (*src) {
+					if (*src == '%') {
+						Q_strcat(dst, sizeof(buffer), "\xB0/.");
+						dst += 3;
+					}
+					else if (*src == '"') {
+						Q_strcat(dst, sizeof(buffer), "''");
+						dst += 2;
+					}
+					else if (*src == '\xAC') {
+						Q_strcat(dst, sizeof(buffer), "[Euro]");
+						dst += 6;
+					}
+					else {
+						*dst++ = *src;
+					}
+					src++;
+				}
+				*dst = 0;
+			}
+
 				 if ( chat_playerNum != -1 )	Com_sprintf( buffer, sizeof( buffer ), "tell %i \"%s\"\n", chat_playerNum, chatField.buffer );
 			else if ( chat_team )				Com_sprintf( buffer, sizeof( buffer ), "say_team \"%s\"\n", chatField.buffer );
 			else								Com_sprintf( buffer, sizeof( buffer ), "say \"%s\"\n", chatField.buffer );

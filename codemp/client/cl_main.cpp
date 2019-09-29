@@ -114,6 +114,8 @@ cvar_t	*cl_drawRecording;
 cvar_t	*cl_fpsSaver;
 cvar_t	*cl_ratioFix;
 
+cvar_t	*cg_languageFix;
+
 vec3_t cl_windVec;
 
 
@@ -2308,7 +2310,13 @@ void CL_InitRenderer( void ) {
 	re->BeginRegistration( &cls.glconfig );
 
 	// load character sets
-	cls.charSetShader = re->RegisterShaderNoMip("gfx/2d/charsgrid_med");
+
+	// check the latched string, since the cvar may not have updated yet
+	const char *checkStr = cg_languageFix->latchedString ? cg_languageFix->latchedString : cg_languageFix->string;
+	bool hungarian = !!(Q_stristrWord(checkStr, "hu"));
+	cls.charSetShader = re->RegisterShaderNoMip(hungarian ? "gfx/2d/charsgrid_med_hun" : "gfx/2d/charsgrid_med");
+	if (hungarian && !cls.charSetShader)
+		cls.charSetShader = re->RegisterShaderNoMip("gfx/2d/charsgrid_med");
 
 	cls.whiteShader = re->RegisterShader( "white" );
 
@@ -2798,6 +2806,8 @@ void CL_Init( void ) {
 	cl_lanForcePackets = Cvar_Get ("cl_lanForcePackets", "1", CVAR_ARCHIVE);
 
 	cl_drawRecording = Cvar_Get("cl_drawRecording", "0", CVAR_ARCHIVE, "Show 'recording' message for demos");
+
+	cg_languageFix = Cvar_Get("cg_languageFix", "0", CVAR_ARCHIVE | CVAR_LATCH, "Apply fixes for certain languages");
 
 	// enable the ja_guid player identifier in userinfo by default in OpenJK
 	cl_enableGuid = Cvar_Get("cl_enableGuid", "1", CVAR_ARCHIVE, "Enable GUID userinfo identifier" );
