@@ -861,23 +861,23 @@ void Message_Key( int key ) {
 	if ( key == A_ENTER || key == A_KP_ENTER ) {
 		if ( chatField.buffer[0] && cls.state == CA_ACTIVE ) {
 			if (Q_strchrs(chatField.buffer, "%\"\xAC")) { // replace symbols
-				char buffer[MAX_EDIT_LINE];
-				char* src = buffer, * dst = chatField.buffer;
+				char tempBuf[MAX_EDIT_LINE] = { 0 };
+				Q_strncpyz(tempBuf, chatField.buffer, sizeof(tempBuf));
 
-				Q_strncpyz(buffer, chatField.buffer, sizeof(buffer));
+				char* src = tempBuf, * dst = chatField.buffer;
 				memset(&chatField.buffer[0], 0, sizeof(chatField.buffer));
 
 				while (*src) {
 					if (*src == '%') {
-						Q_strcat(dst, sizeof(buffer), "\xB0/.");
+						Q_strcat(chatField.buffer, sizeof(chatField.buffer), "\xB0/.");
 						dst += 3;
 					}
 					else if (*src == '"') {
-						Q_strcat(dst, sizeof(buffer), "''");
+						Q_strcat(chatField.buffer, sizeof(chatField.buffer), "''");
 						dst += 2;
 					}
 					else if (*src == '\xAC') {
-						Q_strcat(dst, sizeof(buffer), "[Euro]");
+						Q_strcat(chatField.buffer, sizeof(chatField.buffer), "[Euro]");
 						dst += 6;
 					}
 					else {
