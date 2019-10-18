@@ -157,7 +157,7 @@ static void CMod_LoadShaders( const lump_t *l, clipMap_t &cm )
 
 		// overrides for some base shaders
 		int j;
-		for (j = 0; j <= ARRAY_LEN(replaceMaterials); j++) {
+		for (j = 0; j < ARRAY_LEN(replaceMaterials); j++) {
 			if (!Q_stricmp(out->shader, replaceMaterials[j].shader)) {
 				out->surfaceFlags = replaceMaterials->materialNum;
 			}
