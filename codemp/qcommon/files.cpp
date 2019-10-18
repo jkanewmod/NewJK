@@ -3275,12 +3275,35 @@ void FS_Shutdown( qboolean closemfp ) {
 #endif
 }
 
+// clone of Q_stricmp, but considers "base" to be the same as ""
+static int CompareFsGameString(const char *s1, const char *s2) {
+	const char *compare1 = !Q_stricmp(s1, "base") ? "" : s1;
+	const char *compare2 = !Q_stricmp(s2, "base") ? "" : s2;
+	return Q_stricmp(compare1, compare2);
+}
+
+// returns "" if the string is "base"; otherwise just returns the string
+static const char *FilterFsGameString(const char *s) {
+	if (!Q_stricmp(s, "base"))
+		return "";
+	return s;
+}
+
 //rww - add search paths in for received svc_setgame
 //Ensiform - this is so wrong rww
 void FS_UpdateGamedir(void)
 {
-	if (fs_forceGame->string[0] && Q_stricmp(fs_forceGame->string, "0"))
-		Cvar_Set("fs_game", !Q_stricmp(fs_forceGame->string, "base") ? "" : fs_forceGame->string);
+	if (fs_forceGame->string[0] && Q_stricmp(fs_forceGame->string, "0")) {
+		if (CompareFsGameString(fs_gamedirvar->string, fs_forceGame->string)) {
+			static char lastOverridenGame[MAX_QPATH] = { 0 };
+			if (Q_stricmp(lastOverridenGame, fs_gamedirvar->string)) { // don't spam the same warning repeatedly
+				Com_Printf("*Prevented server from setting fs_game to \"%s\". Forcing fs_game to \"%s\" according to your fs_forceGame setting.\n",
+					fs_gamedirvar->string, FilterFsGameString(fs_forceGame->string));
+				Q_strncpyz(lastOverridenGame, fs_gamedirvar->string, sizeof(lastOverridenGame));
+			}
+		}
+		Cvar_Set("fs_game", FilterFsGameString(fs_forceGame->string));
+	}
 
 	if ( fs_gamedirvar->string[0] && Q_stricmp( fs_gamedirvar->string, BASEGAME ) )
 	{
@@ -3422,10 +3445,10 @@ void FS_Startup( const char *gameName ) {
 	if (fs_forceGame->string[0] && Q_stricmp(fs_forceGame->string, "0")) {
 		static qboolean printedMessage = qfalse;
 		if (!printedMessage) {
-			Com_Printf("Forcing fs_game to \"%s\" according to your fs_forceGame setting.\n", !Q_stricmp(fs_forceGame->string, "base") ? "" : fs_forceGame->string);
+			Com_Printf("Forcing fs_game to \"%s\" according to your fs_forceGame setting.\n", FilterFsGameString(fs_forceGame->string));
 			printedMessage = qtrue;
 		}
-		Cvar_Set("fs_game", !Q_stricmp(fs_forceGame->string, "base") ? "" : fs_forceGame->string);
+		Cvar_Set("fs_game", FilterFsGameString(fs_forceGame->string));
 	}
 
 	// check for additional game folder for mods
