@@ -243,6 +243,7 @@ static cvar_t		*fs_basegame;
 static cvar_t		*fs_cdpath;
 static cvar_t		*fs_copyfiles;
 static cvar_t		*fs_gamedirvar;
+static cvar_t		*fs_forceGame;
 static cvar_t		*fs_dirbeforepak; //rww - when building search path, keep directories at top and insert pk3's under them
 static searchpath_t	*fs_searchpaths;
 static int			fs_readCount;			// total bytes read
@@ -3278,6 +3279,9 @@ void FS_Shutdown( qboolean closemfp ) {
 //Ensiform - this is so wrong rww
 void FS_UpdateGamedir(void)
 {
+	if (fs_forceGame->string[0] && Q_stricmp(fs_forceGame->string, "0"))
+		Cvar_Set("fs_game", !Q_stricmp(fs_forceGame->string, "base") ? "" : fs_forceGame->string);
+
 	if ( fs_gamedirvar->string[0] && Q_stricmp( fs_gamedirvar->string, BASEGAME ) )
 	{
 		if (fs_cdpath->string[0])
@@ -3374,6 +3378,7 @@ void FS_Startup( const char *gameName ) {
 	}
 	fs_homepath = Cvar_Get ("fs_homepath", homePath, CVAR_INIT|CVAR_PROTECTED, "(Read/Write) Location for user generated files" );
 	fs_gamedirvar = Cvar_Get ("fs_game", "", CVAR_INIT|CVAR_SYSTEMINFO, "Mod directory" );
+	fs_forceGame = Cvar_Get("fs_forceGame", "", CVAR_INIT, "Force a specific mod directory");
 
 	fs_dirbeforepak = Cvar_Get("fs_dirbeforepak", "0", CVAR_INIT|CVAR_PROTECTED, "Prioritize directories before paks if not pure" );
 
@@ -3411,6 +3416,16 @@ void FS_Startup( const char *gameName ) {
 		if (fs_homepath->string[0] && !Sys_PathCmp(fs_homepath->string, fs_basepath->string)) {
 			FS_AddGameDirectory(fs_homepath->string, fs_basegame->string);
 		}
+	}
+
+	// make sure fs_game is set to the value of fs_forceGame
+	if (fs_forceGame->string[0] && Q_stricmp(fs_forceGame->string, "0")) {
+		static qboolean printedMessage = qfalse;
+		if (!printedMessage) {
+			Com_Printf("Forcing fs_game to \"%s\" according to your fs_forceGame setting.\n", !Q_stricmp(fs_forceGame->string, "base") ? "" : fs_forceGame->string);
+			printedMessage = qtrue;
+		}
+		Cvar_Set("fs_game", !Q_stricmp(fs_forceGame->string, "base") ? "" : fs_forceGame->string);
 	}
 
 	// check for additional game folder for mods
@@ -3796,6 +3811,7 @@ void FS_InitFilesystem( void ) {
 	Com_StartupVariable( "fs_basepath" );
 	Com_StartupVariable( "fs_homepath" );
 	Com_StartupVariable( "fs_game" );
+	Com_StartupVariable( "fs_forceGame" );
 	Com_StartupVariable( "fs_copyfiles" );
 	Com_StartupVariable( "fs_dirbeforepak" );
 #ifdef MACOS_X

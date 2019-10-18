@@ -461,6 +461,7 @@ void CL_SystemInfoChanged( void ) {
 	t = Info_ValueForKey( systemInfo, "sv_referencedPakNames" );
 	FS_PureServerSetReferencedPaks( s, t );
 
+	const char *forceGameStr = Cvar_VariableString("fs_forceGame");
 	gameSet = qfalse;
 	// scan through all the variables in the systeminfo and locally set cvars to match
 	s = systemInfo;
@@ -471,6 +472,9 @@ void CL_SystemInfoChanged( void ) {
 		}
 		// ehw!
 		if ( !Q_stricmp( key, "fs_game" ) ) {
+			if (VALIDSTRING(forceGameStr) && Q_stricmp(forceGameStr, "0"))
+				continue;
+
 			if(FS_CheckDirTraversal(value))
 			{
 				Com_Printf(S_COLOR_YELLOW "WARNING: Server sent invalid fs_game value %s\n", value);
@@ -487,7 +491,7 @@ void CL_SystemInfoChanged( void ) {
 		Cvar_Server_Set( key, value );
 	}
 	// if game folder should not be set and it is set at the client side
-	if ( !gameSet && *Cvar_VariableString("fs_game") ) {
+	if ( !gameSet && *Cvar_VariableString("fs_game") && !(VALIDSTRING(forceGameStr) && Q_stricmp(forceGameStr, "0"))) {
 		Cvar_Set( "fs_game", "" );
 	}
 	cl_connectedToPureServer = Cvar_VariableValue( "sv_pure" );
