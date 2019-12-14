@@ -3273,6 +3273,9 @@ void FS_Shutdown( qboolean closemfp ) {
 		fclose(missingFiles);
 	}
 #endif
+
+	if (closemfp) //not restarting
+		Cmd_RemoveCommand("fs_restart");
 }
 
 // clone of Q_stricmp, but considers "base" to be the same as ""
@@ -3825,6 +3828,7 @@ Called only at inital startup, not when the filesystem
 is resetting due to a game change
 ================
 */
+static void FS_Restart_f(void);
 void FS_InitFilesystem( void ) {
 	// allow command line parms to override our defaults
 	// we have to specially handle this, because normal command
@@ -3843,6 +3847,8 @@ void FS_InitFilesystem( void ) {
 
 	if(!FS_FilenameCompare(Cvar_VariableString("fs_game"), BASEGAME))
 		Cvar_Set("fs_game", "");
+
+	Cmd_AddCommand("fs_restart", FS_Restart_f, "Restarts the filesystem");
 
 	// try to start up normally
 	FS_Startup( BASEGAME );
@@ -3947,6 +3953,16 @@ qboolean FS_ConditionalRestart( int checksumFeed ) {
 		FS_ReorderPurePaks();
 #endif
 	return qfalse;
+}
+
+/*
+=================
+FS_Restart_f
+Console command to restart filesystem.
+=================
+*/
+static void FS_Restart_f(void) {
+	FS_Restart(fs_checksumFeed);
 }
 
 /*
