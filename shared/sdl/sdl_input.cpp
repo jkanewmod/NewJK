@@ -605,6 +605,13 @@ static void IN_InitJoystick( void )
 	SDL_JoystickEventState(SDL_QUERY);
 }
 
+void IN_SetTextInput(qboolean on) {
+	if (on)
+		SDL_StartTextInput();
+	else
+		SDL_StopTextInput();
+}
+
 void IN_Init( void *windowData )
 {
 	if( !SDL_WasInit( SDL_INIT_VIDEO ) )
@@ -627,7 +634,7 @@ void IN_Init( void *windowData )
 	in_raw = Cvar_Get("in_raw", "1", CVAR_ARCHIVE, "Raw mouse input");
 	in_nograb = Cvar_Get( "in_nograb", "0", CVAR_ARCHIVE );
 
-	SDL_StartTextInput( );
+	IN_SetTextInput((qboolean)!!Key_GetCatcher());
 
 	mouseAvailable = (qboolean)( in_mouse->value != 0 );
 	if (in_raw->integer)

@@ -1784,10 +1784,13 @@ int Key_GetCatcher( void ) {
 Key_SetCatcher
 ====================
 */
+extern void IN_SetTextInput(qboolean on);
 void Key_SetCatcher( int catcher ) {
 	// If the catcher state is changing, clear all key states
 	if ( catcher != keyCatchers )
 		Key_ClearStates();
+
+	IN_SetTextInput((qboolean)!!(catcher));
 
 	keyCatchers = catcher;
 }
