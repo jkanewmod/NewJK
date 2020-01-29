@@ -656,22 +656,6 @@ void Field_CharEvent( field_t *edit, int ch ) {
 	if (edit == &chatField && newChatLen >= max - 1)
 		return;
 
-	if (edit->cursor > 0 && edit->buffer[edit->cursor - 1] == '^' && Q_stristrWord(cg_languageFix->string, "fr")) {
-		int replaceChar = 0;
-		switch (ch) {
-		case 'A': replaceChar = 'Â'; break;
-		case 'a': replaceChar = 'â'; break;
-		case 'E': replaceChar = 'Ê'; break;
-		case 'e': replaceChar = 'ê'; break;
-		case 'O': replaceChar = 'Ô'; break;
-		case 'o': replaceChar = 'ô'; break;
-		}
-		if (replaceChar) {
-			edit->buffer[edit->cursor - 1] = replaceChar;
-			return;
-		}
-	}
-
 	if ( kg.key_overstrikeMode ) {
 		// - 2 to leave room for the leading slash and trailing \0
 		if ( edit->cursor == max - 2 )
