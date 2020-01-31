@@ -386,15 +386,23 @@ qboolean CL_GetServerCommand( int serverCommandNumber ) {
 		if ( clc.demoplaying )
 			return qfalse;
 
-		while (i < MAX_RELIABLE_COMMANDS)
-		{ //spew out the reliable command buffer
-			if (clc.reliableCommands[i][0])
-			{
-				Com_Printf("%i: %s\n", i, clc.reliableCommands[i]);
+		// avoid spamming the console
+		static int lastCrash = 0;
+		int now = Sys_Milliseconds();
+		if (!lastCrash || now - lastCrash >= 1000) {
+			lastCrash = now;
+			while (i < MAX_RELIABLE_COMMANDS)
+			{ //spew out the reliable command buffer
+				if (clc.reliableCommands[i][0])
+				{
+					Com_Printf("%i: %s\n", i, clc.reliableCommands[i]);
+				}
+				i++;
 			}
-			i++;
+			//Com_Error(ERR_DROP, "CL_GetServerCommand: a reliable command was cycled out");
+			Com_Printf("^1CL_GetServerCommand: a reliable command was cycled out. Auto-reconnecting.^7\n");
+			Cbuf_ExecuteText(EXEC_NOW, "reconnect\n");
 		}
-		Com_Error( ERR_DROP, "CL_GetServerCommand: a reliable command was cycled out" );
 		return qfalse;
 	}
 
