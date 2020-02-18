@@ -2976,10 +2976,10 @@ qboolean CL_ConnectedToRemoteServer( void ) {
 static void CL_SetServerInfo(serverInfo_t *server, const char *info, int ping) {
 	if (server) {
 		if (info) {
-			server->clients = atoi(Info_ValueForKey(info, "clients"));
+			server->clients = Com_Clampi(0, MAX_CLIENTS, atoi(Info_ValueForKey(info, "clients")));
 			Q_strncpyz(server->hostName,Info_ValueForKey(info, "hostname"), MAX_NAME_LENGTH);
 			Q_strncpyz(server->mapName, Info_ValueForKey(info, "mapname"), MAX_NAME_LENGTH);
-			server->maxClients = atoi(Info_ValueForKey(info, "sv_maxclients"));
+			server->maxClients = Com_Clampi(1, MAX_CLIENTS, atoi(Info_ValueForKey(info, "sv_maxclients")));
 			Q_strncpyz(server->game,Info_ValueForKey(info, "game"), MAX_NAME_LENGTH);
 			server->gameType = atoi(Info_ValueForKey(info, "gametype"));
 			server->netType = atoi(Info_ValueForKey(info, "nettype"));
@@ -2990,8 +2990,8 @@ static void CL_SetServerInfo(serverInfo_t *server, const char *info, int ping) {
 			server->trueJedi = atoi(Info_ValueForKey(info, "truejedi" ));
 			server->weaponDisable = atoi(Info_ValueForKey(info, "wdisable" ));
 			server->forceDisable = atoi(Info_ValueForKey(info, "fdisable" ));
-			server->humans = atoi( Info_ValueForKey( info, "g_humanplayers" ) );
-			server->bots = atoi( Info_ValueForKey( info, "bots" ) );
+			server->humans = Com_Clampi(0, MAX_CLIENTS, atoi( Info_ValueForKey( info, "g_humanplayers" ) ));
+			server->bots = Com_Clampi(0, MAX_CLIENTS, server->clients - server->humans);
 //			server->pure = (qboolean)atoi(Info_ValueForKey(info, "pure" ));
 		}
 		server->ping = ping;
