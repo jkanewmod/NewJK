@@ -244,6 +244,7 @@ static cvar_t		*fs_cdpath;
 static cvar_t		*fs_copyfiles;
 static cvar_t		*fs_gamedirvar;
 static cvar_t		*fs_forceGame;
+static cvar_t		*fs_pureBypass;
 static cvar_t		*fs_dirbeforepak; //rww - when building search path, keep directories at top and insert pk3's under them
 static searchpath_t	*fs_searchpaths;
 static int			fs_readCount;			// total bytes read
@@ -336,6 +337,8 @@ FS_PakIsPure
 =================
 */
 qboolean FS_PakIsPure( pack_t *pack ) {
+	if (fs_pureBypass->integer == 1)
+		return qtrue; // mad?
 	int i;
 
 	if ( fs_numServerPaks ) {
@@ -3334,6 +3337,8 @@ NOTE TTimo: the reordering that happens here is not reflected in the cvars (\cva
 */
 static void FS_ReorderPurePaks()
 {
+	if (fs_pureBypass->integer == 1)
+		return; // mad?
 	searchpath_t *s;
 	int i;
 	searchpath_t **p_insert_index, // for linked list reordering
@@ -3405,6 +3410,7 @@ void FS_Startup( const char *gameName ) {
 	fs_homepath = Cvar_Get ("fs_homepath", homePath, CVAR_INIT|CVAR_PROTECTED, "(Read/Write) Location for user generated files" );
 	fs_gamedirvar = Cvar_Get ("fs_game", "", CVAR_INIT|CVAR_SYSTEMINFO, "Mod directory" );
 	fs_forceGame = Cvar_Get("fs_forceGame", "", CVAR_INIT, "Force a specific mod directory");
+	fs_pureBypass = Cvar_Get("fs_pureBypass", "2", CVAR_ARCHIVE, "Bypass pure server restriction");
 
 	fs_dirbeforepak = Cvar_Get("fs_dirbeforepak", "0", CVAR_INIT|CVAR_PROTECTED, "Prioritize directories before paks if not pure" );
 
@@ -3604,6 +3610,16 @@ const char *FS_ReferencedPakChecksums( void ) {
 	return info;
 }
 
+static searchpath_t *FindAssets(const int findChecksum, const char *findName) {
+	for (searchpath_t *search = fs_searchpaths; search; search = search->next) {
+		if (!search->pack || search->pack->checksum != findChecksum)
+			continue;
+		return search;
+	}
+	Com_Printf("*^3Warning: unable to find a legitimate %s; pure bypass will not be used.^7\n", findName);
+	return NULL; // the idiot deleted/modified a base pk3 file
+}
+
 /*
 =====================
 FS_ReferencedPakPureChecksums
@@ -3617,56 +3633,100 @@ The string has a specific order, "cgame ui @ ref1 ref2 ref3 ..."
 const char *FS_ReferencedPakPureChecksums( void ) {
 	static char	info[BIG_INFO_STRING];
 	searchpath_t	*search;
-	int nFlags, numPaks, checksum, lastPack, refPacks;
 
 	info[0] = 0;
 
-	checksum = fs_checksumFeed;
-	numPaks = 0;
-	
-	if (Cvar_VariableIntegerValue("protocolswitch") != 2) {
-		lastPack = -1342311474; //assets3.pk3
-		refPacks = 7;
-	} else {
-		lastPack = -1239421272; //assets2.pk3
-		refPacks = 6;
-	}
+	int checksum = fs_checksumFeed;
 
-	for (search = fs_searchpaths; search; search = search->next) {
-		if (search->pack && search->pack->checksum == lastPack) {
-			search->pack->referenced = refPacks;
-			break;
+	bool doBypass = false, legacyServer = !!(Cvar_VariableIntegerValue("protocolswitch") == 2);
+	if (fs_pureBypass->integer && fs_numServerPaks) {
+		// make sure we have all the required files first
+		if (FindAssets(1767559464, "assets0") &&
+			FindAssets(-682941524, "assets1") &&
+			FindAssets(-1239421272, "assets2") &&
+			!(!legacyServer && !FindAssets(-1342311474, "assets3"))) {
+			doBypass = true;
 		}
 	}
 
-	for (nFlags = FS_CGAME_REF; nFlags; nFlags = nFlags >> 1) {
-		if (nFlags & FS_GENERAL_REF) {
-			// add a delimter between must haves and general refs
-			//Q_strcat(info, sizeof(info), "@ ");
-			info[strlen(info)+1] = '\0';
-			info[strlen(info)+2] = '\0';
-			info[strlen(info)] = '@';
-			info[strlen(info)] = ' ';
+	if (doBypass) {
+		Com_Printf("*Bypassing pure server restriction.\n");
+
+		if (legacyServer) {
+			search = FindAssets(-1239421272, "assets2");
+			Q_strcat(info, sizeof(info), va("%i %i @ ", search->pack->pure_checksum, search->pack->pure_checksum));
 		}
-		for ( search = fs_searchpaths ; search ; search = search->next ) {
-			// is the element a pak file and has it been referenced based on flag?
-			if ( search->pack && (search->pack->referenced & nFlags)) {
-				Q_strcat( info, sizeof( info ), va("%i ", search->pack->pure_checksum ) );
-				if (nFlags & (FS_CGAME_REF | FS_UI_REF)) {
-					break;
-				}
-				checksum ^= search->pack->pure_checksum;
-				numPaks++;
+		else {
+			search = FindAssets(-1342311474, "assets3");
+			Q_strcat(info, sizeof(info), va("%i %i @ %i ", search->pack->pure_checksum, search->pack->pure_checksum, search->pack->pure_checksum));
+			checksum ^= search->pack->pure_checksum;
+		}
+
+		search = FindAssets(-1239421272, "assets2");
+		Q_strcat(info, sizeof(info), va("%i ", search->pack->pure_checksum));
+		checksum ^= search->pack->pure_checksum;
+
+		search = FindAssets(-682941524, "assets1");
+		Q_strcat(info, sizeof(info), va("%i ", search->pack->pure_checksum));
+		checksum ^= search->pack->pure_checksum;
+
+		search = FindAssets(1767559464, "assets0");
+		Q_strcat(info, sizeof(info), va("%i ", search->pack->pure_checksum));
+		checksum ^= search->pack->pure_checksum;
+
+		// last checksum is the encoded number of referenced pk3s
+		checksum ^= (legacyServer ? 3 : 4);
+		Q_strcat(info, sizeof(info), va("%i ", checksum));
+	}
+	else {
+		int nFlags, numPaks, lastPack, refPacks;
+		numPaks = 0;
+
+		if (legacyServer) {
+			lastPack = -1342311474; //assets3.pk3
+			refPacks = 7;
+		}
+		else {
+			lastPack = -1239421272; //assets2.pk3
+			refPacks = 6;
+		}
+
+		for (search = fs_searchpaths; search; search = search->next) {
+			if (search->pack && search->pack->checksum == lastPack) {
+				search->pack->referenced = refPacks;
+				break;
 			}
 		}
-		if (fs_fakeChkSum != 0) {
-			// only added if a non-pure file is referenced
-			Q_strcat( info, sizeof( info ), va("%i ", fs_fakeChkSum ) );
+
+		for (nFlags = FS_CGAME_REF; nFlags; nFlags = nFlags >> 1) {
+			if (nFlags & FS_GENERAL_REF) {
+				// add a delimter between must haves and general refs
+				//Q_strcat(info, sizeof(info), "@ ");
+				info[strlen(info) + 1] = '\0';
+				info[strlen(info) + 2] = '\0';
+				info[strlen(info)] = '@';
+				info[strlen(info)] = ' ';
+			}
+			for (search = fs_searchpaths; search; search = search->next) {
+				// is the element a pak file and has it been referenced based on flag?
+				if (search->pack && (search->pack->referenced & nFlags)) {
+					Q_strcat(info, sizeof(info), va("%i ", search->pack->pure_checksum));
+					if (nFlags & (FS_CGAME_REF | FS_UI_REF)) {
+						break;
+					}
+					checksum ^= search->pack->pure_checksum;
+					numPaks++;
+				}
+			}
+			if (fs_fakeChkSum != 0) {
+				// only added if a non-pure file is referenced
+				Q_strcat(info, sizeof(info), va("%i ", fs_fakeChkSum));
+			}
 		}
+		// last checksum is the encoded number of referenced pk3s
+		checksum ^= numPaks;
+		Q_strcat(info, sizeof(info), va("%i ", checksum));
 	}
-	// last checksum is the encoded number of referenced pk3s
-	checksum ^= numPaks;
-	Q_strcat( info, sizeof( info ), va("%i ", checksum ) );
 
 	return info;
 }
