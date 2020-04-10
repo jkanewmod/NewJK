@@ -369,7 +369,7 @@ cvar_t *Cvar_Get( const char *var_name, const char *var_value, uint32_t flags, c
 		Com_Error( ERR_FATAL, "Cvar_Get: NULL parameter" );
     }
 
-	if ( !Cvar_ValidateString( var_name ) || !Q_stricmp(var_name, "siegeclass")) {
+	if ( !Cvar_ValidateString( var_name ) ) {
 		Com_Printf("invalid cvar name string: %s\n", var_name );
 		var_name = "BADNAME";
 	}
