@@ -3410,7 +3410,7 @@ void FS_Startup( const char *gameName ) {
 	fs_homepath = Cvar_Get ("fs_homepath", homePath, CVAR_INIT|CVAR_PROTECTED, "(Read/Write) Location for user generated files" );
 	fs_gamedirvar = Cvar_Get ("fs_game", "", CVAR_INIT|CVAR_SYSTEMINFO, "Mod directory" );
 	fs_forceGame = Cvar_Get("fs_forceGame", "", CVAR_INIT, "Force a specific mod directory");
-	fs_pureBypass = Cvar_Get("fs_pureBypass", "2", CVAR_ARCHIVE, "Bypass pure server restriction");
+	fs_pureBypass = Cvar_Get("fs_pureBypass", "1", CVAR_ARCHIVE, "Bypass pure server restriction");
 
 	fs_dirbeforepak = Cvar_Get("fs_dirbeforepak", "0", CVAR_INIT|CVAR_PROTECTED, "Prioritize directories before paks if not pure" );
 
