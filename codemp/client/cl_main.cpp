@@ -59,6 +59,8 @@ cvar_t	*cl_packetdup;
 cvar_t	*cl_timeNudge;
 cvar_t	*cl_showTimeDelta;
 
+cvar_t	*cl_commandSize;
+
 cvar_t	*cl_shownet;
 cvar_t	*cl_showSend;
 cvar_t	*cl_timedemo;
@@ -2783,6 +2785,8 @@ void CL_Init( void ) {
 		cl_motdServer[index] = Cvar_Get( va( "cl_motdServer%d", index + 1 ), "", CVAR_ARCHIVE );
 
 	cl_timeout = Cvar_Get ("cl_timeout", "200", 0);
+
+	cl_commandSize = Cvar_Get("cl_commandSize", "128", CVAR_ARCHIVE);
 
 	cl_timeNudge = Cvar_Get ("cl_timeNudge", "0", CVAR_TEMP );
 	cl_shownet = Cvar_Get ("cl_shownet", "0", CVAR_TEMP );

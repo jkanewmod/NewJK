@@ -1407,7 +1407,8 @@ void CL_CreateNewCommands( void ) {
 
 	// generate a command for this frame
 	cl.cmdNumber++;
-	cmdNum = cl.cmdNumber & CMD_MASK;
+	const int realCmdMask = (cl_commandSize->integer >= 4 && cl_commandSize->integer <= 512) ? (cl_commandSize->integer - 1) : (CMD_MASK);
+	cmdNum = cl.cmdNumber & realCmdMask;
 	cl.cmds[cmdNum] = CL_CreateCmd();
 }
 
@@ -1549,6 +1550,7 @@ void CL_WritePacket( void ) {
 		Com_Printf("MAX_PACKET_USERCMDS\n");
 	}
 	if ( count >= 1 ) {
+		const int realCmdMask = (cl_commandSize->integer >= 4 && cl_commandSize->integer <= 512) ? (cl_commandSize->integer - 1) : (CMD_MASK);
 		if ( cl_showSend->integer ) {
 			Com_Printf( "(%i)", count );
 		}
@@ -1574,7 +1576,7 @@ void CL_WritePacket( void ) {
 
 		// write all the commands, including the predicted command
 		for ( i = 0 ; i < count ; i++ ) {
-			j = (cl.cmdNumber - count + i + 1) & CMD_MASK;
+			j = (cl.cmdNumber - count + i + 1) & realCmdMask;
 			cmd = &cl.cmds[j];
 			MSG_WriteDeltaUsercmdKey (&buf, key, oldcmd, cmd);
 			oldcmd = cmd;
