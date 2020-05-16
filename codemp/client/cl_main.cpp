@@ -57,6 +57,7 @@ cvar_t	*cl_timeout;
 cvar_t	*cl_maxpackets;
 cvar_t	*cl_packetdup;
 cvar_t	*cl_timeNudge;
+cvar_t	*cl_enableTimeNudge;
 cvar_t	*cl_showTimeDelta;
 
 cvar_t	*cl_commandSize;
@@ -2789,6 +2790,7 @@ void CL_Init( void ) {
 	cl_commandSize = Cvar_Get("cl_commandSize", "128", CVAR_ARCHIVE);
 
 	cl_timeNudge = Cvar_Get ("cl_timeNudge", "0", CVAR_TEMP );
+	cl_enableTimeNudge = Cvar_Get("cl_enableTimeNudge", "1", CVAR_ROM | CVAR_INTERNAL);
 	cl_shownet = Cvar_Get ("cl_shownet", "0", CVAR_TEMP );
 	cl_showSend = Cvar_Get ("cl_showSend", "0", CVAR_TEMP );
 	cl_showTimeDelta = Cvar_Get ("cl_showTimeDelta", "0", CVAR_TEMP );

@@ -775,6 +775,9 @@ void CL_SetCGameTime( void ) {
 		if (tn < 0 && (cl.snap.ps.pm_type == PM_SPECTATOR || cl.snap.ps.pm_flags & PMF_FOLLOW || clc.demoplaying))
 			tn = 0; // disable negative timenudge when spectating
 
+		if (!cl_enableTimeNudge->integer)
+			tn = 0; // allow internally toggling timenudge without modifying the user's own setting
+
 		cl.serverTime = cls.realtime + cl.serverTimeDelta - tn;
 
 		// guarantee that time will never flow backwards, even if
