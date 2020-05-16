@@ -1407,7 +1407,7 @@ void CL_CreateNewCommands( void ) {
 
 	// generate a command for this frame
 	cl.cmdNumber++;
-	const int realCmdMask = (cl_commandSize->integer >= 4 && cl_commandSize->integer <= 512) ? (cl_commandSize->integer - 1) : (CMD_MASK);
+	const int realCmdMask = (cl_commandSize->integer >= 64 && cl_commandSize->integer <= 512) ? (cl_commandSize->integer - 1) : (CMD_MASK);
 	cmdNum = cl.cmdNumber & realCmdMask;
 	cl.cmds[cmdNum] = CL_CreateCmd();
 }
@@ -1550,7 +1550,7 @@ void CL_WritePacket( void ) {
 		Com_Printf("MAX_PACKET_USERCMDS\n");
 	}
 	if ( count >= 1 ) {
-		const int realCmdMask = (cl_commandSize->integer >= 4 && cl_commandSize->integer <= 512) ? (cl_commandSize->integer - 1) : (CMD_MASK);
+		const int realCmdMask = (cl_commandSize->integer >= 64 && cl_commandSize->integer <= 512) ? (cl_commandSize->integer - 1) : (CMD_MASK);
 		if ( cl_showSend->integer ) {
 			Com_Printf( "(%i)", count );
 		}

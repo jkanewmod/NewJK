@@ -54,7 +54,7 @@ CL_GetUserCmd
 qboolean CL_GetUserCmd( int cmdNumber, usercmd_t *ucmd ) {
 	// cmds[cmdNumber] is the last properly generated command
 
-	const int realCmdMask = (cl_commandSize->integer >= 4 && cl_commandSize->integer <= 512) ? (cl_commandSize->integer - 1) : (CMD_MASK);
+	const int realCmdMask = (cl_commandSize->integer >= 64 && cl_commandSize->integer <= 512) ? (cl_commandSize->integer - 1) : (CMD_MASK);
 
 	// can't return anything that we haven't created yet
 	if ( cmdNumber > cl.cmdNumber ) {
