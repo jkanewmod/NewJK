@@ -150,7 +150,7 @@ cvar_t	*r_portalOnly;
 cvar_t	*r_subdivisions;
 cvar_t	*r_lodCurveError;
 
-
+cvar_t	*r_cullDistanceOverride;
 
 cvar_t	*r_overBrightBits;
 cvar_t	*r_mapOverBrightBits;
@@ -1685,6 +1685,9 @@ void R_Register( void )
 	cl_ratioFix							= ri->Cvar_Get(	"cl_ratioFix",						"0",						CVAR_ARCHIVE, "" );
 	r_maxpolys							= ri->Cvar_Get( "r_maxpolys",						XSTRING( DEFAULT_MAX_POLYS ),		CVAR_NONE, "" );
 	r_maxpolyverts						= ri->Cvar_Get( "r_maxpolyverts",					XSTRING( DEFAULT_MAX_POLYVERTS ),	CVAR_NONE, "" );
+
+	r_cullDistanceOverride				= ri->Cvar_Get( "r_cullDistanceOverride",			"0",						CVAR_ROM | CVAR_INTERNAL, "" );
+
 /*
 Ghoul2 Insert Start
 */
@@ -1989,7 +1992,11 @@ static void SetRefractionProperties( float distortionAlpha, float distortionStre
 	tr_distortionNegate = distortionNegate;
 }
 
-static float GetDistanceCull( void ) { return tr.distanceCull; }
+static float GetDistanceCull( void ) {
+	if (tr.distanceCull < r_cullDistanceOverride->value)
+		return r_cullDistanceOverride->value;
+	return tr.distanceCull;
+}
 
 static void GetRealRes( int *w, int *h ) {
 	*w = glConfig.vidWidth;

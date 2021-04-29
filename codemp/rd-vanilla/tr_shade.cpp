@@ -1571,6 +1571,12 @@ static void RB_IterateStagesGeneric( shaderCommands_t *input )
 	bool	FogColorChange = false;
 	fog_t	*fog = NULL;
 
+	float cullDist;
+	if (tr.distanceCull < r_cullDistanceOverride->value)
+		cullDist = r_cullDistanceOverride->value;
+	else
+		cullDist = tr.distanceCull;
+
 	if (tess.fogNum && tess.shader->fogPass && (tess.fogNum == tr.world->globalFog || tess.fogNum == tr.world->numfogs)
 		&& r_drawfog->value == 2)
 	{	// only gl fog global fog and the "special fog"
@@ -1587,9 +1593,9 @@ static void RB_IterateStagesGeneric( shaderCommands_t *input )
 			else
 			{
 				//the greater tr.rangedFog is, the more fog we will get between the view point and cull distance
-				if ((tr.distanceCull-fStart) < tr.rangedFog)
+				if ((cullDist-fStart) < tr.rangedFog)
 				{ //assure a minimum range between fog beginning and cutoff distance
-					fStart = tr.distanceCull-tr.rangedFog;
+					fStart = cullDist-tr.rangedFog;
 
 					if (fStart < 16.0f)
 					{
@@ -1601,7 +1607,7 @@ static void RB_IterateStagesGeneric( shaderCommands_t *input )
 			qglFogi(GL_FOG_MODE, GL_LINEAR);
 
 			qglFogf(GL_FOG_START, fStart);
-			qglFogf(GL_FOG_END, tr.distanceCull);
+			qglFogf(GL_FOG_END, cullDist);
 		}
 		else
 		{

@@ -472,7 +472,12 @@ static void SetFarClip( void )
 	// Bring in the zFar to the distanceCull distance
 	// The sky renders at zFar so need to move it out a little
 	// ...and make sure there is a minimum zfar to prevent problems
-	tr.viewParms.zFar = Com_Clamp(2048.0f, tr.distanceCull * (1.732), sqrtf( farthestCornerDistance ));
+	float cullDist;
+	if (tr.distanceCull < r_cullDistanceOverride->value)
+		cullDist = r_cullDistanceOverride->value;
+	else
+		cullDist = tr.distanceCull;
+	tr.viewParms.zFar = Com_Clamp(2048.0f, cullDist * (1.732), sqrtf( farthestCornerDistance ));
 
 	/*
 	if (r_shadows->integer == 2)
