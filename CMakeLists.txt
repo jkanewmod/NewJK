@@ -49,6 +49,8 @@ option(BuildJK2SPEngine "Whether to create projects for the jk2 SP engine (openj
 option(BuildJK2SPGame "Whether to create projects for the jk2 sp gamecode mod (jk2gamex86.dll)" OFF)
 option(BuildJK2SPRdVanilla "Whether to create projects for the jk2 sp renderer (rdjosp-vanilla_x86.dll)" OFF)
 
+option(BuildDiscordRichPresence "Whether to build with Discord Rich Presence integration" ON)
+
 option(BuildTests "Whether to build automatic unit tests (requires Boost)" OFF)
 
 Include(CMakeDependentOption)
@@ -174,8 +176,6 @@ set(JK2SPDir "${CMAKE_SOURCE_DIR}/codeJK2")
 set(SharedDir ${CMAKE_SOURCE_DIR}/shared)
 set(OpenJKLibDir "${CMAKE_SOURCE_DIR}/lib")
 set(GSLIncludeDirectory "${OpenJKLibDir}/gsl-lite/include")
-
-include(InstallConfig)
 
 
 

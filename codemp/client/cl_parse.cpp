@@ -494,6 +494,14 @@ void CL_SystemInfoChanged( void ) {
 	if ( !gameSet && *Cvar_VariableString("fs_game") && !(VALIDSTRING(forceGameStr) && Q_stricmp(forceGameStr, "0"))) {
 		Cvar_Set( "fs_game", "" );
 	}
+
+#if defined(DISCORD) && !defined(_DEBUG)
+	if (strlen(Cvar_VariableString("fs_game")))
+		Q_strncpyz(cl.discord.fs_game, Cvar_VariableString("fs_game"), sizeof(cl.discord.fs_game));
+	else
+		Q_strncpyz(cl.discord.fs_game, BASEGAME, sizeof(cl.discord.fs_game));
+#endif
+
 	cl_connectedToPureServer = Cvar_VariableValue( "sv_pure" );
 }
 

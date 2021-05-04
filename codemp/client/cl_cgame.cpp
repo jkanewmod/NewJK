@@ -204,6 +204,90 @@ void CL_DoAutoLODScale(void)
 	Cvar_Set( "r_autolodscalevalue", va("%f", finalLODScaleFactor) );
 }
 
+#if defined(DISCORD) && !defined(_DEBUG)
+static void CL_UpdateDiscordServerInfo(const char *info)
+{
+	const char *s = cl.gameState.stringData + cl.gameState.stringOffsets[CS_SERVERINFO];
+	if (VALIDSTRING(s)) {
+		char *value = NULL;
+
+		cl.discord.needPassword = qfalse;
+
+		value = Info_ValueForKey(info, "sv_hostname");
+		Q_strncpyz(cl.discord.hostName, value, sizeof(cl.discord.hostName));
+
+		cl.discord.maxPlayers = atoi(Info_ValueForKey(info, "sv_maxclients"));
+		cl.discord.timelimit = atoi(Info_ValueForKey(info, "timelimit"));
+		cl.discord.gametype = atoi(Info_ValueForKey(info, "g_gametype"));
+
+		value = Info_ValueForKey(info, "g_needpass");
+		if (atoi(value))
+			cl.discord.needPassword = qtrue;
+
+		value = Info_ValueForKey(info, "mapname");
+		Q_strncpyz(cl.discord.mapName, value, sizeof(cl.discord.mapName));
+	}
+}
+#endif
+
+static void CL_ParsePlayerInfo(int start, int end)
+{
+	int clientCount = 0, botCount = 0, redTeam = 0, blueTeam = 0, specTeam = 0;
+	int i = start;
+
+	cl.discord.myTeam = -1;
+
+	while (i < end)
+	{
+		char *s = cl.gameState.stringData + cl.gameState.stringOffsets[i];
+		int team = atoi(Info_ValueForKey(s, "t"));
+		char *bot = Info_ValueForKey(s, "skill");
+
+		switch (team)
+		{
+		default:
+		case 0:
+			break;
+		case 1:
+			redTeam++;
+			break;
+		case 2:
+			blueTeam++;
+			break;
+		case 3:
+			specTeam++;
+			break;
+		}
+
+		if (bot && bot[0])
+		{
+			botCount++;
+		}
+
+		if (s && s[0])
+		{
+			clientCount++;
+		}
+
+		if (cl.snap.valid && i - CS_PLAYERS == cl.snap.ps.clientNum)
+			cl.discord.myTeam = team;
+
+		i++;
+	}
+
+	gCLTotalClientNum = clientCount;
+
+	cl.discord.playerCount = clientCount;
+	cl.discord.redTeam = redTeam;
+	cl.discord.blueTeam = blueTeam;
+	cl.discord.specCount = specTeam;
+	cl.discord.botCount = botCount;
+
+	if (cl_autolodscale && cl_autolodscale->integer)
+		CL_DoAutoLODScale();
+}
+
+
 /*
 =====================
 CL_ConfigstringModified
@@ -258,35 +342,29 @@ void CL_ConfigstringModified( void ) {
 		cl.gameState.dataCount += len + 1;
 	}
 
-	if (cl_autolodscale && cl_autolodscale->integer)
+	if (index >= CS_PLAYERS &&
+		index < CS_G2BONES)
+	{ //this means that a client was updated in some way. Go through and count the clients.
+		CL_ParsePlayerInfo(CS_PLAYERS, CS_G2BONES);
+	}
+
+#if defined(DISCORD) && !defined(_DEBUG)
+	if (index == CS_SERVERINFO)
 	{
-		if (index >= CS_PLAYERS &&
-			index < CS_G2BONES)
-		{ //this means that a client was updated in some way. Go through and count the clients.
-			int clientCount = 0;
-			i = CS_PLAYERS;
+		s = cl.gameState.stringData + cl.gameState.stringOffsets[CS_SERVERINFO];
 
-			while (i < CS_G2BONES)
-			{
-				s = cl.gameState.stringData + cl.gameState.stringOffsets[ i ];
-
-				if (s && s[0])
-				{
-					clientCount++;
-				}
-
-				i++;
-			}
-
-			gCLTotalClientNum = clientCount;
-
-#ifdef _DEBUG
-			Com_DPrintf("%i clients\n", gCLTotalClientNum);
-#endif
-
-			CL_DoAutoLODScale();
+		if (s && s[0]) {
+			CL_UpdateDiscordServerInfo(s);
 		}
 	}
+	
+	s = cl.gameState.stringData + cl.gameState.stringOffsets[CS_SCORES1];
+	cl.discord.redScore = (s && *s) ? atoi(s) : 0;
+	s = cl.gameState.stringData + cl.gameState.stringOffsets[CS_SCORES2];
+	cl.discord.blueScore = (s && *s) ? atoi(s) : 0;
+	s = cl.gameState.stringData + cl.gameState.stringOffsets[CS_LEVEL_START_TIME];
+	cl.discord.levelStartTime = (s && *s) ? atoi(s) : 0;
+#endif
 
 	if ( index == CS_SYSTEMINFO ) {
 		// parse serverId and other cvars
@@ -534,6 +612,10 @@ void CL_InitCGame( void ) {
 	info = cl.gameState.stringData + cl.gameState.stringOffsets[ CS_SERVERINFO ];
 	mapname = Info_ValueForKey( info, "mapname" );
 	Com_sprintf( cl.mapname, sizeof( cl.mapname ), "maps/%s.bsp", mapname );
+
+#if defined(DISCORD) && !defined(_DEBUG)
+	CL_UpdateDiscordServerInfo(info);
+#endif
 
 	// load the dll
 	CL_BindCGame();

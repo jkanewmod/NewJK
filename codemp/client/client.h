@@ -152,6 +152,27 @@ typedef struct clientActive_s {
 	entityState_t	parseEntities[MAX_PARSE_ENTITIES];
 
 	char			*mSharedMemory;
+
+#if defined(DISCORD) && !defined(_DEBUG)
+	struct {
+		qboolean		needPassword;
+		char			hostName[MAX_HOSTNAMELENGTH];
+		char			mapName[MAX_QPATH];
+		int				gametype;
+		int				timelimit;
+		int				playerCount;
+		int				redTeam;
+		int				blueTeam;
+		int				specCount;
+		int				botCount;
+		int				maxPlayers;
+		char			fs_game[MAX_QPATH];
+		int				myTeam;
+		int				redScore;
+		int				blueScore;
+		int				levelStartTime;
+	} discord;
+#endif
 } clientActive_t;
 
 extern	clientActive_t		cl;
@@ -300,6 +321,11 @@ typedef struct clientStatic_s {
 	int			realtime;			// ignores pause
 	int			realFrametime;		// ignoring pause, so console always works
 
+#if defined(DISCORD) && !defined(_DEBUG)
+	qboolean	discordInitialized;
+	int			discordUpdateTime;
+#endif
+
 	int			numlocalservers;
 	serverInfo_t	localServers[MAX_OTHER_SERVERS];
 
@@ -423,6 +449,10 @@ extern	cvar_t	*cl_consoleUseScanCode;
 
 extern  cvar_t  *cl_lanForcePackets;
 
+#if defined(DISCORD) && !defined(_DEBUG)
+extern cvar_t *cl_discord;
+#endif
+
 extern	cvar_t	*cl_drawRecording;
 
 extern	cvar_t	*cg_languageFix;
@@ -468,6 +498,12 @@ int CL_GetPingQueueCount( void );
 void CL_InitRef( void );
 
 int CL_ServerStatus( const char *serverAddress, char *serverStatusString, int maxLen );
+
+#if defined(DISCORD) && !defined(_DEBUG)
+void CL_DiscordInitialize(void);
+void CL_DiscordShutdown(void);
+void CL_DiscordUpdatePresence(void);
+#endif
 
 qboolean CL_CheckPaused(void);
 

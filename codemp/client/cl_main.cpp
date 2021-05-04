@@ -116,6 +116,10 @@ cvar_t  *cl_lanForcePackets;
 
 cvar_t	*cl_drawRecording;
 
+#if defined(DISCORD) && !defined(_DEBUG)
+cvar_t *cl_discord;
+#endif
+
 cvar_t	*cl_fpsSaver;
 cvar_t	*cl_ratioFix;
 
@@ -885,6 +889,13 @@ void CL_Disconnect( qboolean showMainMenu ) {
 	}
 
 	CL_UpdateGUID( NULL, 0 );
+
+#if defined(DISCORD) && !defined(_DEBUG)
+	if (cl_discord->integer) {
+		CL_DiscordInitialize();
+		cls.discordInitialized = qtrue;
+	}
+#endif
 }
 
 
@@ -2300,6 +2311,26 @@ void CL_Frame ( int msec ) {
 		CL_TakeVideoFrame( );
 	}
 
+#if defined(DISCORD) && !defined(_DEBUG)
+	if (cl_discord->integer) {
+		if (cls.realtime >= 5000 && !cls.discordInitialized)
+		{ //we just turned it on
+			CL_DiscordInitialize();
+			cls.discordInitialized = qtrue;
+		}
+
+		if (cls.realtime >= cls.discordUpdateTime && cls.discordInitialized)
+		{
+			CL_DiscordUpdatePresence();
+			cls.discordUpdateTime = cls.realtime + 500;
+		}
+	}
+	else if (cls.discordInitialized) { //we just turned it off
+		CL_DiscordShutdown();
+		cls.discordUpdateTime = 0;
+		cls.discordInitialized = qfalse;
+	}
+#endif
 }
 
 
@@ -2910,6 +2941,10 @@ void CL_Init( void ) {
 
 	cl_ratioFix = Cvar_Get("cl_ratioFix", "0", CVAR_ARCHIVE, "Reduce font width on widescreen aspect ratios to 4:3 proportions");
 
+#if defined(DISCORD) && !defined(_DEBUG)
+	cl_discord = Cvar_Get("cl_discord", "1", CVAR_ARCHIVE, "Share current game information on Discord profile status");
+#endif
+
 	//
 	// register our commands
 	//
@@ -3016,6 +3051,11 @@ void CL_Shutdown( void ) {
 	Cmd_RemoveCommand ("forcepowers");
 	Cmd_RemoveCommand ("video");
 	Cmd_RemoveCommand ("stopvideo");
+
+#if defined(DISCORD) && !defined(_DEBUG)
+	if (cl_discord->integer || cls.discordInitialized)
+		CL_DiscordShutdown();
+#endif
 
 	CL_ShutdownInput();
 	Con_Shutdown();
