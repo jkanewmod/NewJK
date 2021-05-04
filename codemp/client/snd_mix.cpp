@@ -378,7 +378,7 @@ void S_PaintChannels( int endtime ) {
 
 	snd_vol = normal_vol = s_volume->value*256;
 	voice_vol  = (int)(s_volumeVoice->value*256);
-	if (s_mute->integer)
+	if (s_mute->integer || com_minimized->integer || com_unfocused->integer)
 		snd_vol = normal_vol = voice_vol = 0;
 
 //Com_Printf ("%i to %i\n", s_paintedtime, endtime);
