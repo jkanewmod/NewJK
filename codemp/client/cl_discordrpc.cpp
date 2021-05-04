@@ -145,10 +145,9 @@ char *PartyID()
 
 	if ( cls.state >= CA_LOADING && cls.state <= CA_ACTIVE ) 
 	{
-		char *x = (char *)malloc( sizeof( char ) * 128 );
-
-		Q_strncpyz( x, va( "%s", cls.servername ), 128 );
-		strcat( x, "x" );
+		static char x[128] = { 0 };
+		Q_strncpyz( x, cls.servername, sizeof(x) );
+		Q_strcat(x, sizeof(x), "x" );
 		return x;
 	}
 
