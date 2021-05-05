@@ -1203,7 +1203,7 @@ void Com_Init( char *commandLine ) {
 
 		FS_InitFilesystem ();
 
-		cl_steam = Cvar_Get("cl_steam", "1", CVAR_ARCHIVE, "Enables Steam integration at startup");
+		cl_steam = Cvar_Get("cl_steam", "0", CVAR_ARCHIVE, "Enables Steam integration at startup");
 
 		Sys_SteamInit();
 
