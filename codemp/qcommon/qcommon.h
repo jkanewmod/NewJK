@@ -787,6 +787,7 @@ extern	cvar_t	*com_buildScript;		// for building release pak files
 extern	cvar_t	*com_journal;
 extern	cvar_t	*com_cameraMode;
 extern	cvar_t	*com_homepath;
+extern	cvar_t	*cl_steam;
 #ifndef _WIN32
 extern	cvar_t	*com_ansiColor;
 #endif

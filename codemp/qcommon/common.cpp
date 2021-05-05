@@ -64,6 +64,7 @@ cvar_t	*cl_paused;
 cvar_t	*sv_paused;
 cvar_t	*com_cameraMode;
 cvar_t  *com_homepath;
+cvar_t	*cl_steam;
 #ifndef _WIN32
 cvar_t	*com_ansiColor = NULL;
 #endif
@@ -1201,6 +1202,8 @@ void Com_Init( char *commandLine ) {
 		com_homepath = Cvar_Get("com_homepath", "", CVAR_INIT);
 
 		FS_InitFilesystem ();
+
+		cl_steam = Cvar_Get("cl_steam", "1", CVAR_ARCHIVE, "Enables Steam integration at startup");
 
 		Sys_SteamInit();
 

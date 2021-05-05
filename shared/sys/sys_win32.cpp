@@ -635,9 +635,9 @@ static void* gp_steamLibrary = nullptr;
 
 void Sys_SteamInit()
 {
-	if (!Cvar_VariableIntegerValue("com_steamIntegration"))
+	if (!cl_steam->integer)
 	{
-		// Don't do anything if com_steamIntegration is disabled
+		// Don't do anything if cl_steam is disabled
 		return;
 	}
 
@@ -645,7 +645,9 @@ void Sys_SteamInit()
 	gp_steamLibrary = Sys_LoadLibrary("steam_api" DLL_EXT);
 	if (!gp_steamLibrary)
 	{
+#ifdef _DEBUG
 		Com_Printf(S_COLOR_RED "Steam integration failed: Couldn't find steam_api" DLL_EXT "\n");
+#endif
 		return;
 	}
 
@@ -655,7 +657,9 @@ void Sys_SteamInit()
 
 	if (!SteamAPI_Shutdown || !SteamAPI_Init)
 	{
+#ifdef _DEBUG
 		Com_Printf(S_COLOR_RED "Steam integration failed: Library invalid\n");
+#endif
 		Sys_UnloadLibrary(gp_steamLibrary);
 		gp_steamLibrary = nullptr;
 		return;
@@ -664,7 +668,9 @@ void Sys_SteamInit()
 	// Finally, call the init function in Steam, which should pop up the overlay if everything went correctly
 	if (!SteamAPI_Init())
 	{
+#ifdef _DEBUG
 		Com_Printf(S_COLOR_RED "Steam integration failed: Steam init failed. Ensure steam_appid.txt exists and is valid.\n");
+#endif
 		Sys_UnloadLibrary(gp_steamLibrary);
 		gp_steamLibrary = nullptr;
 		return;
@@ -682,7 +688,9 @@ void Sys_SteamShutdown()
 {
 	if (!gp_steamLibrary)
 	{
+#ifdef _DEBUG
 		Com_Printf("Skipping Steam integration shutdown...\n");
+#endif
 		return;
 	}
 
