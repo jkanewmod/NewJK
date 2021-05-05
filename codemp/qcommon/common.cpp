@@ -1203,10 +1203,6 @@ void Com_Init( char *commandLine ) {
 
 		FS_InitFilesystem ();
 
-		cl_steam = Cvar_Get("cl_steam", "0", CVAR_ARCHIVE, "Enables Steam integration at startup");
-
-		Sys_SteamInit();
-
 		Com_InitJournaling();
 
 		// Add some commands here already so users can use them from config files
@@ -1228,6 +1224,10 @@ void Com_Init( char *commandLine ) {
 		Cmd_SetCommandCompletionFunc( "writeconfig", Cmd_CompleteCfgName );
 
 		Com_ExecuteCfg();
+
+		cl_steam = Cvar_Get("cl_steam", "0", CVAR_ARCHIVE, "Enables Steam integration at startup");
+
+		Sys_SteamInit();
 
 		// override anything from the config files with command line args
 		Com_StartupVariable( NULL );
