@@ -235,7 +235,9 @@ static void CL_ParsePlayerInfo(int start, int end)
 	int clientCount = 0, botCount = 0, redTeam = 0, blueTeam = 0, specTeam = 0;
 	int i = start;
 
+#if defined(DISCORD) && !defined(_DEBUG)
 	cl.discord.myTeam = -1;
+#endif
 
 	while (i < end)
 	{
@@ -269,19 +271,23 @@ static void CL_ParsePlayerInfo(int start, int end)
 			clientCount++;
 		}
 
+#if defined(DISCORD) && !defined(_DEBUG)
 		if (cl.snap.valid && i - CS_PLAYERS == cl.snap.ps.clientNum)
 			cl.discord.myTeam = team;
+#endif
 
 		i++;
 	}
 
 	gCLTotalClientNum = clientCount;
 
+#if defined(DISCORD) && !defined(_DEBUG)
 	cl.discord.playerCount = clientCount;
 	cl.discord.redTeam = redTeam;
 	cl.discord.blueTeam = blueTeam;
 	cl.discord.specCount = specTeam;
 	cl.discord.botCount = botCount;
+#endif
 
 	if (cl_autolodscale && cl_autolodscale->integer)
 		CL_DoAutoLODScale();
