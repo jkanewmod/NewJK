@@ -185,7 +185,7 @@ void UIVM_CvarHelp( const char *cvarName, qboolean enter, char *helpBuffer, size
 
 char *Cvar_DescriptionString( const cvar_t *var, qboolean enter = qfalse )
 {
-	static char description[2048];
+	static char description[4096];
 
 	// give UI a chance to fill description
 	description[0] = '\0';
