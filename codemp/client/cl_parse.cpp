@@ -511,6 +511,8 @@ CL_ParseGamestate
 ==================
 */
 void CL_ParseGamestate( msg_t *msg ) {
+	S_StopAllSounds();
+
 	int				i;
 	entityState_t	*es;
 	int				newnum;
