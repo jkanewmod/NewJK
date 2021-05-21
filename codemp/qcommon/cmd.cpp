@@ -91,7 +91,7 @@ static void Cmd_Waitf_f() {
 static void CancelPendingCommands(bool useFrameNumber) {
 	if (Cmd_Argc() == 1) {
 		if (useFrameNumber)
-			Com_Printf("Usage examples:\nwait 10000;echo xxx\nwait 30000;echo yyy\n^5waitcancel xxx  ^9- ^7only cancel the first one\n^5waitcancel echo ^9- ^7cancel both\n^5waitcancel \"\"   ^9- ^7cancel all\n");
+			Com_Printf("Usage examples:\nwaitf 10000;echo xxx\nwaitf 30000;echo yyy\n^5waitfcancel xxx  ^9- ^7only cancel the first one\n^5waitfcancel echo ^9- ^7cancel both\n^5waitfcancel \"\"   ^9- ^7cancel all\n");
 		else
 			Com_Printf("Usage examples:\ndelay 10000;echo xxx\ndelay 30000;echo yyy\n^5delaycancel xxx  ^9- ^7only cancel the first one\n^5delaycancel echo ^9- ^7cancel both\n^5delaycancel \"\"   ^9- ^7cancel all\n");
 		return;
