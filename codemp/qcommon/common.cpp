@@ -1578,6 +1578,7 @@ void Com_Frame( void ) {
 		msec = com_frameTime - lastTime;
 
 		Cbuf_Execute ();
+		Cbuf_CheckPending();
 
 		// mess with msec if needed
 		msec = Com_ModifyMsec( msec );
