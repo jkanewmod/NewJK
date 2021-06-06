@@ -209,12 +209,12 @@ char *GetServerDetails() {
 
 static void handleDiscordReady( const DiscordUser* connectedUser )
 {
-	//Com_Printf( "*Discord: connected to user %s#%s - %s^7\n", connectedUser->username, connectedUser->discriminator, connectedUser->userId );
+	Com_Printf( "*Discord: connected to user %s#%s - %s^7\n", connectedUser->username, connectedUser->discriminator, connectedUser->userId );
 }
 
 static void handleDiscordDisconnected( int errcode, const char* message )
 {
-	//Com_Printf( "*Discord: disconnected (%d: %s^7)\n", errcode, message );
+	Com_Printf( "*Discord: disconnected (%d: %s^7)\n", errcode, message );
 }
 
 static void handleDiscordError( int errcode, const char* message )
@@ -261,7 +261,7 @@ static void handleDiscordJoinRequest( const DiscordUser* request )
 {
 	int response = -1;
 
-	//Com_Printf( "*Discord: join request from %s#%s - %s^7\n", request->username, request->discriminator, request->userId );
+	Com_Printf( "*Discord: join request from %s#%s - %s^7\n", request->username, request->discriminator, request->userId );
 
 	if ( response != -1 ) {
 		Discord_Respond( request->userId, response );
