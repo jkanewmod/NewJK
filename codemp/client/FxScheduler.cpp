@@ -406,7 +406,7 @@ static const size_t numPrimitiveTypes = ARRAY_LEN( primitiveTypes );
 static char brokenEffectFilenames[][32] = {
 	"atst/shot", "atst/shot_red", "atst/side_alt_shot", "atst/side_main_shot", "blaster/npcshot", "blaster/shot",
 	"bryar/crackleShot", "bryar/npcshot", "emplaced/shot", "emplaced/shotnpc", "eweb/shot", "eweb/shotnpc",
-	"flechette/alt_shot", "flechette/shot", "mp/itemcone", "noghri_stick/shot", "repeater/alt_projectile",
+	"flechette/alt_shot", "flechette/shot", "mp/itemcone", "mp/itemcone_alt", "noghri_stick/shot", "repeater/alt_projectile",
 	"repeater/projectile", "rocket/shot", "ships/imp_blastershot", "ships/imp_torpshot", "ships/mine", "ships/reb_blastershot",
 	"ships/reb_torpshot", "ships/swoop_blastershot", "turret/hoth_shot", "turret/shot", "turret/turb_shot", "tusken/shot"
 };
