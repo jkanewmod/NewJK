@@ -34,9 +34,9 @@ int g_console_field_width = 78;
 
 console_t	con;
 
-cvar_t		*con_conspeed;
 cvar_t		*con_notifytime;
 cvar_t		*cl_consoleOpacity; // background alpha multiplier
+cvar_t		*cl_consoleHeight;
 cvar_t		*con_autoclear;
 
 #define	DEFAULT_CONSOLE_WIDTH	78
@@ -371,10 +371,9 @@ void Con_Init (void) {
 	int		i;
 
 	con_notifytime = Cvar_Get ("con_notifytime", "3", 0, "How many seconds notify messages should be shown before they fade away");
-	con_conspeed = Cvar_Get ("scr_conspeed", "3", 0, "Console open/close speed");
-	Cvar_CheckRange (con_conspeed, 1.0f, 100.0f, qfalse);
 
 	cl_consoleOpacity = Cvar_Get ("cl_consoleOpacity", "0.5", CVAR_ARCHIVE, "Opacity of console background");
+	cl_consoleHeight = Cvar_Get("cl_consoleHeight", "0.5", CVAR_ARCHIVE, "Console height");
 	con_autoclear = Cvar_Get ("con_autoclear", "1", CVAR_ARCHIVE, "Automatically clear console input on close");
 
 	Field_Clear( &g_consoleField );
@@ -784,17 +783,9 @@ void Con_DrawSolidConsole( float frac ) {
 		y = 0;
 	}
 	else {
-		// draw the background at full opacity only if fullscreen
-		if (frac < 1.0f)
-		{
-			vec4_t con_color;
-			MAKERGBA(con_color, 1.0f, 1.0f, 1.0f, Com_Clamp(0.0f, 1.0f, cl_consoleOpacity->value));
-			re->SetColor(con_color);
-		}
-		else
-		{
-			re->SetColor(NULL);
-		}
+		vec4_t con_color;
+		MAKERGBA(con_color, 1.0f, 1.0f, 1.0f, Com_Clamp(0.0f, 1.0f, cl_consoleOpacity->value));
+		re->SetColor(con_color);
 		SCR_DrawPic( 0, 0, SCREEN_WIDTH, (float) y, cls.consoleShader );
 	}
 
@@ -949,23 +940,29 @@ Scroll it up or down
 ==================
 */
 void Con_RunConsole (void) {
+	float distance = Q_isanumber(cl_consoleHeight->string) ? Com_Clamp(0.1f, 1.0f, cl_consoleHeight->value) : 0.5f;
+
 	// decide on the destination height of the console
 	if ( Key_GetCatcher( ) & KEYCATCH_CONSOLE )
-		con.finalFrac = 0.5;		// half screen
+		con.finalFrac = distance;		// half screen
 	else
 		con.finalFrac = 0;				// none visible
+
+	// wtf is this base jka code, just always take the same amount of time no matter what
+	float time = 0.5f / 6 * 1000; // 83.333ms == double the default speed with default height
+	float speed = distance / time;
 
 	// scroll towards the destination height
 	if (con.finalFrac < con.displayFrac)
 	{
-		con.displayFrac -= con_conspeed->value*(float)(cls.realFrametime*0.001);
+		con.displayFrac -= speed * (float)cls.realFrametime;
 		if (con.finalFrac > con.displayFrac)
 			con.displayFrac = con.finalFrac;
 
 	}
 	else if (con.finalFrac > con.displayFrac)
 	{
-		con.displayFrac += con_conspeed->value*(float)(cls.realFrametime*0.001);
+		con.displayFrac += speed * (float)cls.realFrametime;
 		if (con.finalFrac < con.displayFrac)
 			con.displayFrac = con.finalFrac;
 	}
