@@ -184,11 +184,50 @@ void SCR_DrawSmallChar( int x, int y, int ch ) {
 
 	size2 = 0.0625;
 
+	qhandle_t shader = cl_consoleFontSize && cl_consoleFontSize->integer < SMALLCHAR_DEFAULT_WIDTH ? cls.charSetShaderSmall : cls.charSetShader;
+
 	re->DrawStretchPic( x * con.xadjust, y * con.yadjust,
 						SMALLCHAR_WIDTH * con.xadjust, SMALLCHAR_HEIGHT * con.yadjust,
 					   fcol, frow,
 					   fcol + size, frow + size2,
-					   cls.charSetShader );
+					   shader );
+}
+
+void SCR_DrawSmallChar_ConsoleNotify(int x, int y, int ch) {
+	int row, col;
+	float frow, fcol;
+	float size;
+
+	ch &= 255;
+
+	if (ch == ' ') {
+		return;
+	}
+
+	if (y < -SMALLCHAR_NOTIFY_HEIGHT) {
+		return;
+	}
+
+	row = ch >> 4;
+	col = ch & 15;
+
+	float size2;
+
+	frow = row * 0.0625;
+	fcol = col * 0.0625;
+
+	size = 0.03125;
+	//	size = 0.0625;
+
+	size2 = 0.0625;
+
+	qhandle_t shader = cl_topLeftFontSize && cl_topLeftFontSize->integer < SMALLCHAR_DEFAULT_WIDTH ? cls.charSetShaderSmall : cls.charSetShader;
+
+	re->DrawStretchPic(x * con.xadjust, y * con.yadjust,
+		SMALLCHAR_NOTIFY_WIDTH * con.xadjust, SMALLCHAR_NOTIFY_HEIGHT * con.yadjust,
+		fcol, frow,
+		fcol + size, frow + size2,
+		shader);
 }
 
 

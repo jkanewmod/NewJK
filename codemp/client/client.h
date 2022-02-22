@@ -350,6 +350,7 @@ typedef struct clientStatic_s {
 	// rendering info
 	glconfig_t	glconfig;
 	qhandle_t	charSetShader;
+	qhandle_t	charSetShaderSmall;
 	qhandle_t	whiteShader;
 	qhandle_t	consoleShader;
 	float		widthRatioCoef;
@@ -389,6 +390,8 @@ extern	refexport_t		*re;		// interface to refresh .dll
 //
 // cvars
 //
+extern	cvar_t	*cl_consoleFontSize;
+extern	cvar_t	*cl_topLeftFontSize;
 extern	cvar_t	*cl_useToggle;
 
 extern	cvar_t	*cl_nodelta;
@@ -588,6 +591,7 @@ void	SCR_DrawBigStringColor( int x, int y, const char *s, vec4_t color, qboolean
 void	SCR_DrawSmallStringExt( int x, int y, const char *string, float *setColor, qboolean forceColor, qboolean noColorEscape );
 int		SCR_Strlen(const char *str);
 void	SCR_DrawSmallChar( int x, int y, int ch );
+void	SCR_DrawSmallChar_ConsoleNotify( int x, int y, int ch );
 
 
 //

@@ -37,6 +37,8 @@ along with this program; if not, see <http://www.gnu.org/licenses/>.
 #include "snd_local.h"
 #include "sys/sys_loadlib.h"
 
+cvar_t	*cl_consoleFontSize;
+cvar_t	*cl_topLeftFontSize;
 cvar_t	*cl_useToggle;
 
 cvar_t	*cl_renderer;
@@ -2402,6 +2404,13 @@ void CL_InitRenderer( void ) {
 	if (hungarian && !cls.charSetShader)
 		cls.charSetShader = re->RegisterShaderNoMip("gfx/2d/charsgrid_med");
 
+	// try to use the smaller image
+	cls.charSetShaderSmall = re->RegisterShaderNoMip(hungarian ? "gfx/2d/charsgrid_small_hun" : "gfx/2d/charsgrid_small");
+	if (hungarian && !cls.charSetShaderSmall)
+		cls.charSetShaderSmall = re->RegisterShaderNoMip("gfx/2d/charsgrid_small");
+	if (!cls.charSetShaderSmall)
+		cls.charSetShaderSmall = cls.charSetShader;
+
 	cls.whiteShader = re->RegisterShader( "white" );
 
 	cls.consoleShader = 0;
@@ -2806,6 +2815,8 @@ void CL_Init( void ) {
 	//
 	// register our variables
 	//
+	cl_consoleFontSize = Cvar_Get("cl_consoleFontSize", "8", CVAR_ARCHIVE, "Console font size");
+	cl_topLeftFontSize = Cvar_Get("cl_topLeftFontSize", "8", CVAR_ARCHIVE, "Top left notification area font size");
 	cl_useToggle = Cvar_Get("cl_useToggle", "0", CVAR_TEMP, "Toggles +use on and off");
 	cl_noprint = Cvar_Get( "cl_noprint", "0", 0 );
 	cl_consoleFeedYBase = Cvar_Get( "cl_consoleFeedYBase", "0", 0 );

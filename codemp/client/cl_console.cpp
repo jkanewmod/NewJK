@@ -665,7 +665,7 @@ void Con_DrawNotify (void)
 			//
 			// and print...
 			//
-			re->Font_DrawString(cl_conXOffset->integer + con.xadjust*(con.xadjust + (1*SMALLCHAR_WIDTH/*aesthetics*/)), con.yadjust*(v), sTemp, g_color_table[currentColor], iFontIndex, -1, fFontScale);
+			re->Font_DrawString(cl_conXOffset->integer + con.xadjust*(con.xadjust + (1* SMALLCHAR_NOTIFY_WIDTH/*aesthetics*/)), con.yadjust*(v), sTemp, g_color_table[currentColor], iFontIndex, -1, fFontScale);
 
 			v +=  iPixelHeightToAdvance;
 		}
@@ -683,10 +683,10 @@ void Con_DrawNotify (void)
 				{
 					cl_conXOffset = Cvar_Get ("cl_conXOffset", "0", 0);
 				}
-				SCR_DrawSmallChar( (int)(cl_conXOffset->integer + con.xadjust + (x+1)*SMALLCHAR_WIDTH), v, text[x] & 0xff );
+				SCR_DrawSmallChar_ConsoleNotify( (int)(cl_conXOffset->integer + con.xadjust + (x+1)* SMALLCHAR_NOTIFY_WIDTH), v, text[x] & 0xff );
 			}
 
-			v += SMALLCHAR_HEIGHT;
+			v += SMALLCHAR_NOTIFY_HEIGHT;
 		}
 	}
 
