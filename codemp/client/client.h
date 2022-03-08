@@ -349,8 +349,7 @@ typedef struct clientStatic_s {
 
 	// rendering info
 	glconfig_t	glconfig;
-	qhandle_t	charSetShader;
-	qhandle_t	charSetShaderSmall;
+	qhandle_t	consoleFonts[2][2][2];
 	qhandle_t	whiteShader;
 	qhandle_t	consoleShader;
 	float		widthRatioCoef;
@@ -459,6 +458,7 @@ extern cvar_t *cl_discord;
 extern	cvar_t	*cl_drawRecording;
 
 extern	cvar_t	*cg_languageFix;
+extern	cvar_t	*cl_consoleFont;
 
 extern	cvar_t	*cl_fpsSaver;
 extern	cvar_t	*cl_ratioFix;

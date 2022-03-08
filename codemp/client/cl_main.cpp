@@ -126,6 +126,7 @@ cvar_t	*cl_fpsSaver;
 cvar_t	*cl_ratioFix;
 
 cvar_t	*cg_languageFix;
+cvar_t	*cl_consoleFont;
 
 vec3_t cl_windVec;
 
@@ -2396,20 +2397,15 @@ void CL_InitRenderer( void ) {
 	re->BeginRegistration( &cls.glconfig );
 
 	// load character sets
+	cls.consoleFonts[0][0][0] = re->RegisterShaderNoMip("gfx/2d/charsgrid_med");
+	cls.consoleFonts[0][0][1] = re->RegisterShaderNoMip("gfx/2d/newjkconsolefont0hun.tga");
+	cls.consoleFonts[0][1][0] = re->RegisterShaderNoMip("gfx/2d/newjkconsolefont0small.tga");
+	cls.consoleFonts[0][1][1] = re->RegisterShaderNoMip("gfx/2d/newjkconsolefont0hunsmall.tga");
 
-	// check the latched string, since the cvar may not have updated yet
-	const char *checkStr = cg_languageFix->latchedString ? cg_languageFix->latchedString : cg_languageFix->string;
-	bool hungarian = !!(Q_stristrWord(checkStr, "hu"));
-	cls.charSetShader = re->RegisterShaderNoMip(hungarian ? "gfx/2d/charsgrid_med_hun" : "gfx/2d/charsgrid_med");
-	if (hungarian && !cls.charSetShader)
-		cls.charSetShader = re->RegisterShaderNoMip("gfx/2d/charsgrid_med");
-
-	// try to use the smaller image
-	cls.charSetShaderSmall = re->RegisterShaderNoMip(hungarian ? "gfx/2d/charsgrid_small_hun" : "gfx/2d/charsgrid_small");
-	if (hungarian && !cls.charSetShaderSmall)
-		cls.charSetShaderSmall = re->RegisterShaderNoMip("gfx/2d/charsgrid_small");
-	if (!cls.charSetShaderSmall)
-		cls.charSetShaderSmall = cls.charSetShader;
+	cls.consoleFonts[1][0][0] = re->RegisterShaderNoMip("gfx/2d/newjkconsolefont1.tga");
+	cls.consoleFonts[1][0][1] = re->RegisterShaderNoMip("gfx/2d/newjkconsolefont1hun.tga");
+	cls.consoleFonts[1][1][0] = re->RegisterShaderNoMip("gfx/2d/newjkconsolefont1small.tga");
+	cls.consoleFonts[1][1][1] = re->RegisterShaderNoMip("gfx/2d/newjkconsolefont1hunsmall.tga");
 
 	cls.whiteShader = re->RegisterShader( "white" );
 
@@ -2911,7 +2907,8 @@ void CL_Init( void ) {
 
 	cl_drawRecording = Cvar_Get("cl_drawRecording", "0", CVAR_ARCHIVE, "Show 'recording' message for demos");
 
-	cg_languageFix = Cvar_Get("cg_languageFix", "0", CVAR_ARCHIVE | CVAR_LATCH, "Apply fixes for certain languages");
+	cg_languageFix = Cvar_Get("cg_languageFix", "0", CVAR_ARCHIVE, "Apply fixes for certain languages");
+	cl_consoleFont = Cvar_Get("cl_consoleFont", "0", CVAR_ARCHIVE, "Console font style");
 
 	// enable the ja_guid player identifier in userinfo by default in OpenJK
 	cl_enableGuid = Cvar_Get("cl_enableGuid", "1", CVAR_ARCHIVE, "Enable GUID userinfo identifier" );

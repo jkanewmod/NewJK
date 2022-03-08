@@ -23,6 +23,7 @@ along with this program; if not, see <http://www.gnu.org/licenses/>.
 */
 
 #include "tr_common.h"
+#include "zlib.h"
 
 // My TGA loader...
 //
@@ -47,6 +48,18 @@ typedef struct TGAHeader_s {
 } TGAHeader_t;
 #pragma pack(pop)
 
+static byte newjkconsolefont1[4194348], newjkconsolefont1small[262188], newjkconsolefont1hun[65580], newjkconsolefont1hunsmall[4140];
+static void LoadEmbeddedFonts(void) {
+#include "embeddedfonts.h"
+	uLongf destSize = sizeof(newjkconsolefont1);
+	uncompress((Bytef *)newjkconsolefont1, &destSize, newjkconsolefont1_compressed, sizeof(newjkconsolefont1_compressed));
+	destSize = sizeof(newjkconsolefont1small);
+	uncompress((Bytef *)newjkconsolefont1small, &destSize, newjkconsolefont1small_compressed, sizeof(newjkconsolefont1small_compressed));
+	destSize = sizeof(newjkconsolefont1hun);
+	uncompress((Bytef *)newjkconsolefont1hun, &destSize, newjkconsolefont1hun_compressed, sizeof(newjkconsolefont1hun_compressed));
+	destSize = sizeof(newjkconsolefont1hunsmall);
+	uncompress((Bytef *)newjkconsolefont1hunsmall, &destSize, newjkconsolefont1hunsmall_compressed, sizeof(newjkconsolefont1hunsmall_compressed));
+}
 
 // *pic == pic, else NULL for failed.
 //
@@ -56,7 +69,7 @@ typedef struct TGAHeader_s {
 void LoadTGA ( const char *name, byte **pic, int *width, int *height)
 {
 	char sErrorString[1024];
-	bool bFormatErrors = false;
+	bool bFormatErrors = false, usingTempFile = true;
 
 	// these don't need to be declared or initialised until later, but the compiler whines that 'goto' skips them.
 	//
@@ -75,6 +88,39 @@ void LoadTGA ( const char *name, byte **pic, int *width, int *height)
 	//
 	byte *pTempLoadedBuffer = 0;
 	ri->FS_ReadFile ( ( char * ) name, (void **)&pTempLoadedBuffer);
+	if (!pTempLoadedBuffer) {
+		if (!Q_stricmpn(name, "gfx/2d/newjkconsolefont", 23)) {
+			static bool initialized = false;
+			if (!initialized) {
+				LoadEmbeddedFonts();
+				initialized = true;
+			}
+
+			if (!Q_stricmpn(name + 23, "1hunsmall", 9)) {
+				pTempLoadedBuffer = (byte *)newjkconsolefont1hunsmall;
+				usingTempFile = false;
+			}
+			else if (!Q_stricmpn(name + 23, "1small", 6)) {
+				pTempLoadedBuffer = (byte *)newjkconsolefont1small;
+				usingTempFile = false;
+			}
+			else if (!Q_stricmpn(name + 23, "1hun", 4)) {
+				pTempLoadedBuffer = (byte *)newjkconsolefont1hun;
+				usingTempFile = false;
+			}
+			else if (!Q_stricmpn(name + 23, "1", 1)) {
+				pTempLoadedBuffer = (byte *)newjkconsolefont1;
+				usingTempFile = false;
+			}
+			else {
+				return;
+			}
+		}
+		else {
+			return;
+		}
+	}
+
 	if (!pTempLoadedBuffer) {
 		return;
 	}
@@ -373,7 +419,9 @@ void LoadTGA ( const char *name, byte **pic, int *width, int *height)
 
 TGADone:
 
-	ri->FS_FreeFile (pTempLoadedBuffer);
+	if (usingTempFile) {
+		ri->FS_FreeFile(pTempLoadedBuffer);
+	}
 
 	if (bFormatErrors)
 	{

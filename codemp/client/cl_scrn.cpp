@@ -80,7 +80,73 @@ void SCR_DrawPic( float x, float y, float width, float height, qhandle_t hShader
 	re->DrawStretchPic( x, y, width, height, 0, 0, 1, 1, hShader );
 }
 
+static void GetHunRowCol(int ch, int &row, int &col, float &coef) {
+	switch (ch) {
+	case 213/*'Õ'*/:
+		col = 0;
+		row = 0;
+		coef = 0.5f;
+		return;
+	case 245/*'õ'*/:
+		col = 0;
+		row = 1;
+		coef = 0.5f;
+		return;
+	case 219/*'Û'*/:
+		col = 1;
+		row = 0;
+		coef = 0.5f;
+		return;
+	case 251/*'û'*/:
+		col = 1;
+		row = 1;
+		coef = 0.5f;
+		return;
+	default:
+		assert(qfalse);
+		row = ch >> 4;
+		col = ch & 15;
+		coef = 0.0625f;
+		return;
+	}
+}
 
+static qhandle_t GetCharSetShader(bool forceDefaultFont, bool small, int ch, int &row, int &col, float &coef) {
+	int fontNum;
+	if (!forceDefaultFont && cl_consoleFont->integer == 1)
+		fontNum = 1;
+	else
+		fontNum = 0;
+
+	int hun = !!(cg_languageFix && Q_stristrWord(cg_languageFix->string, "hu") && (ch == 213/*'Õ'*/ || ch == 245/*'õ'*/ || ch == 219/*'Û'*/ || ch == 251/*'û'*/));
+	qhandle_t handle = cls.consoleFonts[fontNum][(int)small][hun];
+	if (hun) {
+		if (handle) {
+			GetHunRowCol(ch, row, col, coef);
+		}
+		else if (small) {
+			handle = cls.consoleFonts[fontNum][0][1];
+			if (handle)
+				GetHunRowCol(ch, row, col, coef);
+		}
+		if (!handle)
+			hun = false;
+	}
+
+	if (!handle && small)
+		handle = cls.consoleFonts[fontNum][0][0];
+
+	if (!handle)
+		handle = cls.consoleFonts[0][0][0];
+
+	if (!hun) {
+		row = ch >> 4;
+		col = ch & 15;
+		coef = 0.0625f;
+	}
+
+	return handle;
+}
 
 /*
 ** SCR_DrawChar
@@ -106,20 +172,18 @@ static void SCR_DrawChar( int x, int y, float size, int ch ) {
 	aw = size;
 	ah = size;
 
-	row = ch>>4;
-	col = ch&15;
+	float coef;
+	qhandle_t shader = GetCharSetShader(true, false, ch, row, col, coef);
 
-	float size2;
-
-	frow = row*0.0625;
-	fcol = col*0.0625;
-	size = 0.03125;
-	size2 = 0.0625;
+	frow = row*coef;
+	fcol = col*coef;
+	size = coef*0.5f;
+	float size2 = coef;
 
 	re->DrawStretchPic( ax, ay, aw, ah,
 					   fcol, frow,
 					   fcol + size, frow + size2,
-					   cls.charSetShader );
+					shader);
 }
 void SCR_DrawChar2(float x, float y, float width, float height, int ch) {
 	int row, col;
@@ -138,18 +202,18 @@ void SCR_DrawChar2(float x, float y, float width, float height, int ch) {
 	aw = width;
 	ah = height;
 
-	row = ch >> 4;
-	col = ch & 15;
+	float coef;
+	qhandle_t shader = GetCharSetShader(true, false, ch, row, col, coef);
 
-	frow = row * 0.0625;
-	fcol = col * 0.0625;
-	size = 0.03125;
-	size2 = 0.0625;
+	frow = row * coef;
+	fcol = col * coef;
+	size = coef*0.5f;
+	size2 = coef;
 
 	re->DrawStretchPic(ax, ay, aw, ah,
 		fcol, frow,
 		fcol + size, frow + size2,
-		cls.charSetShader);
+		shader);
 }
 
 /*
@@ -171,26 +235,22 @@ void SCR_DrawSmallChar( int x, int y, int ch ) {
 		return;
 	}
 
-	row = ch>>4;
-	col = ch&15;
+	float coef;
+	qhandle_t shader = GetCharSetShader(false, !!(cl_consoleFontSize && cl_consoleFontSize->integer < SMALLCHAR_DEFAULT_WIDTH), ch, row, col, coef);
 
-	float size2;
+	frow = row*coef;
+	fcol = col* coef;
 
-	frow = row*0.0625;
-	fcol = col*0.0625;
-
-	size = 0.03125;
+	size = coef*0.5f;
 //	size = 0.0625;
 
-	size2 = 0.0625;
-
-	qhandle_t shader = cl_consoleFontSize && cl_consoleFontSize->integer < SMALLCHAR_DEFAULT_WIDTH ? cls.charSetShaderSmall : cls.charSetShader;
+	float size2 = coef;
 
 	re->DrawStretchPic( x * con.xadjust, y * con.yadjust,
 						SMALLCHAR_WIDTH * con.xadjust, SMALLCHAR_HEIGHT * con.yadjust,
 					   fcol, frow,
 					   fcol + size, frow + size2,
-					   shader );
+						shader);
 }
 
 void SCR_DrawSmallChar_ConsoleNotify(int x, int y, int ch) {
@@ -208,20 +268,16 @@ void SCR_DrawSmallChar_ConsoleNotify(int x, int y, int ch) {
 		return;
 	}
 
-	row = ch >> 4;
-	col = ch & 15;
+	float coef;
+	qhandle_t shader = GetCharSetShader(false, !!(cl_topLeftFontSize && cl_topLeftFontSize->integer < SMALLCHAR_DEFAULT_WIDTH), ch, row, col, coef);
 
-	float size2;
+	frow = row * coef;
+	fcol = col * coef;
 
-	frow = row * 0.0625;
-	fcol = col * 0.0625;
-
-	size = 0.03125;
+	size = coef*0.5f;
 	//	size = 0.0625;
 
-	size2 = 0.0625;
-
-	qhandle_t shader = cl_topLeftFontSize && cl_topLeftFontSize->integer < SMALLCHAR_DEFAULT_WIDTH ? cls.charSetShaderSmall : cls.charSetShader;
+	float size2 = coef;
 
 	re->DrawStretchPic(x * con.xadjust, y * con.yadjust,
 		SMALLCHAR_NOTIFY_WIDTH * con.xadjust, SMALLCHAR_NOTIFY_HEIGHT * con.yadjust,

@@ -566,10 +566,10 @@ typedef struct wpobject_s
 #define SMALLCHAR_DEFAULT_WIDTH		8
 #define SMALLCHAR_DEFAULT_HEIGHT	(SMALLCHAR_DEFAULT_WIDTH * 2)
 
-#define SMALLCHAR_WIDTH		(cl_consoleFontSize ? cl_consoleFontSize->integer : SMALLCHAR_DEFAULT_WIDTH)
-#define SMALLCHAR_HEIGHT	(SMALLCHAR_WIDTH * 2)
+#define SMALLCHAR_WIDTH		(cl_consoleFontSize ? Com_Clampi(4, 50, cl_consoleFontSize->integer) : SMALLCHAR_DEFAULT_WIDTH)
+#define SMALLCHAR_HEIGHT		(SMALLCHAR_WIDTH * 2)
 
-#define SMALLCHAR_NOTIFY_WIDTH		(cl_topLeftFontSize ? cl_topLeftFontSize->integer : SMALLCHAR_DEFAULT_WIDTH)
+#define SMALLCHAR_NOTIFY_WIDTH		(cl_topLeftFontSize ? Com_Clampi(4, 50, cl_topLeftFontSize->integer) : SMALLCHAR_DEFAULT_WIDTH)
 #define SMALLCHAR_NOTIFY_HEIGHT		(SMALLCHAR_NOTIFY_WIDTH * 2)
 
 #define BIGCHAR_WIDTH		16
