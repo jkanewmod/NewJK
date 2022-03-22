@@ -459,6 +459,7 @@ extern	cvar_t	*cl_drawRecording;
 
 extern	cvar_t	*cg_languageFix;
 extern	cvar_t	*cl_consoleFont;
+extern	cvar_t	*cl_topLeftFont;
 
 extern	cvar_t	*cl_fpsSaver;
 extern	cvar_t	*cl_ratioFix;

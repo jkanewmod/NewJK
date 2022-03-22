@@ -111,12 +111,8 @@ static void GetHunRowCol(int ch, int &row, int &col, float &coef) {
 	}
 }
 
-static qhandle_t GetCharSetShader(bool forceDefaultFont, bool small, int ch, int &row, int &col, float &coef) {
-	int fontNum;
-	if (!forceDefaultFont && cl_consoleFont->integer == 1)
-		fontNum = 1;
-	else
-		fontNum = 0;
+static qhandle_t GetCharSetShader(bool forceDefaultFont, int preferredFont, bool small, int ch, int &row, int &col, float &coef) {
+	int fontNum = forceDefaultFont ? 0 : !!preferredFont;
 
 	int hun = !!(cg_languageFix && Q_stristrWord(cg_languageFix->string, "hu") && (ch == 213/*'Õ'*/ || ch == 245/*'õ'*/ || ch == 219/*'Û'*/ || ch == 251/*'û'*/));
 	qhandle_t handle = cls.consoleFonts[fontNum][(int)small][hun];
@@ -173,7 +169,7 @@ static void SCR_DrawChar( int x, int y, float size, int ch ) {
 	ah = size;
 
 	float coef;
-	qhandle_t shader = GetCharSetShader(true, false, ch, row, col, coef);
+	qhandle_t shader = GetCharSetShader(true, 0, false, ch, row, col, coef);
 
 	frow = row*coef;
 	fcol = col*coef;
@@ -203,7 +199,7 @@ void SCR_DrawChar2(float x, float y, float width, float height, int ch) {
 	ah = height;
 
 	float coef;
-	qhandle_t shader = GetCharSetShader(true, false, ch, row, col, coef);
+	qhandle_t shader = GetCharSetShader(true, 0, false, ch, row, col, coef);
 
 	frow = row * coef;
 	fcol = col * coef;
@@ -236,7 +232,7 @@ void SCR_DrawSmallChar( int x, int y, int ch ) {
 	}
 
 	float coef;
-	qhandle_t shader = GetCharSetShader(false, !!(cl_consoleFontSize && cl_consoleFontSize->integer < SMALLCHAR_DEFAULT_WIDTH), ch, row, col, coef);
+	qhandle_t shader = GetCharSetShader(false, cl_consoleFont->integer, !!(cl_consoleFontSize && cl_consoleFontSize->integer < SMALLCHAR_DEFAULT_WIDTH), ch, row, col, coef);
 
 	frow = row*coef;
 	fcol = col* coef;
@@ -269,7 +265,7 @@ void SCR_DrawSmallChar_ConsoleNotify(int x, int y, int ch) {
 	}
 
 	float coef;
-	qhandle_t shader = GetCharSetShader(false, !!(cl_topLeftFontSize && cl_topLeftFontSize->integer < SMALLCHAR_DEFAULT_WIDTH), ch, row, col, coef);
+	qhandle_t shader = GetCharSetShader(false, cl_topLeftFont->integer, !!(cl_topLeftFontSize && cl_topLeftFontSize->integer < SMALLCHAR_DEFAULT_WIDTH), ch, row, col, coef);
 
 	frow = row * coef;
 	fcol = col * coef;

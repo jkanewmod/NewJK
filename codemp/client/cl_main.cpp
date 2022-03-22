@@ -127,6 +127,7 @@ cvar_t	*cl_ratioFix;
 
 cvar_t	*cg_languageFix;
 cvar_t	*cl_consoleFont;
+cvar_t	*cl_topLeftFont;
 
 vec3_t cl_windVec;
 
@@ -2909,6 +2910,7 @@ void CL_Init( void ) {
 
 	cg_languageFix = Cvar_Get("cg_languageFix", "0", CVAR_ARCHIVE, "Apply fixes for certain languages");
 	cl_consoleFont = Cvar_Get("cl_consoleFont", "0", CVAR_ARCHIVE, "Console font style");
+	cl_topLeftFont = Cvar_Get("cl_topLeftFont", "0", CVAR_ARCHIVE, "Top left notification area font style");
 
 	// enable the ja_guid player identifier in userinfo by default in OpenJK
 	cl_enableGuid = Cvar_Get("cl_enableGuid", "1", CVAR_ARCHIVE, "Enable GUID userinfo identifier" );
