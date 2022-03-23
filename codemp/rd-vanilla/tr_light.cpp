@@ -141,11 +141,59 @@ static void R_SetupEntityLightingGrid( trRefEntity_t *ent ) {
 	float			totalFactor;
 	unsigned short	*startGridPos;
 
-	if (r_fullbright->integer)
+	if (r_fullbright->integer || (ent->e.renderfx & RF_FULLBRIGHT))
 	{
 		ent->ambientLight[0] = ent->ambientLight[1] = ent->ambientLight[2] = 255.0;
 		ent->directedLight[0] = ent->directedLight[1] = ent->directedLight[2] = 255.0;
 		VectorCopy( tr.sunDirection, ent->lightDir );
+		return;
+	}
+
+	if ((ent->e.renderfx & RF_FULLBRIGHT_COLOR1)) {
+		ent->ambientLight[0] = ent->directedLight[0] = Com_Clamp(0, 255, ri->Cvar_VariableValue("r_fullbright_color1R") * 255.0);
+		ent->ambientLight[1] = ent->directedLight[1] = Com_Clamp(0, 255, ri->Cvar_VariableValue("r_fullbright_color1G") * 255.0);
+		ent->ambientLight[2] = ent->directedLight[2] = Com_Clamp(0, 255, ri->Cvar_VariableValue("r_fullbright_color1B") * 255.0);
+		VectorCopy(tr.sunDirection, ent->lightDir);
+		return;
+	}
+
+	if ((ent->e.renderfx & RF_FULLBRIGHT_COLOR2)) {
+		ent->ambientLight[0] = ent->directedLight[0] = Com_Clamp(0, 255, ri->Cvar_VariableValue("r_fullbright_color2R") * 255.0);
+		ent->ambientLight[1] = ent->directedLight[1] = Com_Clamp(0, 255, ri->Cvar_VariableValue("r_fullbright_color2G") * 255.0);
+		ent->ambientLight[2] = ent->directedLight[2] = Com_Clamp(0, 255, ri->Cvar_VariableValue("r_fullbright_color2B") * 255.0);
+		VectorCopy(tr.sunDirection, ent->lightDir);
+		return;
+	}
+
+	if ((ent->e.renderfx & RF_FULLBRIGHT_COLOR3)) {
+		ent->ambientLight[0] = ent->directedLight[0] = Com_Clamp(0, 255, ri->Cvar_VariableValue("r_fullbright_color3R") * 255.0);
+		ent->ambientLight[1] = ent->directedLight[1] = Com_Clamp(0, 255, ri->Cvar_VariableValue("r_fullbright_color3G") * 255.0);
+		ent->ambientLight[2] = ent->directedLight[2] = Com_Clamp(0, 255, ri->Cvar_VariableValue("r_fullbright_color3B") * 255.0);
+		VectorCopy(tr.sunDirection, ent->lightDir);
+		return;
+	}
+
+	if ((ent->e.renderfx & RF_FULLBRIGHT_COLOR4)) {
+		ent->ambientLight[0] = ent->directedLight[0] = Com_Clamp(0, 255, ri->Cvar_VariableValue("r_fullbright_color4R") * 255.0);
+		ent->ambientLight[1] = ent->directedLight[1] = Com_Clamp(0, 255, ri->Cvar_VariableValue("r_fullbright_color4G") * 255.0);
+		ent->ambientLight[2] = ent->directedLight[2] = Com_Clamp(0, 255, ri->Cvar_VariableValue("r_fullbright_color4B") * 255.0);
+		VectorCopy(tr.sunDirection, ent->lightDir);
+		return;
+	}
+
+	if ((ent->e.renderfx & RF_FULLBRIGHT_COLOR5)) {
+		ent->ambientLight[0] = ent->directedLight[0] = Com_Clamp(0, 255, ri->Cvar_VariableValue("r_fullbright_color5R") * 255.0);
+		ent->ambientLight[1] = ent->directedLight[1] = Com_Clamp(0, 255, ri->Cvar_VariableValue("r_fullbright_color5G") * 255.0);
+		ent->ambientLight[2] = ent->directedLight[2] = Com_Clamp(0, 255, ri->Cvar_VariableValue("r_fullbright_color5B") * 255.0);
+		VectorCopy(tr.sunDirection, ent->lightDir);
+		return;
+	}
+
+	if ((ent->e.renderfx & RF_FULLBRIGHT_COLOR6)) {
+		ent->ambientLight[0] = ent->directedLight[0] = Com_Clamp(0, 255, ri->Cvar_VariableValue("r_fullbright_color6R") * 255.0);
+		ent->ambientLight[1] = ent->directedLight[1] = Com_Clamp(0, 255, ri->Cvar_VariableValue("r_fullbright_color6G") * 255.0);
+		ent->ambientLight[2] = ent->directedLight[2] = Com_Clamp(0, 255, ri->Cvar_VariableValue("r_fullbright_color6B") * 255.0);
+		VectorCopy(tr.sunDirection, ent->lightDir);
 		return;
 	}
 
