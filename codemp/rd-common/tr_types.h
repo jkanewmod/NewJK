@@ -76,12 +76,12 @@ along with this program; if not, see <http://www.gnu.org/licenses/>.
 #define RF_FORCEPOST		0x200000 //force it to post-render -rww
 
 #define RF_FULLBRIGHT			0x400000
-#define RF_FULLBRIGHT_COLOR1		0x800000
-#define RF_FULLBRIGHT_COLOR2		0x1000000
-#define RF_FULLBRIGHT_COLOR3		0x2000000
-#define RF_FULLBRIGHT_COLOR4		0x4000000
-#define RF_FULLBRIGHT_COLOR5		0x8000000
-#define RF_FULLBRIGHT_COLOR6		0x10000000
+#define RF_OTHER1				0x800000
+#define RF_OTHER2				0x1000000
+#define RF_OTHER3				0x2000000
+#define RF_OTHER4				0x4000000
+#define RF_OTHER5				0x8000000
+#define RF_OTHER6				0x10000000
 
 // refdef flags
 #define RDF_NOWORLDMODEL	1		// used for player configuration screen
