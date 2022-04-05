@@ -224,6 +224,9 @@ R_BindAnimatedImage
 =================
 */
 
+extern bool forceFullbright, forceFullbrightWhiteShader;
+extern vec3_t forceFullbrightColor;
+
 // de-static'd because tr_quicksprite wants it
 void R_BindAnimatedImage( textureBundle_t *bundle ) {
 	int		index;
@@ -237,6 +240,11 @@ void R_BindAnimatedImage( textureBundle_t *bundle ) {
 	if ((r_fullbright->value /*|| tr.refdef.doFullbright */) && bundle->isLightmap)
 	{
 		GL_Bind( tr.whiteImage );
+		return;
+	}
+
+	if (forceFullbrightWhiteShader) {
+		GL_Bind(tr.whiteImage);
 		return;
 	}
 
@@ -1205,7 +1213,18 @@ static void ComputeColors( shaderStage_t *pStage, int forceRGBGen )
 			memset( tess.svars.colors, tr.identityLightByte, tess.numVertexes * 4 );
 			break;
 		case CGEN_LIGHTING_DIFFUSE:
-			RB_CalcDiffuseColor( ( unsigned char * ) tess.svars.colors );
+			if (forceFullbright) {
+				for (i = 0; i < tess.numVertexes; i++) {
+					tess.svars.colors[i][0] = forceFullbrightColor[0];
+					tess.svars.colors[i][1] = forceFullbrightColor[1];
+					tess.svars.colors[i][2] = forceFullbrightColor[2];
+					tess.svars.colors[i][3] = 0xff;
+				}
+				forceAlphaGen = AGEN_SKIP;
+			}
+			else {
+				RB_CalcDiffuseColor((unsigned char *)tess.svars.colors);
+			}
 			break;
 		case CGEN_LIGHTING_DIFFUSE_ENTITY:
 			RB_CalcDiffuseEntityColor( ( unsigned char * ) tess.svars.colors );

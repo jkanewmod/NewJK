@@ -170,6 +170,21 @@ cvar_t	*r_marksOnTriangleMeshes;
 cvar_t	*r_aspectCorrectFonts;
 cvar_t	*cl_ratioFix;
 
+cvar_t *r_fullbrightcolor_weapon_sab;
+cvar_t *r_fullbrightcolor_weapon_pis;
+cvar_t *r_fullbrightcolor_weapon_bla;
+cvar_t *r_fullbrightcolor_weapon_dis;
+cvar_t *r_fullbrightcolor_weapon_bow;
+cvar_t *r_fullbrightcolor_weapon_rep;
+cvar_t *r_fullbrightcolor_weapon_dem;
+cvar_t *r_fullbrightcolor_weapon_gol;
+cvar_t *r_fullbrightcolor_weapon_roc;
+cvar_t *r_fullbrightcolor_weapon_con;
+cvar_t *r_fullbrightcolor_weapon_the;
+cvar_t *r_fullbrightcolor_weapon_min;
+cvar_t *r_fullbrightcolor_weapon_dpk;
+cvar_t *r_fullbrightcolor_weapon_stu;
+
 // the limits apply to the sum of all scenes in a frame --
 // the main view, all the 3D icons, etc
 #define	DEFAULT_MAX_POLYS		600
@@ -1709,6 +1724,21 @@ Ghoul2 Insert Start
 	broadsword_effcorr					= ri->Cvar_Get( "broadsword_effcorr",				"1",						CVAR_NONE, "" );
 	broadsword_ragtobase				= ri->Cvar_Get( "broadsword_ragtobase",				"2",						CVAR_NONE, "" );
 	broadsword_dircap					= ri->Cvar_Get( "broadsword_dircap",				"64",						CVAR_NONE, "" );
+
+	r_fullbrightcolor_weapon_sab = ri->Cvar_Get("r_fullbrightcolor_weapon_sab", "", CVAR_ROM | CVAR_INTERNAL, "");
+	r_fullbrightcolor_weapon_pis = ri->Cvar_Get("r_fullbrightcolor_weapon_pis", "", CVAR_ROM | CVAR_INTERNAL, "");
+	r_fullbrightcolor_weapon_bla = ri->Cvar_Get("r_fullbrightcolor_weapon_bla", "", CVAR_ROM | CVAR_INTERNAL, "");
+	r_fullbrightcolor_weapon_dis = ri->Cvar_Get("r_fullbrightcolor_weapon_dis", "", CVAR_ROM | CVAR_INTERNAL, "");
+	r_fullbrightcolor_weapon_bow = ri->Cvar_Get("r_fullbrightcolor_weapon_bow", "", CVAR_ROM | CVAR_INTERNAL, "");
+	r_fullbrightcolor_weapon_rep = ri->Cvar_Get("r_fullbrightcolor_weapon_rep", "", CVAR_ROM | CVAR_INTERNAL, "");
+	r_fullbrightcolor_weapon_dem = ri->Cvar_Get("r_fullbrightcolor_weapon_dem", "", CVAR_ROM | CVAR_INTERNAL, "");
+	r_fullbrightcolor_weapon_gol = ri->Cvar_Get("r_fullbrightcolor_weapon_gol", "", CVAR_ROM | CVAR_INTERNAL, "");
+	r_fullbrightcolor_weapon_roc = ri->Cvar_Get("r_fullbrightcolor_weapon_roc", "", CVAR_ROM | CVAR_INTERNAL, "");
+	r_fullbrightcolor_weapon_con = ri->Cvar_Get("r_fullbrightcolor_weapon_con", "", CVAR_ROM | CVAR_INTERNAL, "");
+	r_fullbrightcolor_weapon_the = ri->Cvar_Get("r_fullbrightcolor_weapon_the", "", CVAR_ROM | CVAR_INTERNAL, "");
+	r_fullbrightcolor_weapon_min = ri->Cvar_Get("r_fullbrightcolor_weapon_min", "", CVAR_ROM | CVAR_INTERNAL, "");
+	r_fullbrightcolor_weapon_dpk = ri->Cvar_Get("r_fullbrightcolor_weapon_dpk", "", CVAR_ROM | CVAR_INTERNAL, "");
+	r_fullbrightcolor_weapon_stu = ri->Cvar_Get("r_fullbrightcolor_weapon_stu", "", CVAR_ROM | CVAR_INTERNAL, "");
 /*
 Ghoul2 Insert End
 */

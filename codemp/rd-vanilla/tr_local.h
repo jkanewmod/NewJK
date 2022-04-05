@@ -1235,6 +1235,21 @@ extern	cvar_t	*cl_ratioFix;
 
 extern	cvar_t	*r_cullDistanceOverride;
 
+extern cvar_t *r_fullbrightcolor_weapon_sab;
+extern cvar_t *r_fullbrightcolor_weapon_pis;
+extern cvar_t *r_fullbrightcolor_weapon_bla;
+extern cvar_t *r_fullbrightcolor_weapon_dis;
+extern cvar_t *r_fullbrightcolor_weapon_bow;
+extern cvar_t *r_fullbrightcolor_weapon_rep;
+extern cvar_t *r_fullbrightcolor_weapon_dem;
+extern cvar_t *r_fullbrightcolor_weapon_gol;
+extern cvar_t *r_fullbrightcolor_weapon_roc;
+extern cvar_t *r_fullbrightcolor_weapon_con;
+extern cvar_t *r_fullbrightcolor_weapon_the;
+extern cvar_t *r_fullbrightcolor_weapon_min;
+extern cvar_t *r_fullbrightcolor_weapon_dpk;
+extern cvar_t *r_fullbrightcolor_weapon_stu;
+
 /*
 Ghoul2 Insert Start
 */

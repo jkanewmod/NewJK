@@ -24,6 +24,8 @@ along with this program; if not, see <http://www.gnu.org/licenses/>.
 #include "tr_local.h"
 #include "glext.h"
 #include "tr_WorldEffects.h"
+#include <vector>
+#include <algorithm>
 
 backEndData_t	*backEndData;
 backEndState_t	backEnd;
@@ -666,6 +668,9 @@ static inline bool R_AverageTessXYZ(vec3_t dest)
 }
 #endif
 
+bool forceFullbright = false, forceFullbrightWhiteShader = false;
+vec3_t forceFullbrightColor = { 0, 0, 0 };
+extern std::vector<trRefEntity_t *> forceWhiteEnts;
 void RB_RenderDrawSurfList( drawSurf_t *drawSurfs, int numDrawSurfs ) {
 	shader_t		*shader, *oldShader;
 	int				fogNum, oldFogNum;
@@ -832,7 +837,87 @@ void RB_RenderDrawSurfList( drawSurf_t *drawSurfs, int numDrawSurfs ) {
 			|| ( entityNum != oldEntityNum && !shader->entityMergable ) )
 		{
 			if (oldShader != NULL) {
-				RB_EndSurface();
+				if (oldShader->name[0] && !strncmp(oldShader->name, "models/weapons2/", 16) && *(oldShader->name + 16)) {
+					const char *weapon = oldShader->name + 16;
+					const cvar_t *weaponCvar;
+					if (!strncmp(weapon, "sab", 3))
+						weaponCvar = r_fullbrightcolor_weapon_sab;
+					else if (!strncmp(weapon, "blaster_p", 9) || !strncmp(weapon, "bri", 3))
+						weaponCvar = r_fullbrightcolor_weapon_pis;
+					else if (!strncmp(weapon, "blaster_r", 9))
+						weaponCvar = r_fullbrightcolor_weapon_bla;
+					else if (!strncmp(weapon, "disr", 4))
+						weaponCvar = r_fullbrightcolor_weapon_dis;
+					else if (!strncmp(weapon, "bow", 3))
+						weaponCvar = r_fullbrightcolor_weapon_bow;
+					else if (!strncmp(weapon, "hea", 3))
+						weaponCvar = r_fullbrightcolor_weapon_rep;
+					else if (!strncmp(weapon, "dem", 3))
+						weaponCvar = r_fullbrightcolor_weapon_dem;
+					else if (!strncmp(weapon, "gol", 3))
+						weaponCvar = r_fullbrightcolor_weapon_gol;
+					else if (!strncmp(weapon, "mer", 3))
+						weaponCvar = r_fullbrightcolor_weapon_roc;
+					else if (!strncmp(weapon, "con", 3))
+						weaponCvar = r_fullbrightcolor_weapon_con;
+					else if (!strncmp(weapon, "the", 3))
+						weaponCvar = r_fullbrightcolor_weapon_the;
+					else if (!strncmp(weapon, "las", 3))
+						weaponCvar = r_fullbrightcolor_weapon_min;
+					else if (!strncmp(weapon, "det", 3))
+						weaponCvar = r_fullbrightcolor_weapon_dpk;
+					else if (!strncmp(weapon, "stu", 3))
+						weaponCvar = r_fullbrightcolor_weapon_stu;
+					else
+						weaponCvar = nullptr;
+
+					float r, g, b;
+					int usingWhiteTextureInt;
+					if (weaponCvar && VALIDSTRING(weaponCvar->string) && sscanf_s(weaponCvar->string, "%f %f %f %d", &r, &g, &b, &usingWhiteTextureInt) == 4) {
+						float ambientLight[3], directedLight[3], lightDir[3];
+						VectorCopy(backEnd.currentEntity->ambientLight, ambientLight);
+						VectorCopy(backEnd.currentEntity->directedLight, directedLight);
+						VectorCopy(backEnd.currentEntity->lightDir, lightDir);
+
+						forceFullbrightColor[0] = backEnd.currentEntity->ambientLight[0] = backEnd.currentEntity->directedLight[0] = r;
+						forceFullbrightColor[1] = backEnd.currentEntity->ambientLight[1] = backEnd.currentEntity->directedLight[1] = g;
+						forceFullbrightColor[2] = backEnd.currentEntity->ambientLight[2] = backEnd.currentEntity->directedLight[2] = b;
+						r = backEnd.currentEntity->e.shaderRGBA[0] / 255.0f;
+						g = backEnd.currentEntity->e.shaderRGBA[1] / 255.0f;
+						b = backEnd.currentEntity->e.shaderRGBA[2] / 255.0f;
+						int ambientLightInt = backEnd.currentEntity->ambientLightInt;
+						((byte *)&backEnd.currentEntity->ambientLightInt)[0] = Q_ftol(r * backEnd.currentEntity->ambientLight[0]);
+						((byte *)&backEnd.currentEntity->ambientLightInt)[1] = Q_ftol(g * backEnd.currentEntity->ambientLight[1]);
+						((byte *)&backEnd.currentEntity->ambientLightInt)[2] = Q_ftol(b * backEnd.currentEntity->ambientLight[2]);
+						((byte *)&backEnd.currentEntity->ambientLightInt)[3] = backEnd.currentEntity->e.shaderRGBA[3];
+						VectorCopy(tr.sunDirection, backEnd.currentEntity->lightDir);
+
+						forceFullbright = true;
+						if (usingWhiteTextureInt)
+							forceFullbrightWhiteShader = true;
+						RB_EndSurface();
+						forceFullbright = forceFullbrightWhiteShader = false;
+
+						VectorCopy(ambientLight, backEnd.currentEntity->ambientLight);
+						VectorCopy(directedLight, backEnd.currentEntity->directedLight);
+						VectorCopy(lightDir, backEnd.currentEntity->lightDir);
+						backEnd.currentEntity->ambientLightInt = ambientLightInt;
+					}
+					else {
+						RB_EndSurface();
+					}
+				}
+				else {
+					auto x = std::find(forceWhiteEnts.begin(), forceWhiteEnts.end(), backEnd.currentEntity);
+					if (x != forceWhiteEnts.end()) {
+						forceFullbrightWhiteShader = true;
+						RB_EndSurface();
+						forceFullbrightWhiteShader = false;
+					}
+					else {
+						RB_EndSurface();
+					}
+				}
 
 				if (!didShadowPass && shader && shader->sort > SS_BANNER)
 				{
@@ -1690,6 +1775,8 @@ const void	*RB_DrawSurfs( const void *data ) {
 		// Draw the glow additively over the screen.
 		RB_DrawGlowOverlay();
 	}
+
+	forceWhiteEnts.clear();
 
 	return (const void *)(cmd + 1);
 }

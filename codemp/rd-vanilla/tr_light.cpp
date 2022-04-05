@@ -24,6 +24,7 @@ along with this program; if not, see <http://www.gnu.org/licenses/>.
 // tr_light.c
 
 #include "tr_local.h"
+#include <vector>
 
 #define	DLIGHT_AT_RADIUS		16
 // at the edge of a dlight's influence, this amount of light will be added
@@ -131,7 +132,8 @@ R_SetupEntityLightingGrid
 
 =================
 */
-static void R_SetupEntityLightingGrid( trRefEntity_t *ent ) {
+std::vector<trRefEntity_t *> forceWhiteEnts;
+static bool R_SetupEntityLightingGrid( trRefEntity_t *ent ) {
 	vec3_t			lightOrigin;
 	int				pos[3];
 	int				i, j;
@@ -146,7 +148,7 @@ static void R_SetupEntityLightingGrid( trRefEntity_t *ent ) {
 		ent->ambientLight[0] = ent->ambientLight[1] = ent->ambientLight[2] = 255.0;
 		ent->directedLight[0] = ent->directedLight[1] = ent->directedLight[2] = 255.0;
 		VectorCopy( tr.sunDirection, ent->lightDir );
-		return;
+		return false;
 	}
 
 	if (ent->e.renderfx & RF_FULLBRIGHT)
@@ -162,19 +164,23 @@ static void R_SetupEntityLightingGrid( trRefEntity_t *ent ) {
 		if (index > 0 && index < 64) {
 			const char *s = ri->Cvar_VariableString(va("r_fullbrightcolor%d", index));
 			float r = 255, g = 255, b = 255;
+			int useWhiteTexture = 0;
 			if (VALIDSTRING(s))
-				sscanf_s(s, "%f %f %f", &r, &g, &b);
+				sscanf_s(s, "%f %f %f %d", &r, &g, &b, &useWhiteTexture);
 			ent->ambientLight[0] = ent->directedLight[0] = r;
 			ent->ambientLight[1] = ent->directedLight[1] = g;
 			ent->ambientLight[2] = ent->directedLight[2] = b;
 			VectorCopy(tr.sunDirection, ent->lightDir);
+			if (useWhiteTexture)
+				forceWhiteEnts.push_back(ent);
+			return true;
 		}
 		else {
 			ent->ambientLight[0] = ent->ambientLight[1] = ent->ambientLight[2] = 255.0;
 			ent->directedLight[0] = ent->directedLight[1] = ent->directedLight[2] = 255.0;
 			VectorCopy(tr.sunDirection, ent->lightDir);
+			return false;
 		}
-		return;
 	}
 
 	if ( ent->e.renderfx & RF_LIGHTING_ORIGIN ) {
@@ -289,6 +295,7 @@ static void R_SetupEntityLightingGrid( trRefEntity_t *ent ) {
 	VectorScale( ent->directedLight, r_directedScale->value, ent->directedLight );
 
 	VectorNormalize2( direction, ent->lightDir );
+	return false;
 }
 
 
@@ -357,9 +364,10 @@ void R_SetupEntityLighting( const trRefdef_t *refdef, trRefEntity_t *ent ) {
 	}
 
 	// if NOWORLDMODEL, only use dynamic lights (menu system, etc)
+	bool customFullbright = false;
 	if ( !(refdef->rdflags & RDF_NOWORLDMODEL )
 		&& tr.world->lightGridData ) {
-		R_SetupEntityLightingGrid( ent );
+		customFullbright = R_SetupEntityLightingGrid( ent );
 	} else {
 		ent->ambientLight[0] = ent->ambientLight[1] =
 			ent->ambientLight[2] = tr.identityLight * 150;
@@ -369,7 +377,7 @@ void R_SetupEntityLighting( const trRefdef_t *refdef, trRefEntity_t *ent ) {
 	}
 
 	// bonus items and view weapons have a fixed minimum add
-	if ( 1 /* ent->e.renderfx & RF_MINLIGHT */ ) {
+	if ( !customFullbright /* ent->e.renderfx & RF_MINLIGHT */ ) {
 		// give everything a minimum light add
 		ent->ambientLight[0] += tr.identityLight * 32;
 		ent->ambientLight[1] += tr.identityLight * 32;
@@ -397,22 +405,24 @@ void R_SetupEntityLighting( const trRefdef_t *refdef, trRefEntity_t *ent ) {
 	//
 	// modify the light by dynamic lights
 	//
-	d = VectorLength( ent->directedLight );
-	VectorScale( ent->lightDir, d, lightDir );
+	if (!customFullbright) {
+		d = VectorLength(ent->directedLight);
+		VectorScale(ent->lightDir, d, lightDir);
 
-	for ( i = 0 ; i < refdef->num_dlights ; i++ ) {
-		dl = &refdef->dlights[i];
-		VectorSubtract( dl->origin, lightOrigin, dir );
-		d = VectorNormalize( dir );
+		for (i = 0; i < refdef->num_dlights; i++) {
+			dl = &refdef->dlights[i];
+			VectorSubtract(dl->origin, lightOrigin, dir);
+			d = VectorNormalize(dir);
 
-		power = DLIGHT_AT_RADIUS * ( dl->radius * dl->radius );
-		if ( d < DLIGHT_MINIMUM_RADIUS ) {
-			d = DLIGHT_MINIMUM_RADIUS;
+			power = DLIGHT_AT_RADIUS * (dl->radius * dl->radius);
+			if (d < DLIGHT_MINIMUM_RADIUS) {
+				d = DLIGHT_MINIMUM_RADIUS;
+			}
+			d = power / (d * d);
+
+			VectorMA(ent->directedLight, d, dl->color, ent->directedLight);
+			VectorMA(lightDir, d, dir, lightDir);
 		}
-		d = power / ( d * d );
-
-		VectorMA( ent->directedLight, d, dl->color, ent->directedLight );
-		VectorMA( lightDir, d, dir, lightDir );
 	}
 
 	// clamp ambient

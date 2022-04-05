@@ -3362,6 +3362,7 @@ void R_AddGhoulSurfaces( trRefEntity_t *ent ) {
 			RenderSurfaces(RS);
 		}
 	}
+
 	HackadelicOnClient=false;
 
 #ifdef G2_PERFORMANCE_ANALYSIS
