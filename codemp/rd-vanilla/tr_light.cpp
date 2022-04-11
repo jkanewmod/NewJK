@@ -442,11 +442,13 @@ void R_SetupEntityLighting( const trRefdef_t *refdef, trRefEntity_t *ent ) {
 	((byte *)&ent->ambientLightInt)[2] = Q_ftol( ent->ambientLight[2] );
 	((byte *)&ent->ambientLightInt)[3] = 0xff;
 
-	// transform the direction to local space
-	VectorNormalize( lightDir );
-	ent->lightDir[0] = DotProduct( lightDir, ent->e.axis[0] );
-	ent->lightDir[1] = DotProduct( lightDir, ent->e.axis[1] );
-	ent->lightDir[2] = DotProduct( lightDir, ent->e.axis[2] );
+	if (!customFullbright) {
+		// transform the direction to local space
+		VectorNormalize(lightDir);
+		ent->lightDir[0] = DotProduct(lightDir, ent->e.axis[0]);
+		ent->lightDir[1] = DotProduct(lightDir, ent->e.axis[1]);
+		ent->lightDir[2] = DotProduct(lightDir, ent->e.axis[2]);
+	}
 }
 
 /*

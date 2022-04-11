@@ -86,6 +86,7 @@ void R_PerformanceCounters( void ) {
 R_IssueRenderCommands
 ====================
 */
+extern std::vector<trRefEntity_t *> forceWhiteEnts;
 void R_IssueRenderCommands( qboolean runPerformanceCounters ) {
 	renderCommandList_t	*cmdList;
 
@@ -109,6 +110,8 @@ void R_IssueRenderCommands( qboolean runPerformanceCounters ) {
 		// let it start on the new batch
 		RB_ExecuteRenderCommands( cmdList->cmds );
 	}
+
+	forceWhiteEnts.clear();
 }
 
 

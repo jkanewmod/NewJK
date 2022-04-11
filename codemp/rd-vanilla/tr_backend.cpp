@@ -908,15 +908,7 @@ void RB_RenderDrawSurfList( drawSurf_t *drawSurfs, int numDrawSurfs ) {
 					}
 				}
 				else {
-					auto x = std::find(forceWhiteEnts.begin(), forceWhiteEnts.end(), backEnd.currentEntity);
-					if (x != forceWhiteEnts.end()) {
-						forceFullbrightWhiteShader = true;
-						RB_EndSurface();
-						forceFullbrightWhiteShader = false;
-					}
-					else {
-						RB_EndSurface();
-					}
+					RB_EndSurface();
 				}
 
 				if (!didShadowPass && shader && shader->sort > SS_BANNER)
@@ -1775,8 +1767,6 @@ const void	*RB_DrawSurfs( const void *data ) {
 		// Draw the glow additively over the screen.
 		RB_DrawGlowOverlay();
 	}
-
-	forceWhiteEnts.clear();
 
 	return (const void *)(cmd + 1);
 }
