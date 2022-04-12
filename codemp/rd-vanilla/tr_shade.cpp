@@ -1826,7 +1826,7 @@ void RB_StageIteratorGeneric( void )
 
 	input = &tess;
 
-	if (!Q_stricmpn(input->shader->name, "models/players/", 15)) {
+	if (!Q_stricmpn(input->shader->name, "models/", 7)) {
 		auto x = std::find(forceWhiteEnts.begin(), forceWhiteEnts.end(), backEnd.currentEntity);
 		if (x != forceWhiteEnts.end()) {
 			VectorCopy(backEnd.currentEntity->ambientLight, forceFullbrightColor);
