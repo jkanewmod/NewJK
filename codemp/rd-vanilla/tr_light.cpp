@@ -384,7 +384,7 @@ void R_SetupEntityLighting( const trRefdef_t *refdef, trRefEntity_t *ent ) {
 		ent->ambientLight[2] += tr.identityLight * 32;
 	}
 
-	if (ent->e.renderfx & RF_MINLIGHT)
+	if (!customFullbright && ent->e.renderfx & RF_MINLIGHT)
 	{ //the minlight flag is now for items rotating on their holo thing
 		if (ent->e.shaderRGBA[0] == 255 &&
 			ent->e.shaderRGBA[1] == 255 &&

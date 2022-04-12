@@ -1821,16 +1821,18 @@ static void RB_IterateStagesGeneric( shaderCommands_t *input )
 extern std::vector<trRefEntity_t *> forceWhiteEnts;
 void RB_StageIteratorGeneric( void )
 {
-	auto x = std::find(forceWhiteEnts.begin(), forceWhiteEnts.end(), backEnd.currentEntity);
-	if (x != forceWhiteEnts.end()) {
-		VectorCopy(backEnd.currentEntity->ambientLight, forceFullbrightColor);
-		forceFullbright = forceFullbrightWhiteShader = true;
-	}
-
 	shaderCommands_t *input;
 	int stage;
 
 	input = &tess;
+
+	if (!Q_stricmpn(input->shader->name, "models/players/", 15)) {
+		auto x = std::find(forceWhiteEnts.begin(), forceWhiteEnts.end(), backEnd.currentEntity);
+		if (x != forceWhiteEnts.end()) {
+			VectorCopy(backEnd.currentEntity->ambientLight, forceFullbrightColor);
+			forceFullbright = forceFullbrightWhiteShader = true;
+		}
+	}
 
 	RB_DeformTessGeometry();
 
