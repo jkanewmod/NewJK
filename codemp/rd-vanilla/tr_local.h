@@ -1250,6 +1250,209 @@ extern cvar_t *r_fullbrightcolor_weapon_min;
 extern cvar_t *r_fullbrightcolor_weapon_dpk;
 extern cvar_t *r_fullbrightcolor_weapon_stu;
 
+struct FullbrightEnt {
+	trRefEntity_t *ent;
+	vec3_t ambientLight, directedLight, lightDir;
+	int ambientLightInt;
+	FullbrightEnt() {};
+	FullbrightEnt(const FullbrightEnt &f) {
+		ent = f.ent;
+		VectorCopy(f.ambientLight, ambientLight);
+		VectorCopy(f.directedLight, directedLight);
+		VectorCopy(f.lightDir, lightDir);
+		ambientLightInt = f.ambientLightInt;
+	}
+	FullbrightEnt(trRefEntity_t *e, bool runQuickLighting = false) {
+		ent = e;
+
+		VectorCopy(ent->ambientLight, ambientLight);
+		VectorCopy(ent->directedLight, directedLight);
+		VectorCopy(ent->lightDir, lightDir);
+		((byte *)&ambientLightInt)[0] = Q_ftol(ent->ambientLight[0]);
+		((byte *)&ambientLightInt)[1] = Q_ftol(ent->ambientLight[1]);
+		((byte *)&ambientLightInt)[2] = Q_ftol(ent->ambientLight[2]);
+		((byte *)&ambientLightInt)[3] = 0xff;
+
+		if (runQuickLighting) {
+			vec3_t lightOrigin;
+			int pos[3], frac[3], gridStep[3];
+			unsigned short *startGridPos;
+			float totalFactor;
+			if (ent->e.renderfx & RF_LIGHTING_ORIGIN) {
+				// seperate lightOrigins are needed so an object that is
+				// sinking into the ground can still be lit, and so
+				// multi-part models can be lit identically
+				VectorCopy(ent->e.lightingOrigin, lightOrigin);
+			}
+			else {
+				VectorCopy(ent->e.origin, lightOrigin);
+			}
+
+			VectorSubtract(lightOrigin, tr.world->lightGridOrigin, lightOrigin);
+			for (int i = 0; i < 3; i++) {
+				float	v;
+
+				v = lightOrigin[i] * tr.world->lightGridInverseSize[i];
+				pos[i] = floor(v);
+				frac[i] = v - pos[i];
+				if (pos[i] < 0) {
+					pos[i] = 0;
+				}
+				else if (pos[i] >= tr.world->lightGridBounds[i] - 1) {
+					pos[i] = tr.world->lightGridBounds[i] - 1;
+				}
+			}
+
+			VectorClear(ambientLight);
+			VectorClear(directedLight);
+			vec3_t direction;
+			VectorClear(direction);
+
+			// trilerp the light value
+			gridStep[0] = 1;
+			gridStep[1] = tr.world->lightGridBounds[0];
+			gridStep[2] = tr.world->lightGridBounds[0] * tr.world->lightGridBounds[1];
+			startGridPos = tr.world->lightGridArray + (pos[0] * gridStep[0] + pos[1] * gridStep[1] + pos[2] * gridStep[2]);
+
+			totalFactor = 0;
+			for (int i = 0; i < 8; i++) {
+				float			factor;
+				mgrid_t *data;
+				unsigned short *gridPos;
+				int				lat, lng;
+				vec3_t			normal;
+
+				factor = 1.0;
+				gridPos = startGridPos;
+				for (int j = 0; j < 3; j++) {
+					if (i & (1 << j)) {
+						factor *= frac[j];
+						gridPos += gridStep[j];
+					}
+					else {
+						factor *= (1.0 - frac[j]);
+					}
+				}
+
+				if (gridPos >= tr.world->lightGridArray + tr.world->numGridArrayElements)
+				{//we've gone off the array somehow
+					continue;
+				}
+				data = tr.world->lightGridData + *gridPos;
+
+				if (data->styles[0] == LS_LSNONE)
+				{
+					continue;	// ignore samples in walls
+				}
+
+				totalFactor += factor;
+
+				for (int j = 0; j < MAXLIGHTMAPS; j++)
+				{
+					if (data->styles[j] != LS_LSNONE)
+					{
+						const byte	style = data->styles[j];
+						extern color4ub_t styleColors[MAX_LIGHT_STYLES];
+						ambientLight[0] += factor * data->ambientLight[j][0] * styleColors[style][0] / 255.0f;
+						ambientLight[1] += factor * data->ambientLight[j][1] * styleColors[style][1] / 255.0f;
+						ambientLight[2] += factor * data->ambientLight[j][2] * styleColors[style][2] / 255.0f;
+
+						directedLight[0] += factor * data->directLight[j][0] * styleColors[style][0] / 255.0f;
+						directedLight[1] += factor * data->directLight[j][1] * styleColors[style][1] / 255.0f;
+						directedLight[2] += factor * data->directLight[j][2] * styleColors[style][2] / 255.0f;
+					}
+					else
+					{
+						break;
+					}
+				}
+
+				lat = data->latLong[1];
+				lng = data->latLong[0];
+				lat *= (FUNCTABLE_SIZE / 256);
+				lng *= (FUNCTABLE_SIZE / 256);
+
+				// decode X as cos( lat ) * sin( long )
+				// decode Y as sin( lat ) * sin( long )
+				// decode Z as cos( long )
+
+				normal[0] = tr.sinTable[(lat + (FUNCTABLE_SIZE / 4)) & FUNCTABLE_MASK] * tr.sinTable[lng];
+				normal[1] = tr.sinTable[lat] * tr.sinTable[lng];
+				normal[2] = tr.sinTable[(lng + (FUNCTABLE_SIZE / 4)) & FUNCTABLE_MASK];
+
+				VectorMA(direction, factor, normal, direction);
+			}
+
+			if (totalFactor > 0 && totalFactor < 0.99)
+			{
+				totalFactor = 1.0 / totalFactor;
+				VectorScale(ambientLight, totalFactor, ambientLight);
+				VectorScale(directedLight, totalFactor, directedLight);
+			}
+
+			extern cvar_t *r_ambientScale, *r_directedScale;
+			VectorScale(ambientLight, r_ambientScale->value, ambientLight);
+			VectorScale(directedLight, r_directedScale->value, directedLight);
+
+			VectorNormalize2(direction, lightDir);
+
+			ambientLight[0] += tr.identityLight * 32;
+			ambientLight[1] += tr.identityLight * 32;
+			ambientLight[2] += tr.identityLight * 32;
+
+			if (ent->e.renderfx & RF_MINLIGHT) {
+				if (ent->e.shaderRGBA[0] == 255 && ent->e.shaderRGBA[1] == 255 && ent->e.shaderRGBA[2] == 0) {
+					ambientLight[0] += tr.identityLight * 255;
+					ambientLight[1] += tr.identityLight * 255;
+					ambientLight[2] += tr.identityLight * 0;
+				}
+				else {
+					ambientLight[0] += tr.identityLight * 16;
+					ambientLight[1] += tr.identityLight * 96;
+					ambientLight[2] += tr.identityLight * 150;
+				}
+			}
+
+			float d = VectorLength(directedLight);
+			VectorScale(lightDir, d, lightDir);
+
+			for (int i = 0; i < tr.refdef.num_dlights; i++) {
+				dlight_t *dl = &tr.refdef.dlights[i];
+				vec3_t lightOrigin, dir;
+				VectorSubtract(dl->origin, lightOrigin, dir);
+				d = VectorNormalize(dir);
+
+				float power = 16 * (dl->radius * dl->radius);
+				if (d < 16)
+					d = 16;
+				d = power / (d * d);
+
+				VectorMA(directedLight, d, dl->color, directedLight);
+				VectorMA(lightDir, d, dir, lightDir);
+			}
+
+			// clamp ambient
+			for (int i = 0; i < 3; i++) {
+				if (ambientLight[i] > tr.identityLightByte) {
+					ambientLight[i] = tr.identityLightByte;
+				}
+			}
+
+			// save out the byte packet version
+			((byte *)&ambientLightInt)[0] = Q_ftol(ambientLight[0]);
+			((byte *)&ambientLightInt)[1] = Q_ftol(ambientLight[1]);
+			((byte *)&ambientLightInt)[2] = Q_ftol(ambientLight[2]);
+			((byte *)&ambientLightInt)[3] = 0xff;
+
+			// transform the direction to local space
+			VectorNormalize(lightDir);
+			lightDir[0] = DotProduct(lightDir, ent->e.axis[0]);
+			lightDir[1] = DotProduct(lightDir, ent->e.axis[1]);
+			lightDir[2] = DotProduct(lightDir, ent->e.axis[2]);
+		}
+	}
+};
+
 /*
 Ghoul2 Insert Start
 */

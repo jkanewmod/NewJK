@@ -132,7 +132,11 @@ R_SetupEntityLightingGrid
 
 =================
 */
+
 std::vector<trRefEntity_t *> forceWhiteEnts;
+std::vector<FullbrightEnt> fullbrightPlayers;
+std::vector<FullbrightEnt> fullbrightEnts;
+
 static bool R_SetupEntityLightingGrid( trRefEntity_t *ent ) {
 	vec3_t			lightOrigin;
 	int				pos[3];
@@ -160,6 +164,17 @@ static bool R_SetupEntityLightingGrid( trRefEntity_t *ent ) {
 		if (ent->e.renderfx & RF_OTHER4) index |= 8;
 		if (ent->e.renderfx & RF_OTHER5) index |= 16;
 		if (ent->e.renderfx & RF_OTHER6) index |= 32;
+
+		bool isPlayer = !!(ent->e.renderfx & RF_OTHER7);
+
+		if (isPlayer) { // run lighting calc on fullbright players so that it can be applied to held non-fullbright weapons
+			FullbrightEnt lightCalc(ent, true);
+			fullbrightEnts.emplace_back(lightCalc);
+			fullbrightPlayers.emplace_back(lightCalc);
+		}
+		else {
+			fullbrightEnts.emplace_back(ent);
+		}
 
 		if (index > 0 && index < 64) {
 			const char *s = ri->Cvar_VariableString(va("r_fullbrightcolor%d", index));

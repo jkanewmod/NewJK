@@ -1819,6 +1819,7 @@ static void RB_IterateStagesGeneric( shaderCommands_t *input )
 ** RB_StageIteratorGeneric
 */
 extern std::vector<trRefEntity_t *> forceWhiteEnts;
+extern std::vector<FullbrightEnt> fullbrightPlayers;
 void RB_StageIteratorGeneric( void )
 {
 	shaderCommands_t *input;
@@ -1826,11 +1827,33 @@ void RB_StageIteratorGeneric( void )
 
 	input = &tess;
 
+	bool overridingFullbrightEnt = false;
+	FullbrightEnt backupFullbrightPlayer;
+
 	if (!Q_stricmpn(input->shader->name, "models/", 7)) {
-		auto x = std::find(forceWhiteEnts.begin(), forceWhiteEnts.end(), backEnd.currentEntity);
-		if (x != forceWhiteEnts.end()) {
-			VectorCopy(backEnd.currentEntity->ambientLight, forceFullbrightColor);
-			forceFullbright = forceFullbrightWhiteShader = true;
+		bool isWeapon = false;
+		if (!Q_stricmpn(input->shader->name + 7, "weapons2/", 9)) {
+			isWeapon = true;
+			if (!forceFullbright && !forceFullbrightWhiteShader) {
+				auto fullbrightPlayer = std::find_if(fullbrightPlayers.begin(), fullbrightPlayers.end(), [&](auto &p) { return p.ent == backEnd.currentEntity; });
+				if (fullbrightPlayer != fullbrightPlayers.end()) {
+					// this is a non-fullbright weapon held by a fullbright player
+					backupFullbrightPlayer = FullbrightEnt(backEnd.currentEntity);
+					VectorCopy(fullbrightPlayer->ambientLight, backEnd.currentEntity->ambientLight);
+					VectorCopy(fullbrightPlayer->directedLight, backEnd.currentEntity->directedLight);
+					VectorCopy(fullbrightPlayer->lightDir, backEnd.currentEntity->lightDir);
+					backEnd.currentEntity->ambientLightInt = fullbrightPlayer->ambientLightInt;
+					overridingFullbrightEnt = true;
+				}
+			}
+		}
+
+		if (!overridingFullbrightEnt && !(isWeapon && forceFullbright && !forceFullbrightWhiteShader)) {
+			auto forceWhite = std::find(forceWhiteEnts.begin(), forceWhiteEnts.end(), backEnd.currentEntity);
+			if (forceWhite != forceWhiteEnts.end()) {
+				VectorCopy(backEnd.currentEntity->ambientLight, forceFullbrightColor);
+				forceFullbright = forceFullbrightWhiteShader = true;
+			}
 		}
 	}
 
@@ -1966,6 +1989,13 @@ void RB_StageIteratorGeneric( void )
 	}
 
 	forceFullbright = forceFullbrightWhiteShader = false;
+
+	if (overridingFullbrightEnt) { // restore
+		VectorCopy(backupFullbrightPlayer.ambientLight, backEnd.currentEntity->ambientLight);
+		VectorCopy(backupFullbrightPlayer.directedLight, backEnd.currentEntity->directedLight);
+		VectorCopy(backupFullbrightPlayer.lightDir, backEnd.currentEntity->lightDir);
+		backEnd.currentEntity->ambientLightInt = backupFullbrightPlayer.ambientLightInt;
+	}
 }
 
 

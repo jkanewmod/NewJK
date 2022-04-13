@@ -82,6 +82,7 @@ along with this program; if not, see <http://www.gnu.org/licenses/>.
 #define RF_OTHER4				0x4000000
 #define RF_OTHER5				0x8000000
 #define RF_OTHER6				0x10000000
+#define RF_OTHER7				0x20000000
 
 // refdef flags
 #define RDF_NOWORLDMODEL	1		// used for player configuration screen

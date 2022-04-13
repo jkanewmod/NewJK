@@ -87,6 +87,8 @@ R_IssueRenderCommands
 ====================
 */
 extern std::vector<trRefEntity_t *> forceWhiteEnts;
+extern std::vector<FullbrightEnt> fullbrightPlayers;
+extern std::vector<FullbrightEnt> fullbrightEnts;
 void R_IssueRenderCommands( qboolean runPerformanceCounters ) {
 	renderCommandList_t	*cmdList;
 
@@ -111,7 +113,16 @@ void R_IssueRenderCommands( qboolean runPerformanceCounters ) {
 		RB_ExecuteRenderCommands( cmdList->cmds );
 	}
 
+	for (auto &x : fullbrightEnts) {
+		VectorCopy(x.ambientLight, x.ent->ambientLight);
+		VectorCopy(x.directedLight, x.ent->directedLight);
+		VectorCopy(x.lightDir, x.ent->lightDir);
+		x.ent->ambientLightInt = x.ambientLightInt;
+	}
+	fullbrightEnts.clear();
+
 	forceWhiteEnts.clear();
+	fullbrightPlayers.clear();
 }
 
 
