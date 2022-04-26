@@ -394,6 +394,14 @@ if(BuildMPEngine)
 		endif(BuildDiscordRichPresence)
 	endif()
 
+# shcore.lib is required to detect DPI from the OS
+if(WIN32)
+	set(MPEngineLibraries
+		${MPEngineLibraries}
+		shcore.lib
+		)
+endif(WIN32)
+
 	if(UseInternalSDL2)
 		if(CMAKE_SIZEOF_VOID_P EQUAL 4)
 			set(MPEngineLibraries

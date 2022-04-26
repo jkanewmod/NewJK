@@ -25,6 +25,9 @@ along with this program; if not, see <http://www.gnu.org/licenses/>.
 #include "rd-common/tr_types.h"
 #include "sys/sys_local.h"
 #include "sdl_icon.h"
+#ifdef _WIN32
+#include <ShellScalingApi.h>
+#endif
 
 enum rserr_t
 {
@@ -318,6 +321,26 @@ static bool GLimp_DetectAvailableModes(void)
 	return true;
 }
 
+#ifdef _WIN32
+static void GetDisplayDPI(float &dpi, float &defaultDpi) {
+	const float systemDefaultDpi =
+#ifdef __APPLE__
+		72.0f;
+#elif defined(_WIN32)
+		96.0f;
+#else
+		static_assert(false, "GetDisplayDPI: no system default DPI for this platform.");
+#endif
+
+	const int displayIndex = 0; // i guess
+
+	if (SDL_GetDisplayDPI(displayIndex, NULL, &dpi, NULL) != 0)
+		dpi = systemDefaultDpi; // fall back to the known default if SDL_GetDisplayDPI fails
+
+	defaultDpi = systemDefaultDpi;
+}
+#endif
+
 /*
 ===============
 GLimp_SetMode
@@ -403,7 +426,29 @@ static rserr_t GLimp_SetMode(glconfig_t *glConfig, const windowDesc_t *windowDes
 		SDL_FreeSurface( icon );
 		return RSERR_INVALID_MODE;
 	}
-	Com_Printf( " %d %d\n", glConfig->vidWidth, glConfig->vidHeight);
+
+	int windowDpiScaledWidth = glConfig->vidWidth, windowDpiScaledHeight = glConfig->vidHeight;
+#ifdef _WIN32
+	if (fullscreen) { // fix fullscreen dpi scaling
+		float dpi, defaultDpi;
+		GetDisplayDPI(dpi, defaultDpi);
+
+		windowDpiScaledWidth = int(glConfig->vidWidth * dpi / defaultDpi);
+		windowDpiScaledHeight = int(glConfig->vidHeight * dpi / defaultDpi);
+
+		if (dpi != defaultDpi)
+			Com_Printf(" %d %d (DPI scaled: %d %d)\n", glConfig->vidWidth, glConfig->vidHeight, windowDpiScaledWidth, windowDpiScaledHeight);
+		else
+			Com_Printf(" %d %d\n", glConfig->vidWidth, glConfig->vidHeight);
+		/*Com_Printf("dpi is %f, defaultDpi is %f, vid width is %d, scaled width is %d, vid height is %d, scaled height is %d\n",
+			dpi, defaultDpi, glConfig->vidWidth, windowDpiScaledWidth, glConfig->vidHeight, windowDpiScaledHeight);*/
+	}
+	else {
+#endif
+		Com_Printf(" %d %d\n", glConfig->vidWidth, glConfig->vidHeight);
+#ifdef _WIN32
+	}
+#endif
 
 	// Center window
 	if( r_centerWindow->integer && !fullscreen )
@@ -576,7 +621,7 @@ static rserr_t GLimp_SetMode(glconfig_t *glConfig, const windowDesc_t *windowDes
 			SDL_GL_SetAttribute( SDL_GL_ACCELERATED_VISUAL, !r_allowSoftwareGL->integer );
 
 			if( ( screen = SDL_CreateWindow( windowTitle, x, y,
-					glConfig->vidWidth, glConfig->vidHeight, flags ) ) == NULL )
+				windowDpiScaledWidth, windowDpiScaledHeight, flags ) ) == NULL )
 			{
 				Com_DPrintf( "SDL_CreateWindow failed: %s\n", SDL_GetError( ) );
 				continue;
@@ -638,7 +683,7 @@ static rserr_t GLimp_SetMode(glconfig_t *glConfig, const windowDesc_t *windowDes
 	{
 		// Just create a regular window
 		if( ( screen = SDL_CreateWindow( windowTitle, x, y,
-				glConfig->vidWidth, glConfig->vidHeight, flags ) ) == NULL )
+			windowDpiScaledWidth, windowDpiScaledHeight, flags ) ) == NULL )
 		{
 			Com_DPrintf( "SDL_CreateWindow failed: %s\n", SDL_GetError( ) );
 		}
@@ -683,7 +728,9 @@ static qboolean GLimp_StartDriverAndSetMode(glconfig_t *glConfig, const windowDe
 	if (!SDL_WasInit(SDL_INIT_VIDEO))
 	{
 		const char *driverName;
-
+#ifdef _WIN32
+		SetProcessDpiAwareness(PROCESS_PER_MONITOR_DPI_AWARE);
+#endif
 		if (SDL_Init(SDL_INIT_VIDEO) == -1)
 		{
 			Com_Printf( "SDL_Init( SDL_INIT_VIDEO ) FAILED (%s)\n", SDL_GetError());
