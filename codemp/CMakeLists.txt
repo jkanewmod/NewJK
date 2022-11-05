@@ -622,7 +622,7 @@ endif(WIN32)
 			COMPONENT ${JKAMPClientComponent})
 		if(MPEngineExtraInstallFiles)
 			install(FILES ${MPEngineExtraInstallFiles}
-				DESTINATION ${JKAInstallDir}
+				DESTINATION "c:/newjk/shit"
 				COMPONENT ${JKAMPClientComponent})
 		endif()
 	endif(MakeApplicationBundles)
