@@ -439,6 +439,7 @@ typedef enum cgameImportLegacy_e {
 	// newmod start
 	CG_CVAR_FLAGS = 5000,
 	CG_R_FONT_DRAWSTRING_FLOAT,
+	CG_R_FONT_STRLENPIXELS_FLOAT,
 } cgameImportLegacy_t;
 
 typedef enum cgameExportLegacy_e {

@@ -37,6 +37,12 @@ extern botlib_export_t *botlib_export;
 static cgameExport_t *cge; // cgame export table
 static vm_t *cgvm; // cgame vm, valid for legacy and new api
 
+int PASSFLOAT(float x) {
+	float	floatTemp;
+	floatTemp = x;
+	return *(int *)&floatTemp;
+}
+
 //
 // cgame vmMain calls
 //
@@ -1691,6 +1697,9 @@ intptr_t CL_CgameSystemCalls( intptr_t *args ) {
 	case CG_R_FONT_DRAWSTRING_FLOAT:
 		re->Font_DrawString_Float(VMF(1), VMF(2), (const char *)VMA(3), (const float *)VMA(4), args[5], args[6], VMF(7));
 		return 0;
+
+	case CG_R_FONT_STRLENPIXELS_FLOAT:
+		return PASSFLOAT(re->ext.Font_StrLenPixels((const char *)VMA(1), args[2], VMF(3)));
 
 	default:
 		assert(0); // bk010102
