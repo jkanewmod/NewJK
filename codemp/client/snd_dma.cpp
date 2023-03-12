@@ -173,7 +173,7 @@ int			s_numSfx;
 static	sfx_t		*sfxHash[LOOP_HASH];
 
 cvar_t		*s_mute;
-cvar_t		*volume;
+cvar_t		*s_volumeMaster;
 cvar_t		*s_volume;
 cvar_t		*s_volumeVoice;
 cvar_t		*s_testsound;
@@ -453,7 +453,7 @@ void S_Init( void ) {
 
 	s_mute = Cvar_Get("s_mute", "0", CVAR_ROM | CVAR_INTERNAL);
 	Cvar_Set("s_mute", "0");
-	volume = Cvar_Get("volume", "1.0", CVAR_ARCHIVE, "Volume");
+	s_volumeMaster = Cvar_Get("s_volumeMaster", "1.0", CVAR_ARCHIVE, "Master volume");
 	s_volume = Cvar_Get ("s_volume", "0.5", CVAR_ARCHIVE, "Sound effects volume" );
 	Cvar_CheckRange(s_volume, 0, 1, qfalse);
 	s_volumeVoice= Cvar_Get ("s_volumeVoice", "1.0", CVAR_ARCHIVE, "Voice channel volume" );
@@ -4951,7 +4951,7 @@ static void S_UpdateBackgroundTrack( void )
 			if ( pMusicInfoCurrent->s_backgroundFile == -1)
 			{
 				int iRawEnd = s_rawend;
-				S_UpdateBackgroundTrack_Actual( pMusicInfoCurrent, qtrue, s_musicVolume->value*volume->value );
+				S_UpdateBackgroundTrack_Actual( pMusicInfoCurrent, qtrue, s_musicVolume->value*s_volumeMaster->value );
 
 	/*			static int iPrevFrontVol = 0;
 				if (iPrevFrontVol != pMusicInfoCurrent->iXFadeVolume)
@@ -4963,7 +4963,7 @@ static void S_UpdateBackgroundTrack( void )
 				if (pMusicInfoFadeOut->bActive)
 				{
 					s_rawend = iRawEnd;
-					S_UpdateBackgroundTrack_Actual( pMusicInfoFadeOut, qfalse, s_musicVolume->value*volume->value );	// inactive-checked internally
+					S_UpdateBackgroundTrack_Actual( pMusicInfoFadeOut, qfalse, s_musicVolume->value*s_volumeMaster->value );	// inactive-checked internally
 	/*
 					static int iPrevFadeVol = 0;
 					if (iPrevFadeVol != pMusicInfoFadeOut->iXFadeVolume)
@@ -5023,7 +5023,7 @@ static void S_UpdateBackgroundTrack( void )
 			MusicInfo_t *pMusicInfoFadeOut = &tMusic_Info[ eBGRNDTRACK_FADE ];
 			if (pMusicInfoFadeOut->bActive)
 			{
-				S_UpdateBackgroundTrack_Actual( pMusicInfoFadeOut, qtrue, s_musicVolume->value*volume->value );
+				S_UpdateBackgroundTrack_Actual( pMusicInfoFadeOut, qtrue, s_musicVolume->value*s_volumeMaster->value );
 				if (pMusicInfoFadeOut->iXFadeVolume == 0)
 				{
 					pMusicInfoFadeOut->bActive = qfalse;
@@ -5037,7 +5037,7 @@ static void S_UpdateBackgroundTrack( void )
 		//
 		const char *psCommand = S_Music_GetRequestedState();	// special check just for "silence" case...
 		qboolean bShouldBeSilent = (qboolean)(psCommand && !Q_stricmp(psCommand,"silence"));
-		float fDesiredVolume = bShouldBeSilent ? 0.0f : s_musicVolume->value*volume->value;
+		float fDesiredVolume = bShouldBeSilent ? 0.0f : s_musicVolume->value*s_volumeMaster->value;
 		//
 		// internal to this code is a volume-smoother...
 		//

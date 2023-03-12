@@ -376,8 +376,8 @@ void S_PaintChannels( int endtime ) {
 	int		sampleOffset;
 	int	normal_vol,voice_vol;
 
-	snd_vol = normal_vol = (s_volume->value*volume->value)*256;
-	voice_vol  = (int)((s_volumeVoice->value*volume->value)*256);
+	snd_vol = normal_vol = (s_volume->value*s_volumeMaster->value)*256;
+	voice_vol  = (int)((s_volumeVoice->value*s_volumeMaster->value)*256);
 	if (s_mute->integer || com_minimized->integer || com_unfocused->integer)
 		snd_vol = normal_vol = voice_vol = 0;
 
