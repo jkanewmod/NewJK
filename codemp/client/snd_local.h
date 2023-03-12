@@ -217,11 +217,8 @@ extern	dma_t	dma;
 extern	portable_samplepair_t	s_rawsamples[MAX_RAW_SAMPLES];
 portable_samplepair_t *S_GetRawSamplePointer();	// TA added this, but it just returns the s_rawsamples[] array above. Oh well...
 
-<<<<<<< HEAD
 extern cvar_t	*s_mute;
-=======
 extern cvar_t	*volume;
->>>>>>> e081c1a87 (Add master volume cvar that behaves as it does in Source engine games)
 extern cvar_t	*s_volume;
 extern cvar_t	*s_volumeVoice;
 extern cvar_t	*s_nosound;
