@@ -205,7 +205,7 @@ void	SNDDMA_Submit(void);
 
 //====================================================================
 
-#define	MAX_CHANNELS			32
+#define	MAX_CHANNELS			64
 extern	channel_t   s_channels[MAX_CHANNELS];
 
 extern	int		s_paintedtime;
@@ -221,6 +221,7 @@ extern cvar_t	*s_mute;
 extern cvar_t	*s_volumeMaster;
 extern cvar_t	*s_volume;
 extern cvar_t	*s_volumeVoice;
+extern cvar_t	*s_volumeAnnouncer;
 extern cvar_t	*s_nosound;
 extern cvar_t	*s_khz;
 extern cvar_t	*s_allowDynamicMusic;

@@ -870,6 +870,10 @@ typedef enum {
 	CHAN_MENU1,		//## %s !!"W:\game\base\!!sound\*.wav;*.mp3" #menu stuff, etc
 	CHAN_VOICE_GLOBAL,  //## %s !!"W:\game\base\!!sound\voice\*.wav;*.mp3" # Causes mouth animation and is broadcast, like announcer
 	CHAN_MUSIC,	//## %s !!"W:\game\base\!!sound\*.wav;*.mp3" #music played as a looping sound - added by BTO (VV)
+	CHAN_ANNOUNCER2,
+	CHAN_ANNOUNCER3,
+	CHAN_ANNOUNCERLEFT,
+	CHAN_ANNOUNCERRIGHT
 } soundChannel_t;
 
 

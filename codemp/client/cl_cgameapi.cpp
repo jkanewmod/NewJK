@@ -1701,6 +1701,9 @@ intptr_t CL_CgameSystemCalls( intptr_t *args ) {
 	case CG_R_FONT_STRLENPIXELS_FLOAT:
 		return PASSFLOAT(re->ext.Font_StrLenPixels((const char *)VMA(1), args[2], VMF(3)));
 
+	case CG_S_SOUNDLENGTH:
+		return (int)S_GetSampleLengthInMilliSeconds(args[1]);
+
 	default:
 		assert(0); // bk010102
 		Com_Error( ERR_DROP, "Bad cgame system trap: %ld", (long int) args[0] );

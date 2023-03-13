@@ -176,6 +176,7 @@ cvar_t		*s_mute;
 cvar_t		*s_volumeMaster;
 cvar_t		*s_volume;
 cvar_t		*s_volumeVoice;
+cvar_t		*s_volumeAnnouncer;
 cvar_t		*s_testsound;
 cvar_t		*s_khz;
 cvar_t		*s_allowDynamicMusic;
@@ -453,12 +454,14 @@ void S_Init( void ) {
 
 	s_mute = Cvar_Get("s_mute", "0", CVAR_ROM | CVAR_INTERNAL);
 	Cvar_Set("s_mute", "0");
-	s_volumeMaster = Cvar_Get("s_volumeMaster", "1.0", CVAR_ARCHIVE, "Master volume");
-	s_volume = Cvar_Get ("s_volume", "0.5", CVAR_ARCHIVE, "Sound effects volume" );
+	s_volumeMaster = Cvar_Get("s_volumeMaster", "1.0", CVAR_ARCHIVE, "Master volume. All other volumes are multiplied by this.");
+	s_volume = Cvar_Get ("s_volume", "0.5", CVAR_ARCHIVE, "Sound effects volume (0-1)" );
 	Cvar_CheckRange(s_volume, 0, 1, qfalse);
-	s_volumeVoice= Cvar_Get ("s_volumeVoice", "1.0", CVAR_ARCHIVE, "Voice channel volume" );
+	s_volumeVoice= Cvar_Get ("s_volumeVoice", "1.0", CVAR_ARCHIVE, "Voice channel volume (0-1)" );
 	Cvar_CheckRange(s_volumeVoice, 0, 1, qfalse);
-	s_musicVolume = Cvar_Get ("s_musicvolume", "0.25", CVAR_ARCHIVE, "Music volume" );
+	s_volumeAnnouncer = Cvar_Get("s_volumeAnnouncer", "1.0", CVAR_ARCHIVE, "Announcer volume (0-1)");
+	Cvar_CheckRange(s_volumeAnnouncer, 0, 1, qfalse);
+	s_musicVolume = Cvar_Get ("s_musicvolume", "0.25", CVAR_ARCHIVE, "Music volume (0-1)" );
 	Cvar_CheckRange(s_musicVolume, 0, 1, qfalse);
 	s_separation = Cvar_Get ("s_separation", "0.5", CVAR_ARCHIVE);
 	s_khz = Cvar_Get ("s_khz", "44", CVAR_ARCHIVE|CVAR_LATCH);
@@ -603,17 +606,22 @@ void S_Init( void ) {
 		// Clamp sound volumes between 0.0f and 1.0f (just in case they aren't already)
 		if (s_volume->value < 0.f)
 			s_volume->value = 0.f;
-		if (s_volume->value > 1.f)
+		else if (s_volume->value > 1.f)
 			s_volume->value = 1.f;
+
+		if (s_volumeAnnouncer->value < 0.f)
+			s_volumeAnnouncer->value = 0.f;
+		else if (s_volumeAnnouncer->value > 1.f)
+			s_volumeAnnouncer->value = 1.f;
 
 		if (s_volumeVoice->value < 0.f)
 			s_volumeVoice->value = 0.f;
-		if (s_volumeVoice->value > 1.f)
+		else if (s_volumeVoice->value > 1.f)
 			s_volumeVoice->value = 1.f;
 
 		if (s_musicVolume->value < 0.f)
 			s_musicVolume->value = 0.f;
-		if (s_musicVolume->value > 1.f)
+		else if (s_musicVolume->value > 1.f)
 			s_musicVolume->value = 1.f;
 
 		// s_init could be called in game, if so there may be an .eal file
@@ -2352,7 +2360,8 @@ void S_UpdateEntityPosition( int entityNum, const vec3_t origin )
 			if ((s_channels[i].bPlaying) && (s_channels[i].entnum == entityNum) && (!s_channels[i].bLooping))
 			{
 				// Ignore position updates for CHAN_VOICE_GLOBAL
-				if (ch->entchannel != CHAN_VOICE_GLOBAL && ch->entchannel != CHAN_ANNOUNCER)
+				if (ch->entchannel != CHAN_VOICE_GLOBAL && ch->entchannel != CHAN_ANNOUNCER && ch->entchannel != CHAN_ANNOUNCER2 && ch->entchannel != CHAN_ANNOUNCER3 &&
+					ch->entchannel != CHAN_ANNOUNCERLEFT && ch->entchannel != CHAN_ANNOUNCERRIGHT)
 				{
 					ALfloat pos[3];
 					pos[0] = origin[0];
@@ -2637,8 +2646,18 @@ void S_Respatialize( int entityNum, const vec3_t head, matrix3_t axis, int inwat
 
 			// anything coming from the view entity will always be full volume
 			if (ch->entnum == listener_number) {
-				ch->leftvol = ch->master_vol;
-				ch->rightvol = ch->master_vol;
+				if (ch->entchannel == CHAN_ANNOUNCERLEFT) {
+					ch->leftvol = ch->master_vol;
+					ch->rightvol = 0;
+				}
+				else if (ch->entchannel == CHAN_ANNOUNCERRIGHT) {
+					ch->leftvol = 0;
+					ch->rightvol = ch->master_vol;
+				}
+				else {
+					ch->leftvol = ch->master_vol;
+					ch->rightvol = ch->master_vol;
+				}
 			} else {
 				if (ch->fixed_origin) {
 					VectorCopy( ch->origin, origin );
@@ -2874,7 +2893,8 @@ void S_Update_(void) {
 
 			int source = ch - s_channels;
 
-			if (ch->entchannel == CHAN_VOICE_GLOBAL || ch->entchannel == CHAN_ANNOUNCER)
+			if (ch->entchannel == CHAN_VOICE_GLOBAL || ch->entchannel == CHAN_ANNOUNCER || ch->entchannel == CHAN_ANNOUNCER2 || ch->entchannel == CHAN_ANNOUNCER3 ||
+				ch->entchannel == CHAN_ANNOUNCERLEFT || ch->entchannel == CHAN_ANNOUNCERRIGHT)
 			{
 				// Always play these sounds at 0,0,-1 (in front of listener)
 				pos[0] = 0.0f;
@@ -2884,9 +2904,10 @@ void S_Update_(void) {
 				alSourcefv(s_channels[source].alSource, AL_POSITION, pos);
 				alSourcei(s_channels[source].alSource, AL_LOOPING, AL_FALSE);
 				alSourcei(s_channels[source].alSource, AL_SOURCE_RELATIVE, AL_TRUE);
-				if (ch->entchannel == CHAN_ANNOUNCER)
+				if (ch->entchannel == CHAN_ANNOUNCER || ch->entchannel == CHAN_ANNOUNCER2 || ch->entchannel == CHAN_ANNOUNCER3 ||
+					ch->entchannel == CHAN_ANNOUNCERLEFT || ch->entchannel == CHAN_ANNOUNCERRIGHT)
 				{
-					alSourcef(s_channels[source].alSource, AL_GAIN, ((float)(ch->master_vol) * s_volume->value) / 255.0f);
+					alSourcef(s_channels[source].alSource, AL_GAIN, ((float)(ch->master_vol) * s_volumeAnnouncer->value) / 255.0f);
 				}
 				else
 				{
