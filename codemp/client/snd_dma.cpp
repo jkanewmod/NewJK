@@ -459,7 +459,7 @@ void S_Init( void ) {
 	Cvar_CheckRange(s_volume, 0, 1, qfalse);
 	s_volumeVoice= Cvar_Get ("s_volumeVoice", "1.0", CVAR_ARCHIVE, "Voice channel volume (0-1)" );
 	Cvar_CheckRange(s_volumeVoice, 0, 1, qfalse);
-	s_volumeAnnouncer = Cvar_Get("s_volumeAnnouncer", "1.0", CVAR_ARCHIVE, "Announcer volume (0-1)");
+	s_volumeAnnouncer = Cvar_Get("s_volumeAnnouncer", "0.5", CVAR_ARCHIVE, "Announcer volume (0-1)");
 	Cvar_CheckRange(s_volumeAnnouncer, 0, 1, qfalse);
 	s_musicVolume = Cvar_Get ("s_musicvolume", "0.25", CVAR_ARCHIVE, "Music volume (0-1)" );
 	Cvar_CheckRange(s_musicVolume, 0, 1, qfalse);
