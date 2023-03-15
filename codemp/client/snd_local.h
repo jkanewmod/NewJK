@@ -205,7 +205,7 @@ void	SNDDMA_Submit(void);
 
 //====================================================================
 
-#define	MAX_CHANNELS			32
+#define	MAX_CHANNELS			64
 extern	channel_t   s_channels[MAX_CHANNELS];
 
 extern	int		s_paintedtime;
@@ -218,8 +218,10 @@ extern	portable_samplepair_t	s_rawsamples[MAX_RAW_SAMPLES];
 portable_samplepair_t *S_GetRawSamplePointer();	// TA added this, but it just returns the s_rawsamples[] array above. Oh well...
 
 extern cvar_t	*s_mute;
+extern cvar_t	*s_volumeMaster;
 extern cvar_t	*s_volume;
 extern cvar_t	*s_volumeVoice;
+extern cvar_t	*s_volumeAnnouncer;
 extern cvar_t	*s_nosound;
 extern cvar_t	*s_khz;
 extern cvar_t	*s_allowDynamicMusic;

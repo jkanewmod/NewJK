@@ -374,12 +374,13 @@ void S_PaintChannels( int endtime ) {
 	sfx_t	*sc;
 	int		ltime, count;
 	int		sampleOffset;
-	int	normal_vol,voice_vol;
+	int	normal_vol,voice_vol,announcer_vol;
 
-	snd_vol = normal_vol = s_volume->value*256;
-	voice_vol  = (int)(s_volumeVoice->value*256);
+	snd_vol = normal_vol = (s_volume->value*s_volumeMaster->value)*256;
+	voice_vol  = (int)((s_volumeVoice->value*s_volumeMaster->value)*256);
+	announcer_vol  = (int)((s_volumeAnnouncer->value*s_volumeMaster->value)*256);
 	if (s_mute->integer || com_minimized->integer || com_unfocused->integer)
-		snd_vol = normal_vol = voice_vol = 0;
+		snd_vol = normal_vol = voice_vol = announcer_vol = 0;
 
 //Com_Printf ("%i to %i\n", s_paintedtime, endtime);
 	while ( s_paintedtime < endtime ) {
@@ -424,8 +425,11 @@ void S_PaintChannels( int endtime ) {
 				continue;
 			}
 
-			if ( ch->entchannel == CHAN_VOICE || ch->entchannel == CHAN_VOICE_ATTEN || ch->entchannel == CHAN_VOICE_GLOBAL )
+			if (ch->entchannel == CHAN_VOICE || ch->entchannel == CHAN_VOICE_ATTEN || ch->entchannel == CHAN_VOICE_GLOBAL)
 				snd_vol = voice_vol;
+			else if (ch->entchannel == CHAN_ANNOUNCER || ch->entchannel == CHAN_ANNOUNCER2 || ch->entchannel == CHAN_ANNOUNCER3 ||
+				ch->entchannel == CHAN_ANNOUNCERLEFT || ch->entchannel == CHAN_ANNOUNCERRIGHT)
+				snd_vol = announcer_vol;
 			else
 				snd_vol = normal_vol;
 
