@@ -872,6 +872,7 @@ typedef enum {
 	CHAN_MUSIC,	//## %s !!"W:\game\base\!!sound\*.wav;*.mp3" #music played as a looping sound - added by BTO (VV)
 	CHAN_ANNOUNCER2,
 	CHAN_ANNOUNCER3,
+	CHAN_SPECIAL1,
 	CHAN_ANNOUNCERLEFT,
 	CHAN_ANNOUNCERRIGHT
 } soundChannel_t;

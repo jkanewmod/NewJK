@@ -2361,7 +2361,7 @@ void S_UpdateEntityPosition( int entityNum, const vec3_t origin )
 			{
 				// Ignore position updates for CHAN_VOICE_GLOBAL
 				if (ch->entchannel != CHAN_VOICE_GLOBAL && ch->entchannel != CHAN_ANNOUNCER && ch->entchannel != CHAN_ANNOUNCER2 && ch->entchannel != CHAN_ANNOUNCER3 &&
-					ch->entchannel != CHAN_ANNOUNCERLEFT && ch->entchannel != CHAN_ANNOUNCERRIGHT)
+					ch->entchannel != CHAN_SPECIAL1 && ch->entchannel != CHAN_ANNOUNCERLEFT && ch->entchannel != CHAN_ANNOUNCERRIGHT)
 				{
 					ALfloat pos[3];
 					pos[0] = origin[0];
@@ -2894,7 +2894,7 @@ void S_Update_(void) {
 			int source = ch - s_channels;
 
 			if (ch->entchannel == CHAN_VOICE_GLOBAL || ch->entchannel == CHAN_ANNOUNCER || ch->entchannel == CHAN_ANNOUNCER2 || ch->entchannel == CHAN_ANNOUNCER3 ||
-				ch->entchannel == CHAN_ANNOUNCERLEFT || ch->entchannel == CHAN_ANNOUNCERRIGHT)
+				ch->entchannel == CHAN_SPECIAL1 || ch->entchannel == CHAN_ANNOUNCERLEFT || ch->entchannel == CHAN_ANNOUNCERRIGHT)
 			{
 				// Always play these sounds at 0,0,-1 (in front of listener)
 				pos[0] = 0.0f;
@@ -2908,6 +2908,11 @@ void S_Update_(void) {
 					ch->entchannel == CHAN_ANNOUNCERLEFT || ch->entchannel == CHAN_ANNOUNCERRIGHT)
 				{
 					alSourcef(s_channels[source].alSource, AL_GAIN, ((float)(ch->master_vol) * s_volumeAnnouncer->value) / 255.0f);
+				}
+				else if (ch->entchannel == CHAN_SPECIAL1) {
+					float specialVolume = s_volume->value;
+					specialVolume *= 4;
+					alSourcef(s_channels[source].alSource, AL_GAIN, ((float)(ch->master_vol) * specialVolume) / 255.0f);
 				}
 				else
 				{

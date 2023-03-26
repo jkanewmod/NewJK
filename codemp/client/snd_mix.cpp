@@ -425,13 +425,21 @@ void S_PaintChannels( int endtime ) {
 				continue;
 			}
 
-			if (ch->entchannel == CHAN_VOICE || ch->entchannel == CHAN_VOICE_ATTEN || ch->entchannel == CHAN_VOICE_GLOBAL)
+			if (ch->entchannel == CHAN_VOICE || ch->entchannel == CHAN_VOICE_ATTEN || ch->entchannel == CHAN_VOICE_GLOBAL) {
 				snd_vol = voice_vol;
+			}
 			else if (ch->entchannel == CHAN_ANNOUNCER || ch->entchannel == CHAN_ANNOUNCER2 || ch->entchannel == CHAN_ANNOUNCER3 ||
-				ch->entchannel == CHAN_ANNOUNCERLEFT || ch->entchannel == CHAN_ANNOUNCERRIGHT)
+				ch->entchannel == CHAN_ANNOUNCERLEFT || ch->entchannel == CHAN_ANNOUNCERRIGHT) {
 				snd_vol = announcer_vol;
-			else
+			}
+			else if (ch->entchannel == CHAN_SPECIAL1) {
+				float specialVolume = normal_vol;
+				specialVolume *= 4;
+				snd_vol = specialVolume;
+			}
+			else {
 				snd_vol = normal_vol;
+			}
 
 			ltime = s_paintedtime;
 			sc = ch->thesfx;
