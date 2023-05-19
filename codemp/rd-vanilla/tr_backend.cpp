@@ -672,7 +672,7 @@ bool forceFullbright = false, forceFullbrightWhiteShader = false;
 vec3_t forceFullbrightColor = { 0, 0, 0 };
 extern std::vector<trRefEntity_t *> forceWhiteEnts;
 
-static void DoEndSurface(const char *name) {
+static void DoEndSurface(const char *name, bool canFullbright) {
 	if (!VALIDSTRING(name)) {
 		RB_EndSurface();
 		return;
@@ -714,7 +714,7 @@ static void DoEndSurface(const char *name) {
 
 		float r, g, b;
 		int usingWhiteTextureInt;
-		if (weaponCvar && VALIDSTRING(weaponCvar->string) && sscanf_s(weaponCvar->string, "%f %f %f %d", &r, &g, &b, &usingWhiteTextureInt) == 4) {
+		if (weaponCvar && VALIDSTRING(weaponCvar->string) && canFullbright && sscanf_s(weaponCvar->string, "%f %f %f %d", &r, &g, &b, &usingWhiteTextureInt) == 4) {
 			float ambientLight[3], directedLight[3], lightDir[3];
 			VectorCopy(backEnd.currentEntity->ambientLight, ambientLight);
 			VectorCopy(backEnd.currentEntity->directedLight, directedLight);
@@ -919,7 +919,7 @@ void RB_RenderDrawSurfList( drawSurf_t *drawSurfs, int numDrawSurfs ) {
 			|| ( entityNum != oldEntityNum && !shader->entityMergable ) )
 		{
 			if (oldShader != NULL) {
-				DoEndSurface(oldShader->name);
+				DoEndSurface(oldShader->name, !(backEnd.refdef.entities[oldEntityNum].e.renderfx & RF_ISCORPSE));
 
 				if (!didShadowPass && shader && shader->sort > SS_BANNER)
 				{
@@ -1221,7 +1221,7 @@ void RB_RenderDrawSurfList( drawSurf_t *drawSurfs, int numDrawSurfs ) {
 			}
 
 			rb_surfaceTable[ *pRender->drawSurf->surface ]( pRender->drawSurf->surface );
-			DoEndSurface(pRender->shader->name);
+			DoEndSurface(pRender->shader->name, !(backEnd.refdef.entities[pRender->entNum].e.renderfx & RF_ISCORPSE));
 		}
 	}
 
