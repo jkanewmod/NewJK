@@ -105,11 +105,11 @@ int G2_Add_Bone (const model_t *mod, boneInfo_v &blist, const char *boneName)
 		// didn't find it? Error
 		//assert(0);
 #ifdef _DEBUG
-		ri->Printf( PRINT_ALL, "WARNING: Failed to add bone %s\n", boneName);
+		//ri->Printf( PRINT_ALL, "WARNING: Failed to add bone %s\n", boneName);
 #endif
 
 #ifdef _RAG_PRINT_TEST
-		ri->Printf( PRINT_ALL, "WARNING: Failed to add bone %s\n", boneName);
+		//ri->Printf( PRINT_ALL, "WARNING: Failed to add bone %s\n", boneName);
 #endif
 		return -1;
 	}
