@@ -1231,6 +1231,9 @@ void CL_CmdButtons( usercmd_t *cmd ) {
 
 	if (cl_useToggle->integer)
 		cmd->buttons |= BUTTON_USE;
+
+	if (cl_attackToggle->integer)
+		cmd->buttons |= BUTTON_ATTACK;
 }
 
 

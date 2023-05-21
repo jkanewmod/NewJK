@@ -392,6 +392,7 @@ extern	refexport_t		*re;		// interface to refresh .dll
 extern	cvar_t	*cl_consoleFontSize;
 extern	cvar_t	*cl_topLeftFontSize;
 extern	cvar_t	*cl_useToggle;
+extern	cvar_t	*cl_attackToggle;
 
 extern	cvar_t	*cl_nodelta;
 extern	cvar_t	*cl_debugMove;
