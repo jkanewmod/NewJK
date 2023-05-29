@@ -533,7 +533,7 @@ typedef struct cgameImport_s {
 
 	// sound
 	int				(*S_AddLocalSet)						( const char *name, vec3_t listener_origin, vec3_t origin, int entID, int time );
-	void			(*S_AddLoopingSound)					( int entityNum, const vec3_t origin, const vec3_t velocity, sfxHandle_t sfx );
+	void			(*S_AddLoopingSound)					( int entityNum, const vec3_t origin, const vec3_t velocity, sfxHandle_t sfx, int chan );
 	void			(*S_ClearLoopingSounds)					( void );
 	int				(*S_GetVoiceVolume)						( int entID );
 	void			(*S_MuteSound)							( int entityNum, int entchannel );
@@ -638,9 +638,9 @@ typedef struct cgameImport_s {
 	// FX
 	void			(*FX_AddLine)							( vec3_t start, vec3_t end, float size1, float size2, float sizeParm, float alpha1, float alpha2, float alphaParm, vec3_t sRGB, vec3_t eRGB, float rgbParm, int killTime, qhandle_t shader, int flags );
 	int				(*FX_RegisterEffect)					( const char *file );
-	void			(*FX_PlayEffect)						( const char *file, vec3_t org, vec3_t fwd, int vol, int rad );
-	void			(*FX_PlayEffectID)						( int id, vec3_t org, vec3_t fwd, int vol, int rad, qboolean isPortal );
-	void			(*FX_PlayEntityEffectID)				( int id, vec3_t org, matrix3_t axis, const int boltInfo, const int entNum, int vol, int rad );
+	void			(*FX_PlayEffect)						( const char *file, vec3_t org, vec3_t fwd, int vol, int rad, int chan );
+	void			(*FX_PlayEffectID)						( int id, vec3_t org, vec3_t fwd, int vol, int rad, qboolean isPortal, int chan );
+	void			(*FX_PlayEntityEffectID)				( int id, vec3_t org, matrix3_t axis, const int boltInfo, const int entNum, int vol, int rad, int chan );
 	qboolean		(*FX_PlayBoltedEffectID)				( int id, vec3_t org, void *pGhoul2, const int boltNum, const int entNum, const int modelNum, int iLooptime, qboolean isRelative );
 	void			(*FX_AddScheduledEffects)				( qboolean portal );
 	int				(*FX_InitSystem)						( refdef_t *refdef );

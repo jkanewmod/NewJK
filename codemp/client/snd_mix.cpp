@@ -25,6 +25,10 @@ along with this program; if not, see <http://www.gnu.org/licenses/>.
 
 #include "client.h"
 #include "snd_local.h"
+#include <string>
+#include <sstream>
+#include <map>
+#include <memory>
 
 portable_samplepair_t paintbuffer[PAINTBUFFER_SIZE];
 int 	*snd_p, snd_linear_count, snd_vol;
@@ -365,7 +369,27 @@ void ChannelPaint(channel_t *ch, sfx_t *sc, int count, int sampleOffset, int buf
 	}
 }
 
+std::unique_ptr<char[]> GetKeyValue(const char *input, const char *key) {
+	assert(VALIDSTRING(key));
+	if (!VALIDSTRING(input))
+		return nullptr;
 
+	std::istringstream iss(input);
+	std::string token;
+	while (std::getline(iss, token, ' ')) {
+		size_t pos = token.find('=');
+		if (pos == std::string::npos || pos == token.length() - 1)
+			continue;
+
+		if (token.substr(0, pos) == key) {
+			std::string valueStr = token.substr(pos + 1);
+			std::unique_ptr<char[]> value(new char[valueStr.length() + 1]);
+			std::strcpy(value.get(), valueStr.c_str());
+			return value;
+		}
+	}
+	return nullptr;
+}
 
 void S_PaintChannels( int endtime ) {
 	int 	i;
@@ -378,9 +402,37 @@ void S_PaintChannels( int endtime ) {
 
 	snd_vol = normal_vol = (s_volume->value*s_volumeMaster->value)*256;
 	voice_vol  = (int)((s_volumeVoice->value*s_volumeMaster->value)*256);
-	announcer_vol  = (int)((s_volumeAnnouncer->value*s_volumeMaster->value)*256);
+	if (s_volumeAnnouncer->string[0])
+		announcer_vol  = (int)((s_volumeAnnouncer->value*s_volumeMaster->value)*256);
+	else // null string = copy s_volume
+		announcer_vol  = (int)((s_volume->value*s_volumeMaster->value)*256);
+
+	static float weapon_vol_static = 128.0f, weapon_vol_local_static = 128.0f;
+
+	static char weaponVolumeCvar[MAX_STRING_CHARS] = { 0 };
+	if (!weaponVolumeCvar[0] || strcmp(weaponVolumeCvar, s_volumeWeapon->string)) {
+		if (s_volumeWeapon->string[0])
+			Q_strncpyz(weaponVolumeCvar, s_volumeWeapon->string, sizeof(weaponVolumeCvar));
+		else // null string = copy s_volume
+			Q_strncpyz(weaponVolumeCvar, s_volume->string, sizeof(weaponVolumeCvar));
+
+		auto self_ptr = GetKeyValue(weaponVolumeCvar, "self"), other_ptr = GetKeyValue(weaponVolumeCvar, "other");
+		const char *self = self_ptr ? self_ptr.get() : nullptr, *other = other_ptr ? other_ptr.get() : nullptr;
+
+		if (!self && !other)
+			self = other = weaponVolumeCvar;
+		else if (!self)
+			self = other;
+		else if (!other)
+			other = self;
+
+		weapon_vol_local_static = ((atof(self) * s_volumeMaster->value) * 256);
+		weapon_vol_static = ((atof(other) * s_volumeMaster->value) * 256);
+	}
+
+	int weapon_vol = weapon_vol_static, weapon_vol_local = weapon_vol_local_static;
 	if (s_mute->integer || com_minimized->integer || com_unfocused->integer)
-		snd_vol = normal_vol = voice_vol = announcer_vol = 0;
+		snd_vol = normal_vol = voice_vol = announcer_vol = weapon_vol = weapon_vol_local = 0;
 
 //Com_Printf ("%i to %i\n", s_paintedtime, endtime);
 	while ( s_paintedtime < endtime ) {
@@ -436,6 +488,12 @@ void S_PaintChannels( int endtime ) {
 				float specialVolume = normal_vol;
 				specialVolume *= 4;
 				snd_vol = specialVolume;
+			}
+			else if (ch->entchannel == CHAN_WEAPON || ch->entchannel == CHAN_AUTO_WEAPON) {
+				snd_vol = weapon_vol;
+			}
+			else if (ch->entchannel == CHAN_WEAPON_LOCAL || ch->entchannel == CHAN_AUTO_WEAPON_LOCAL) {
+				snd_vol = weapon_vol_local;
 			}
 			else {
 				snd_vol = normal_vol;

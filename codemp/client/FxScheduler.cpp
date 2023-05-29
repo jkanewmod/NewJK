@@ -760,7 +760,7 @@ static void ReportPlayEffectError(int id)
 // Return:
 //	none
 //------------------------------------------------------
-void CFxScheduler::PlayEffect( int id, vec3_t origin, vec3_t forward, int vol, int rad, bool isPortal )
+void CFxScheduler::PlayEffect( int id, vec3_t origin, vec3_t forward, int vol, int rad, bool isPortal, int chan )
 {
 	matrix3_t	axis;
 
@@ -768,7 +768,7 @@ void CFxScheduler::PlayEffect( int id, vec3_t origin, vec3_t forward, int vol, i
 	VectorCopy( forward, axis[0] );
 	MakeNormalVectors( forward, axis[1], axis[2] );
 
-	PlayEffect( id, origin, axis, -1, 0, -1, vol, rad, isPortal );
+	PlayEffect( id, origin, axis, -1, 0, -1, vol, rad, isPortal, false, false, chan );
 }
 
 
@@ -786,7 +786,7 @@ void CFxScheduler::PlayEffect( int id, vec3_t origin, vec3_t forward, int vol, i
 //	none
 //------------------------------------------------------
 void CFxScheduler::PlayEffect( const char *file, vec3_t origin, matrix3_t axis, const int boltInfo, CGhoul2Info_v *ghoul2,
-							  int fxParm /*-1*/, int vol, int rad, int iLoopTime, bool isRelative )
+							  int fxParm /*-1*/, int vol, int rad, int iLoopTime, bool isRelative, int chan )
 {
 	char	sfile[MAX_QPATH];
 
@@ -801,7 +801,7 @@ void CFxScheduler::PlayEffect( const char *file, vec3_t origin, matrix3_t axis, 
 	}
 #endif
 
-	PlayEffect( mEffectIDs[sfile], origin, axis, boltInfo, ghoul2, fxParm, vol, rad, qfalse, iLoopTime, isRelative );
+	PlayEffect( mEffectIDs[sfile], origin, axis, boltInfo, ghoul2, fxParm, vol, rad, qfalse, iLoopTime, isRelative, chan );
 }
 
 int	totalPrimitives = 0;
@@ -838,7 +838,7 @@ void GetRGB_Colors( CPrimitiveTemplate *fx, vec3_t outStartRGB, vec3_t outEndRGB
 // Return:
 //	none
 //------------------------------------------------------
-void CFxScheduler::PlayEffect( int id, vec3_t origin, matrix3_t axis, const int boltInfo, CGhoul2Info_v *ghoul2, int fxParm /*-1*/, int vol, int rad, bool isPortal/*false*/, int iLoopTime/*0*/,  bool isRelative )
+void CFxScheduler::PlayEffect( int id, vec3_t origin, matrix3_t axis, const int boltInfo, CGhoul2Info_v *ghoul2, int fxParm /*-1*/, int vol, int rad, bool isPortal/*false*/, int iLoopTime/*0*/,  bool isRelative, int chan )
 {
 	SEffectTemplate			*fx;
 	CPrimitiveTemplate		*prim;
@@ -966,11 +966,11 @@ void CFxScheduler::PlayEffect( int id, vec3_t origin, matrix3_t axis, const int 
 
 					data->mEntityNum = entityNum;
 					CGVM_GetLerpOrigin();
-					CreateEffect( prim, data->mPoint, axis, -delay, fxParm );
+					CreateEffect( prim, data->mPoint, axis, -delay, fxParm, nullptr, -1, -1, -1, chan );
 				}
 				else
 				{
-					CreateEffect( prim, origin, axis, -delay, fxParm );
+					CreateEffect( prim, origin, axis, -delay, fxParm, nullptr, -1, -1, -1, chan );
 				}
 			}
 			else
@@ -1079,7 +1079,7 @@ void CFxScheduler::PlayEffect( const char *file, vec3_t origin, int vol, int rad
 // Return:
 //	none
 //------------------------------------------------------
-void CFxScheduler::PlayEffect( const char *file, vec3_t origin, vec3_t forward, int vol, int rad )
+void CFxScheduler::PlayEffect( const char *file, vec3_t origin, vec3_t forward, int vol, int rad, int chan )
 {
 	char	sfile[MAX_QPATH];
 
@@ -1249,7 +1249,7 @@ void CFxScheduler::Draw2DEffects(float screenXScale, float screenYScale)
 // Return:
 //	none
 //------------------------------------------------------
-void CFxScheduler::CreateEffect( CPrimitiveTemplate *fx, const vec3_t origin, matrix3_t axis, int lateTime, int fxParm /*-1*/, CGhoul2Info_v *ghoul2, int entNum, int modelNum, int boltNum  )
+void CFxScheduler::CreateEffect( CPrimitiveTemplate *fx, const vec3_t origin, matrix3_t axis, int lateTime, int fxParm /*-1*/, CGhoul2Info_v *ghoul2, int entNum, int modelNum, int boltNum, int chan  )
 {
 	vec3_t	org, org2, temp,
 				vel, accel,
@@ -1700,11 +1700,11 @@ void CFxScheduler::CreateEffect( CPrimitiveTemplate *fx, const vec3_t origin, ma
 	//---------
 		if (gEffectsInPortal)
 		{ //could orient this anyway for panning, but eh. It's going to appear to the player in the sky the same place no matter what, so just make it a local sound.
-			theFxHelper.PlayLocalSound( fx->mMediaHandles.GetHandle(), CHAN_AUTO );
+			theFxHelper.PlayLocalSound( fx->mMediaHandles.GetHandle(), (chan == CHAN_AUTO_WEAPON || chan == CHAN_AUTO_WEAPON_LOCAL) ? chan : CHAN_AUTO);
 		}
 		else
 		{
-			theFxHelper.PlaySound( org, ENTITYNUM_NONE, CHAN_AUTO, fx->mMediaHandles.GetHandle(), fx->mSoundVolume, fx->mSoundRadius );
+			theFxHelper.PlaySound( org, ENTITYNUM_NONE, (chan == CHAN_AUTO_WEAPON || chan == CHAN_AUTO_WEAPON_LOCAL) ? chan : CHAN_AUTO, fx->mMediaHandles.GetHandle(), fx->mSoundVolume, fx->mSoundRadius );
 		}
 		break;
 
@@ -1771,7 +1771,7 @@ void CFxScheduler::CreateEffect( CPrimitiveTemplate *fx, const vec3_t origin, ma
 // Return:
 //	none
 //------------------------------------------------------
-void CFxScheduler::CreateEffect( CPrimitiveTemplate *fx, SScheduledEffect *scheduledFx )
+void CFxScheduler::CreateEffect( CPrimitiveTemplate *fx, SScheduledEffect *scheduledFx, int chan )
 {
 	int boltInfo;
 

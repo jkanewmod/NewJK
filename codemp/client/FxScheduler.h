@@ -637,8 +637,8 @@ private:
 	void	AddPrimitiveToEffect( SEffectTemplate *fx, CPrimitiveTemplate *prim );
 	int		ParseEffect( const char *file, CGPGroup *base );
 
-	void	CreateEffect( CPrimitiveTemplate *fx, const vec3_t origin, matrix3_t axis, int lateTime, int fxParm = -1,  CGhoul2Info_v *ghoul2 = NULL, int entNum = -1, int modelNum = -1, int boltNum = -1);
-	void	CreateEffect( CPrimitiveTemplate *fx, SScheduledEffect *schedFx );
+	void	CreateEffect( CPrimitiveTemplate *fx, const vec3_t origin, matrix3_t axis, int lateTime, int fxParm = -1,  CGhoul2Info_v *ghoul2 = NULL, int entNum = -1, int modelNum = -1, int boltNum = -1, int chan = -1);
+	void	CreateEffect( CPrimitiveTemplate *fx, SScheduledEffect *schedFx, int chan = -1 );
 
 public:
 
@@ -649,13 +649,13 @@ public:
 	// Nasty overloaded madness
 	//rww - maybe this should be done differently.. it's more than a bit confusing.
 	//Remind me when I don't have 50 files checked out.
-	void	PlayEffect( int id, vec3_t org, vec3_t fwd, int vol = -1, int rad = -1, bool isPortal = false );				// builds arbitrary perp. right vector, does a cross product to define up
+	void	PlayEffect( int id, vec3_t org, vec3_t fwd, int vol = -1, int rad = -1, bool isPortal = false, int chan = -1 );				// builds arbitrary perp. right vector, does a cross product to define up
 	void	PlayEffect( int id, vec3_t origin, matrix3_t axis, const int boltInfo=-1, CGhoul2Info_v *ghoul2 = NULL,
-				int fxParm = -1, int vol = -1, int rad = -1, bool isPortal = false, int iLoopTime = false, bool isRelative = false  );
-	void	PlayEffect( const char *file, vec3_t org, int vol = -1, int rad = -1 );					// uses a default up axis
-	void	PlayEffect( const char *file, vec3_t org, vec3_t fwd, int vol = -1, int rad = -1 );		// builds arbitrary perp. right vector, does a cross product to define up
+				int fxParm = -1, int vol = -1, int rad = -1, bool isPortal = false, int iLoopTime = false, bool isRelative = false, int chan = -1  );
+	void	PlayEffect( const char *file, vec3_t org, int vol = -1, int rad = -1, int chan = -1 );					// uses a default up axis
+	void	PlayEffect( const char *file, vec3_t org, vec3_t fwd, int vol = -1, int rad = -1, int chan = -1 );		// builds arbitrary perp. right vector, does a cross product to define up
 	void	PlayEffect( const char *file, vec3_t origin,
-				matrix3_t axis, const int boltInfo = -1, CGhoul2Info_v *ghoul2 = NULL, int fxParm = -1, int vol = -1, int rad = -1, int iLoopTime = false, bool isRelative = false );
+				matrix3_t axis, const int boltInfo = -1, CGhoul2Info_v *ghoul2 = NULL, int fxParm = -1, int vol = -1, int rad = -1, int iLoopTime = false, bool isRelative = false, int chan = -1 );
 
 	void	StopEffect( const char *file, const int boltInfo, bool isPortal = false );	//find a scheduled Looping effect with these parms and kill it
 	void	AddScheduledEffects( bool portal );								// call once per CGame frame

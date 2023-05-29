@@ -1050,7 +1050,7 @@ intptr_t CL_CgameSystemCalls( intptr_t *args ) {
 		return 0;
 
 	case CG_S_ADDLOOPINGSOUND:
-		S_AddLoopingSound( args[1], (const float *)VMA(2), (const float *)VMA(3), args[4] );
+		S_AddLoopingSound( args[1], (const float *)VMA(2), (const float *)VMA(3), args[4], args[5]);
 		return 0;
 
 	case CG_S_ADDREALLOOPINGSOUND:
@@ -1380,7 +1380,7 @@ intptr_t CL_CgameSystemCalls( intptr_t *args ) {
 		return 0;
 
 	case CG_FX_PLAY_EFFECT_ID:
-		FX_PlayEffectID(args[1], (float *)VMA(2), (float *)VMA(3), args[4], args[5] );
+		FX_PlayEffectID(args[1], (float *)VMA(2), (float *)VMA(3), args[4], args[5], qfalse, args[6]);
 		return 0;
 
 	case CG_FX_PLAY_PORTAL_EFFECT_ID:
@@ -1388,7 +1388,7 @@ intptr_t CL_CgameSystemCalls( intptr_t *args ) {
 		return 0;
 
 	case CG_FX_PLAY_ENTITY_EFFECT_ID:
-		FX_PlayEntityEffectID(args[1], (float *)VMA(2), (vec3_t *)VMA(3), args[4], args[5], args[6], args[7] );
+		FX_PlayEntityEffectID(args[1], (float *)VMA(2), (vec3_t *)VMA(3), args[4], args[5], args[6], args[7], args[8]);
 		return 0;
 
 	case CG_FX_PLAY_BOLTED_EFFECT_ID:

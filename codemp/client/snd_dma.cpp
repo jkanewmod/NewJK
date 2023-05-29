@@ -177,6 +177,7 @@ cvar_t		*s_volumeMaster;
 cvar_t		*s_volume;
 cvar_t		*s_volumeVoice;
 cvar_t		*s_volumeAnnouncer;
+cvar_t		*s_volumeWeapon;
 cvar_t		*s_testsound;
 cvar_t		*s_khz;
 cvar_t		*s_allowDynamicMusic;
@@ -210,6 +211,8 @@ typedef struct
 	// For Open AL
 	bool	bProcessed;
 	bool	bRelative;
+
+	int		chan;
 } loopSound_t;
 
 #define	MAX_LOOP_SOUNDS		32
@@ -459,8 +462,8 @@ void S_Init( void ) {
 	Cvar_CheckRange(s_volume, 0, 1, qfalse);
 	s_volumeVoice= Cvar_Get ("s_volumeVoice", "1.0", CVAR_ARCHIVE, "Voice channel volume (0-1)" );
 	Cvar_CheckRange(s_volumeVoice, 0, 1, qfalse);
-	s_volumeAnnouncer = Cvar_Get("s_volumeAnnouncer", "0.5", CVAR_ARCHIVE, "Announcer volume (0-1)");
-	Cvar_CheckRange(s_volumeAnnouncer, 0, 1, qfalse);
+	s_volumeAnnouncer = Cvar_Get("s_volumeAnnouncer", "", CVAR_ARCHIVE, "Announcer volume (0-1)");
+	s_volumeWeapon = Cvar_Get("s_volumeWeapon", "", CVAR_ARCHIVE, "Announcer volume (0-1)");
 	s_musicVolume = Cvar_Get ("s_musicvolume", "0.25", CVAR_ARCHIVE, "Music volume (0-1)" );
 	Cvar_CheckRange(s_musicVolume, 0, 1, qfalse);
 	s_separation = Cvar_Get ("s_separation", "0.5", CVAR_ARCHIVE);
@@ -609,10 +612,21 @@ void S_Init( void ) {
 		else if (s_volume->value > 1.f)
 			s_volume->value = 1.f;
 
+		if (!s_volumeAnnouncer->string[0]) // empty string = copy s_volume
+			s_volumeAnnouncer->value = s_volume->value;
+
 		if (s_volumeAnnouncer->value < 0.f)
 			s_volumeAnnouncer->value = 0.f;
 		else if (s_volumeAnnouncer->value > 1.f)
 			s_volumeAnnouncer->value = 1.f;
+
+		if (!s_volumeWeapon->string[0]) // empty string = copy s_volume
+			s_volumeWeapon->value = s_volume->value;
+
+		if (s_volumeWeapon->value < 0.f)
+			s_volumeWeapon->value = 0.f;
+		else if (s_volumeWeapon->value > 1.f)
+			s_volumeWeapon->value = 1.f;
 
 		if (s_volumeVoice->value < 0.f)
 			s_volumeVoice->value = 0.f;
@@ -1129,7 +1143,7 @@ channel_t *S_PickChannel(int entnum, int entchannel)
 	{
 		for (ch_idx = 0, ch = &s_channels[0]; ch_idx < MAX_CHANNELS ; ch_idx++, ch++ )
 		{
-			if ( entchannel == CHAN_AUTO || entchannel == CHAN_LESS_ATTEN || pass > 0 )
+			if ( entchannel == CHAN_AUTO || entchannel == CHAN_LESS_ATTEN || entchannel == CHAN_AUTO_WEAPON || entchannel == CHAN_AUTO_WEAPON_LOCAL || pass > 0 )
 			{//if we're on the second pass, just find the first open chan
 				if ( !ch->thesfx )
 				{//grab the first open channel
@@ -1591,13 +1605,13 @@ void S_StartSound(const vec3_t origin, int entityNum, int entchannel, sfxHandle_
 	if (s_UseOpenAL)
 	{
 		int i;
-		if (entchannel == CHAN_WEAPON)
+		if (entchannel == CHAN_WEAPON || entchannel == CHAN_WEAPON_LOCAL)
 		{
 			// Check if we are playing a 'charging' sound, if so, stop it now ..
 			ch = s_channels + 1;
 			for (i = 1; i < s_numChannels; i++, ch++)
 			{
-				if ((ch->entnum == entityNum) && (ch->entchannel == CHAN_WEAPON) && (ch->thesfx) && (strstr(ch->thesfx->sSoundName, "altcharge") != NULL))
+				if ((ch->entnum == entityNum) && (ch->entchannel == CHAN_WEAPON || ch->entchannel == CHAN_WEAPON_LOCAL) && (ch->thesfx) && (strstr(ch->thesfx->sSoundName, "altcharge") != NULL))
 				{
 					// Stop this sound
 					alSourceStop(ch->alSource);
@@ -1942,7 +1956,7 @@ Called during entity generation for a frame
 Include velocity in case I get around to doing doppler...
 ==================
 */
-void S_AddLoopingSound( int entityNum, const vec3_t origin, const vec3_t velocity, sfxHandle_t sfxHandle ) {
+void S_AddLoopingSound( int entityNum, const vec3_t origin, const vec3_t velocity, sfxHandle_t sfxHandle, int chan ) {
 	/*const*/ sfx_t *sfx;
 
   	if ( !s_soundStarted || s_soundMuted ) {
@@ -1973,6 +1987,10 @@ void S_AddLoopingSound( int entityNum, const vec3_t origin, const vec3_t velocit
 	loopSounds[numLoopSounds].sfx = sfx;
 	loopSounds[numLoopSounds].volume = SOUND_MAXVOL;
 	loopSounds[numLoopSounds].entnum = entityNum;
+	if (chan == CHAN_AUTO_WEAPON || chan == CHAN_AUTO_WEAPON_LOCAL)
+		loopSounds[numLoopSounds].chan = chan;
+	else
+		loopSounds[numLoopSounds].chan = -1;
 
 	if ( s_doppler->integer && VectorLengthSquared(velocity) > 0.0 ) {
 		vec3_t	out;
@@ -2061,6 +2079,7 @@ void S_AddLoopSounds (void)
 	channel_t	*ch;
 	loopSound_t	*loop, *loop2;
 	static int	loopFrame;
+	int channel = -1;
 
 	loopFrame++;
 	for ( i = 0 ; i < numLoopSounds ; i++) {
@@ -2104,6 +2123,8 @@ void S_AddLoopSounds (void)
 
 		ch->doppler = loop->doppler;
 		ch->dopplerScale = loop->dopplerScale;
+		if (loop->chan == CHAN_AUTO_WEAPON || loop->chan == CHAN_AUTO_WEAPON_LOCAL)
+			ch->entchannel = loop->chan;
 
 		// you cannot use MP3 files here because they offer only streaming access, not random
 		//
