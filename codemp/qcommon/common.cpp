@@ -1867,10 +1867,9 @@ PrintCvarMatches
 char *Cvar_DescriptionString( const char *var_name, qboolean enter = qfalse );
 static void PrintCvarMatches( const char *s ) {
 	if ( !Q_stricmpn( s, shortestMatch, (int)strlen( shortestMatch ) ) ) {
-		char value[TRUNCATE_LENGTH] = {0};
+		Com_Printf( S_COLOR_GREY "Cvar  " S_COLOR_WHITE "%s = " S_COLOR_GREY "\"" S_COLOR_WHITE "%s" S_COLOR_GREY "\"" S_COLOR_WHITE "\n", s, Cvar_VariableString(s) );
+
 		const char *description = Cvar_DescriptionString( s );
-		Com_TruncateLongString( value, Cvar_VariableString( s ) );
-		Com_Printf( S_COLOR_GREY "Cvar  " S_COLOR_WHITE "%s = " S_COLOR_GREY "\"" S_COLOR_WHITE "%s" S_COLOR_GREY "\"" S_COLOR_WHITE "\n", s, value );
 		if ( VALIDSTRING( description ) )
 			Com_Printf( S_COLOR_GREEN "      %s" S_COLOR_WHITE "\n", description );
 	}
