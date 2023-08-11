@@ -543,15 +543,8 @@ void CL_PlayDemo_f( void ) {
 		return;
 	}
 
-	// make sure a local server is killed
-	// 2 means don't force disconnect of local client
-	Cvar_Set( "sv_killserver", "2" );
-
 	// open the demo file
 	arg = Cmd_Args();
-
-	CL_Disconnect( qtrue );
-
 
 	//could probably be alot cleaner
 	//look for the old protocol first
@@ -579,16 +572,24 @@ void CL_PlayDemo_f( void ) {
 
 	FS_FOpenFileRead( name, &clc.demofile, qtrue );
 	if (!clc.demofile) {
+		char errorMsg[1024];
 		if (!Q_stricmp(arg, "(null)"))
-		{
-			Com_Error( ERR_DROP, SE_GetString("CON_TEXT_NO_DEMO_SELECTED") );
-		}
+			Com_sprintf(errorMsg, sizeof(errorMsg), "%s\n", SE_GetString("CON_TEXT_NO_DEMO_SELECTED"));
 		else
-		{
-			Com_Error( ERR_DROP, "couldn't open %s", name);
-		}
+			Com_sprintf(errorMsg, sizeof(errorMsg), "Unable to open %s.\n", name);
+
+		Com_Printf(errorMsg);
 		return;
 	}
+
+	// make sure a local server is killed
+	// 2 means don't force disconnect of local client
+	Cvar_Set("sv_killserver", "2");
+
+	CL_Disconnect(qtrue);
+
+	FS_FOpenFileRead( name, &clc.demofile, qtrue ); // reopen since the disconnect cleared it out
+
 	Q_strncpyz( clc.demoName, arg, sizeof( clc.demoName ) );
 	Cvar_Set("demoname", arg);
 
