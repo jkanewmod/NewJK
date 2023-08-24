@@ -597,6 +597,7 @@ void CL_PlayDemo_f( void ) {
 
 	cls.state = CA_CONNECTED;
 	clc.demoplaying = qtrue;
+	Cvar_Set("cl_demoPlaying", "1");
 	Q_strncpyz( cls.servername, arg, sizeof( cls.servername ) );
 
 	// read demo messages until connected
@@ -878,6 +879,7 @@ void CL_Disconnect( qboolean showMainMenu ) {
 
 	// wipe the client connection
 	Com_Memset( &clc, 0, sizeof( clc ) );
+	Cvar_Set("cl_demoPlaying", "0");
 
 	cls.state = CA_DISCONNECTED;
 
