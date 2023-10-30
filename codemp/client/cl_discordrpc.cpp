@@ -224,32 +224,90 @@ static void handleDiscordError( int errcode, const char* message )
 
 static void handleDiscordJoin( const char* secret )
 {
-	char ip[60] = { 0 };
-	char fsgame[60] = { 0 };
-	char password[MAX_CVAR_VALUE_STRING];
-	int parsed = 0;
+	char ip[22] = { 0 }; //xxx.xxx.xxx.xxx:xxxxx\0
+	char password[106] = { 0 };
+	int i = 0;
+	netadr_t adr;
+	qboolean skippedFsgame = qfalse;
 
-	Com_Printf( "*Discord: joining (%s^7)\n", secret );
-	
-	parsed = sscanf(secret, "%s %s %s", ip, fsgame, password);
+	Com_Printf("*Discord: joining ^3(%s)^7\n", secret);
 
-	// detect inbreds
-	Q_strstrip(ip, "\";\r\n", NULL);
-	Q_strstrip(password, "\";\r\n", NULL);
+	// 
+	//This implementation is broken in EJK, when servers do not have fs_game set in their .cfg.
+	//If that's the case, then there will be an extra space in the secret in between the ip and password, which leads to the variables being incorrectly set or not being set at all.
+	//Ideally, this whole implementation should be scrapped and reimplemented.
+	// 
+	//Let's do a workaround for this.
 
-	switch (parsed)
+	while (*secret && *secret != ' ') //Parse the ip first.
 	{
-		case 3: //ip, password, and fsgame
-			Cbuf_AddText(va("set password \"%s\";connect %s;\n", password, ip));
-			break;
-		case 2://ip and fsgame
-		case 1://ip only
-			Cbuf_AddText(va("connect %s\n", ip));
-			break;
-		default:
-			Com_Printf("*Discord: %1Failed to parse server information from join secret\n");
-			break;
+		if (i >= sizeof(ip)) break;
+
+		ip[i++] = *secret;
+		secret++;
 	}
+
+	ip[i] = '\0';
+	i = 0;
+
+	if (*ip)
+	{
+		if (NET_StringToAdr(ip, &adr))
+		{
+			if (!strchr(secret, '\"')) //Check for quotes in the string, if they appear, it means we join a passwordless server.
+			{
+				if (*secret == ' ' && *(secret + 1) == ' ') //No quotes have been found, check whether the string contains 2 spaces between ip and fsgame.
+				{
+					secret += 2; //We found 2 spaces, which means the server has no fs_game set. move the pointer by 2 to skip the spaces.
+
+					while (*secret)
+					{
+						if (i >= sizeof(password)) break;
+
+						password[i++] = *secret;	//Everything after the spaces is the server password.
+						secret++;
+					}
+					password[i] = '\0';
+				}
+				else //1 space is found, which means the server has fs_game set.
+				{
+					secret++; //Increment the pointer by 1 to skip the space.
+					while (*secret)
+					{
+						while (!skippedFsgame && *secret != ' ' && *secret) //the first word after the space is fs_game, we can skip that.
+						{
+							secret++;
+
+							if (*secret == ' ') //We found the next space. Increment pointer again to skip it.
+							{
+								secret++;
+								skippedFsgame = qtrue;
+							}
+						}
+
+						if (i >= sizeof(password)) break;
+
+						password[i++] = *secret; //Every character after the second space, is part of the password. 
+						secret++;
+					}
+					password[i] = '\0';
+				}
+
+				Q_strstrip(password, "\";\r\n", NULL);
+
+				Cbuf_AddText(va("set password %s; connect %i.%i.%i.%i:%hu\n", password, adr.ip[0], adr.ip[1], adr.ip[2], adr.ip[3], BigShort(adr.port)));
+			}
+			else
+			{
+				Cbuf_AddText(va("connect %i.%i.%i.%i:%hu\n", adr.ip[0], adr.ip[1], adr.ip[2], adr.ip[3], BigShort(adr.port)));
+			}
+		}
+		else
+		{
+			Com_Printf("*Discord: Invalid IP address (%s)\n", ip);
+		}
+	}
+	Com_Printf("*Discord: Failed to parse server information from join secret\n");
 }
 
 static void handleDiscordSpectate( const char* secret )
@@ -299,8 +357,6 @@ void CL_DiscordShutdown(void)
 
 void CL_DiscordUpdatePresence(void)
 {
-	char *partyID = PartyID();
-	char *joinID = joinSecret();
 
 	if (!cls.discordInitialized)
 		return;
@@ -326,7 +382,7 @@ void CL_DiscordUpdatePresence(void)
 	}*/
 	if (!clc.demoplaying && !com_sv_running->integer)
 	{ //send join information blank since it won't do anything in this case
-		discordPresence.partyId = partyID; // send join request in discord chat
+		discordPresence.partyId = PartyID(); // send join request in discord chat
 		/*if (cl_discordRichPresence->integer > 1) {
 			discordPresence.partySize = cls.state == CA_ACTIVE ? 1 : NULL;
 			discordPresence.partyMax = cls.state == CA_ACTIVE ? ((cl.discord.maxPlayers - cl.discord.playerCount) + discordPresence.partySize) : NULL;
@@ -335,7 +391,7 @@ void CL_DiscordUpdatePresence(void)
 			discordPresence.partySize = cls.state >= CA_LOADING ? cl.discord.playerCount : NULL;
 			discordPresence.partyMax = cls.state >= CA_LOADING ? cl.discord.maxPlayers : NULL;
 		//}
-		discordPresence.joinSecret = joinID; // server ip for discord join to execute
+		discordPresence.joinSecret = joinSecret(); // server ip for discord join to execute
 	}
 	Discord_UpdatePresence( &discordPresence );
 
