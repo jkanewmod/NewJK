@@ -88,10 +88,12 @@ bool CParticle::Cull(void)
 	VectorSubtract( mOrigin1, theFxHelper.refdef->vieworg, dir );
 
 	// Check if it's behind the viewer
+#if 0
 	if ( mRefEnt.reType != RT_LINE && (DotProduct( theFxHelper.refdef->viewaxis[0], dir )) < 0) // cg.cosHalfFOV * (len - mRadius) )
 	{
 		return true;
 	}
+#endif
 
 	// don't cull if this is hacked to show up close to the inview wpn
 	if (mFlags & FX_DEPTH_HACK)
@@ -616,10 +618,12 @@ bool COrientedParticle::Cull(void)
 	VectorSubtract( mOrigin1, theFxHelper.refdef->vieworg, dir );
 
 	// Check if it's behind the viewer
+#if 0
 	if ( (DotProduct( theFxHelper.refdef->viewaxis[0], dir )) < 0 )
 	{
 		return true;
 	}
+#endif
 
 //	len = VectorLengthSquared( dir );
 
@@ -1784,10 +1788,12 @@ bool CPoly::Cull(void)
 	VectorSubtract( mOrigin1, theFxHelper.refdef->vieworg, dir );
 
 	// Check if it's behind the viewer
+#if 0
 	if ( (DotProduct( theFxHelper.refdef->viewaxis[0], dir )) < 0 )
 	{
 		return true;
 	}
+#endif
 
 	float len = VectorLengthSquared( dir );
 
