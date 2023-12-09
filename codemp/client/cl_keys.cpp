@@ -441,7 +441,7 @@ void Field_VariableSizeDraw( field_t *edit, int x, int y, int width, int size, q
 	str[ drawLen ] = 0;
 
 	// draw it
-	if ( size == SMALLCHAR_WIDTH ) {
+	if ( size == SMALLCHAR_WIDTH && edit != &chatField ) {
 		float	color[4];
 
 		color[0] = color[1] = color[2] = color[3] = 1.0;
@@ -468,7 +468,7 @@ void Field_VariableSizeDraw( field_t *edit, int x, int y, int width, int size, q
 
 		i = drawLen - SCR_Strlen(str);
 
-		if ( size == SMALLCHAR_WIDTH ) {
+		if ( size == SMALLCHAR_WIDTH && edit != &chatField ) {
 			SCR_DrawSmallChar( x + ( edit->cursor - prestep - i ) * size, y, cursorChar );
 		} else {
 			str[0] = cursorChar;
