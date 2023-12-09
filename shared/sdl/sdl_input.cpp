@@ -919,7 +919,7 @@ static void IN_ProcessEvents( void )
 				break;
 
 			case SDL_QUIT:
-				if ( cl_allowOSClose->integer || com_minimized->integer || com_unfocused->integer || ( Key_GetCatcher( ) & KEYCATCH_CONSOLE ) || !lastKeyDown )
+				if ( cl_allowOSClose->integer || com_minimized->integer || com_unfocused->integer || ( Key_GetCatcher( ) & KEYCATCH_CONSOLE ) )
 					Cbuf_ExecuteText(EXEC_NOW, "quit Closed window\n");
 				break;
 
