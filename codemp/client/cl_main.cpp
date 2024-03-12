@@ -1034,12 +1034,14 @@ void CL_ForwardToServer_f( void ) {
 }
 
 
+extern void CL_SetWindowTitle(const char *s);
 /*
 ==================
 CL_Disconnect_f
 ==================
 */
 void CL_Disconnect_f( void ) {
+	CL_SetWindowTitle(NULL);
 	SCR_StopCinematic();
 	Cvar_Set("ui_singlePlayerActive", "0");
 	if ( cls.state != CA_DISCONNECTED && cls.state != CA_CINEMATIC ) {

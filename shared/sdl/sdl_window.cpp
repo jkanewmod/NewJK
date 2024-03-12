@@ -945,3 +945,7 @@ qboolean WIN_GL_ExtensionSupported( const char *extension )
 {
 	return SDL_GL_ExtensionSupported( extension ) == SDL_TRUE ? qtrue : qfalse;
 }
+
+void CL_SetWindowTitle(const char *s) {
+	SDL_SetWindowTitle(screen, VALIDSTRING(s) ? s : CLIENT_WINDOW_TITLE);
+}

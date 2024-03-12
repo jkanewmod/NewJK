@@ -835,6 +835,8 @@ static void CGVM_Cmd_RemoveCommand( const char *cmd_name ) {
 	Cmd_VM_RemoveCommand( cmd_name, VM_CGAME );
 }
 
+extern void CL_SetWindowTitle(const char *s);
+
 // legacy syscall
 
 intptr_t CL_CgameSystemCalls( intptr_t *args ) {
@@ -1703,6 +1705,10 @@ intptr_t CL_CgameSystemCalls( intptr_t *args ) {
 
 	case CG_S_SOUNDLENGTH:
 		return (int)S_GetSampleLengthInMilliSeconds(args[1]);
+
+	case CG_SETWINDOWTITLE:
+		CL_SetWindowTitle((const char *)VMA(1));
+		return 0;
 
 	default:
 		assert(0); // bk010102

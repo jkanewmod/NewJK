@@ -440,7 +440,8 @@ typedef enum cgameImportLegacy_e {
 	CG_CVAR_FLAGS = 5000,
 	CG_R_FONT_DRAWSTRING_FLOAT,
 	CG_R_FONT_STRLENPIXELS_FLOAT,
-	CG_S_SOUNDLENGTH
+	CG_S_SOUNDLENGTH,
+	CG_SETWINDOWTITLE
 } cgameImportLegacy_t;
 
 typedef enum cgameExportLegacy_e {
