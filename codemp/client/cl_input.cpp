@@ -217,16 +217,26 @@ void IN_GenCMD9( void )
 	cl.gcmdValue = GENCMD_FORCE_ABSORB;
 }
 
+// th
 void IN_GenCMD10( void )
 {
 	cl.gcmdSendValue = qtrue;
-	cl.gcmdValue = GENCMD_FORCE_HEALOTHER;
+	int alignment = Cvar_VariableIntegerValue("ui_forceAlignment");
+	if (alignment == 2)
+		cl.gcmdValue = GENCMD_FORCE_FORCEPOWEROTHER; // redirect to te if dark
+	else
+		cl.gcmdValue = GENCMD_FORCE_HEALOTHER;
 }
 
+// te
 void IN_GenCMD11( void )
 {
 	cl.gcmdSendValue = qtrue;
-	cl.gcmdValue = GENCMD_FORCE_FORCEPOWEROTHER;
+	int alignment = Cvar_VariableIntegerValue("ui_forceAlignment");
+	if (alignment == 1)
+		cl.gcmdValue = GENCMD_FORCE_HEALOTHER; // redirect to th if light
+	else
+		cl.gcmdValue = GENCMD_FORCE_FORCEPOWEROTHER;
 }
 
 void IN_GenCMD12( void )
