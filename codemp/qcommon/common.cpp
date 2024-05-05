@@ -244,6 +244,7 @@ Both client and server can use this, and it will
 do the appropriate things.
 =============
 */
+extern void CL_SetWindowTitle(const char *s);
 void NORETURN QDECL Com_Error( int code, const char *fmt, ... ) {
 	va_list		argptr;
 	static int	lastErrorTime;
@@ -286,9 +287,11 @@ void NORETURN QDECL Com_Error( int code, const char *fmt, ... ) {
 	if ( code != ERR_DISCONNECT && code != ERR_NEED_CD ) {
 		Cvar_Get("com_errorMessage", "", CVAR_ROM);	//give com_errorMessage a default so it won't come back to life after a resetDefaults
 		Cvar_Set("com_errorMessage", com_errorMessage);
+		CL_SetWindowTitle(NULL);
 	}
 
 	if ( code == ERR_DISCONNECT || code == ERR_SERVERDISCONNECT || code == ERR_DROP || code == ERR_NEED_CD ) {
+		CL_SetWindowTitle(NULL);
 		throw code;
 	} else {
 		CL_Shutdown ();
