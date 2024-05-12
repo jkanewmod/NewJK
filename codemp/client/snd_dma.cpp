@@ -4693,7 +4693,7 @@ void S_StartBackgroundTrack( const char *intro, const char *loop, qboolean bCall
 		}
 		else
 		{
-			if (sNameIntro[0]!='.')	// blank name with ".mp3" or whatever attached - no error print out
+			if (sNameIntro[0]!='.' && s_musicVolume->value > 0)	// blank name with ".mp3" or whatever attached - no error print out
 			{
 				Com_Printf( "*^1Unable to find music \"%s\" as explicit track or dynamic music entry!\n",sNameIntro);
 				S_StopBackgroundTrack();
