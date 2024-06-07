@@ -477,6 +477,8 @@ typedef enum cgameExportLegacy_e {
 	CG_MISC_ENT,
 	CG_GET_SORTED_FORCE_POWER,
 	CG_FX_CAMERASHAKE,
+	// newmod start
+	CG_CHAT = 6000
 } cgameExportLegacy_t;
 
 typedef struct cgameImport_s {

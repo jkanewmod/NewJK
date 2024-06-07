@@ -307,6 +307,13 @@ void CGVM_CameraShake( void ) {
 	cge->CameraShake();
 }
 
+void CGVM_Chat(void) {
+	if (cgvm->isLegacy) {
+		VM_Call(cgvm, CG_CHAT);
+		return;
+	}
+}
+
 
 //
 // cgame syscalls

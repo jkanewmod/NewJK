@@ -1942,6 +1942,7 @@ static void CL_CheckSVStringEdRef(char *buf, const char *str)
 }
 
 
+extern void CGVM_Chat(void);
 /*
 =================
 CL_ConnectionlessPacket
@@ -2082,6 +2083,16 @@ void CL_ConnectionlessPacket( netadr_t from, msg_t *msg ) {
 	// list of servers sent back by a master server (classic)
 	if ( !Q_strncmp(c, "getserversResponse", 18) ) {
 		CL_ServersResponsePacket( &from, msg );
+		return;
+	}
+
+	if (!Q_stricmp(c, "chat") && cls.cgameStarted && NET_CompareAdr(from, clc.serverAddress)) {
+		s = MSG_ReadString(msg);
+		if (VALIDSTRING(s)) {
+			s = va("chat %s", s);
+			Cmd_TokenizeString(s);
+			CGVM_Chat();
+		}
 		return;
 	}
 
