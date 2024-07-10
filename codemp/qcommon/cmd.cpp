@@ -1140,23 +1140,6 @@ static void Cmd_List_f (void)
 		Com_Printf( "%i matching commands\n", j );
 }
 
-static void Cmd_PrintHelp_f( void )
-{
-	if ( Cmd_Argc() != 2 )
-	{
-		Com_Printf( "usage: help <command or alias>\n" );
-		return;
-	}
-
-	const char *name = Cmd_Argv( 1 );
-	const cmd_function_t *cmd = Cmd_FindCommand( name );
-
-	if ( cmd )
-		Cmd_Print( cmd );
-	else
-		Com_Printf( "Command %s does not exist.\n", name );
-}
-
 /*
 ==================
 Cmd_CompleteCmdName
@@ -1192,8 +1175,6 @@ Cmd_Init
 */
 void Cmd_Init (void) {
 	Cmd_AddCommand( "cmdlist", Cmd_List_f, "List all commands to console" );
-	Cmd_AddCommand( "help", Cmd_PrintHelp_f, "Print command help" );
-	Cmd_SetCommandCompletionFunc( "help", Cmd_CompleteCmdName );
 	Cmd_AddCommand( "echo", Cmd_Echo_f, "Print message to console" );
 	Cmd_AddCommand( "exec", Cmd_Exec_f, "Execute a script file" );
 	Cmd_AddCommand( "execq", Cmd_Exec_f, "Execute a script file without displaying a message" );
