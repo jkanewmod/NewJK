@@ -826,7 +826,11 @@ void NET_OpenIP( void )
 	// a different net_port for each one
 
 	if ( net_enabled->integer & NET_ENABLEV4 ) {
+#ifdef _DEBUG
+		for ( int i=0 ; i < 40 ; i++ ) {
+#else
 		for ( int i=0 ; i < 10 ; i++ ) {
+#endif
 			ip_socket = NET_IPSocket( net_ip->string, port + i, &err );
 			if ( ip_socket != INVALID_SOCKET ) {
 				Cvar_SetValue( "net_port", port + i );
