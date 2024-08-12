@@ -148,6 +148,7 @@ void IN_UseGivenForce(void)
 	if(genCmdNum != 0) {
 		cl.gcmdSendValue = qtrue;
 		cl.gcmdValue = genCmdNum;
+		cl.gcmdsDesiredThisFrame |= (1 << genCmdNum);
 	}
 }
 
@@ -167,118 +168,136 @@ void IN_GenCMD1( void )
 {
 	cl.gcmdSendValue = qtrue;
 	cl.gcmdValue = GENCMD_SABERSWITCH;
+	cl.gcmdsDesiredThisFrame |= (1 << cl.gcmdValue);
 }
 
 void IN_GenCMD2( void )
 {
 	cl.gcmdSendValue = qtrue;
 	cl.gcmdValue = GENCMD_ENGAGE_DUEL;
+	cl.gcmdsDesiredThisFrame |= (1 << cl.gcmdValue);
 }
 
 void IN_GenCMD3( void )
 {
 	cl.gcmdSendValue = qtrue;
 	cl.gcmdValue = GENCMD_FORCE_HEAL;
+	cl.gcmdsDesiredThisFrame |= (1 << cl.gcmdValue);
 }
 
 void IN_GenCMD4( void )
 {
 	cl.gcmdSendValue = qtrue;
 	cl.gcmdValue = GENCMD_FORCE_SPEED;
+	cl.gcmdsDesiredThisFrame |= (1 << cl.gcmdValue);
 }
 
 void IN_GenCMD5( void )
 {
 	cl.gcmdSendValue = qtrue;
 	cl.gcmdValue = GENCMD_FORCE_PULL;
+	cl.gcmdsDesiredThisFrame |= (1 << cl.gcmdValue);
 }
 
 void IN_GenCMD6( void )
 {
 	cl.gcmdSendValue = qtrue;
 	cl.gcmdValue = GENCMD_FORCE_DISTRACT;
+	cl.gcmdsDesiredThisFrame |= (1 << cl.gcmdValue);
 }
 
 void IN_GenCMD7( void )
 {
 	cl.gcmdSendValue = qtrue;
 	cl.gcmdValue = GENCMD_FORCE_RAGE;
+	cl.gcmdsDesiredThisFrame |= (1 << cl.gcmdValue);
 }
 
 void IN_GenCMD8( void )
 {
 	cl.gcmdSendValue = qtrue;
 	cl.gcmdValue = GENCMD_FORCE_PROTECT;
+	cl.gcmdsDesiredThisFrame |= (1 << cl.gcmdValue);
 }
 
 void IN_GenCMD9( void )
 {
 	cl.gcmdSendValue = qtrue;
 	cl.gcmdValue = GENCMD_FORCE_ABSORB;
+	cl.gcmdsDesiredThisFrame |= (1 << cl.gcmdValue);
 }
 
 // th
 void IN_GenCMD10( void )
 {
 	cl.gcmdSendValue = qtrue;
-	int alignment = Cvar_VariableIntegerValue("ui_forceAlignment");
-	if (alignment == 2)
+	if (ui_forceAlignment->integer == 2)
 		cl.gcmdValue = GENCMD_FORCE_FORCEPOWEROTHER; // redirect to te if dark
 	else
 		cl.gcmdValue = GENCMD_FORCE_HEALOTHER;
+
+	cl.gcmdsDesiredThisFrame |= (1 << cl.gcmdValue);
 }
 
 // te
 void IN_GenCMD11( void )
 {
 	cl.gcmdSendValue = qtrue;
-	int alignment = Cvar_VariableIntegerValue("ui_forceAlignment");
-	if (alignment == 1)
+	if (ui_forceAlignment->integer == 1)
 		cl.gcmdValue = GENCMD_FORCE_HEALOTHER; // redirect to th if light
 	else
 		cl.gcmdValue = GENCMD_FORCE_FORCEPOWEROTHER;
+
+	cl.gcmdsDesiredThisFrame |= (1 << cl.gcmdValue);
 }
 
 void IN_GenCMD12( void )
 {
 	cl.gcmdSendValue = qtrue;
 	cl.gcmdValue = GENCMD_FORCE_SEEING;
+	cl.gcmdsDesiredThisFrame |= (1 << cl.gcmdValue);
 }
 
 void IN_GenCMD13( void )
 {
 	cl.gcmdSendValue = qtrue;
 	cl.gcmdValue = GENCMD_USE_SEEKER;
+	cl.gcmdsDesiredThisFrame |= (1 << cl.gcmdValue);
 }
 
 void IN_GenCMD14( void )
 {
 	cl.gcmdSendValue = qtrue;
 	cl.gcmdValue = GENCMD_USE_FIELD;
+	cl.gcmdsDesiredThisFrame |= (1 << cl.gcmdValue);
 }
 
 void IN_GenCMD15( void )
 {
 	cl.gcmdSendValue = qtrue;
 	cl.gcmdValue = GENCMD_USE_BACTA;
+	cl.gcmdsDesiredThisFrame |= (1 << cl.gcmdValue);
 }
 
 void IN_GenCMD16( void )
 {
 	cl.gcmdSendValue = qtrue;
 	cl.gcmdValue = GENCMD_USE_ELECTROBINOCULARS;
+	cl.gcmdsDesiredThisFrame |= (1 << cl.gcmdValue);
 }
 
 void IN_GenCMD17( void )
 {
 	cl.gcmdSendValue = qtrue;
 	cl.gcmdValue = GENCMD_ZOOM;
+	cl.gcmdsDesiredThisFrame |= (1 << cl.gcmdValue);
 }
 
 void IN_GenCMD18( void )
 {
 	cl.gcmdSendValue = qtrue;
 	cl.gcmdValue = GENCMD_USE_SENTRY;
+	cl.gcmdsDesiredThisFrame |= (1 << cl.gcmdValue);
 }
 
 void IN_GenCMD19( void )
@@ -289,78 +308,91 @@ void IN_GenCMD19( void )
 	}
 	cl.gcmdSendValue = qtrue;
 	cl.gcmdValue = GENCMD_SABERATTACKCYCLE;
+	cl.gcmdsDesiredThisFrame |= (1 << cl.gcmdValue);
 }
 
 void IN_GenCMD20( void )
 {
 	cl.gcmdSendValue = qtrue;
 	cl.gcmdValue = GENCMD_FORCE_THROW;
+	cl.gcmdsDesiredThisFrame |= (1 << cl.gcmdValue);
 }
 
 void IN_GenCMD21( void )
 {
 	cl.gcmdSendValue = qtrue;
 	cl.gcmdValue = GENCMD_USE_JETPACK;
+	cl.gcmdsDesiredThisFrame |= (1 << cl.gcmdValue);
 }
 
 void IN_GenCMD22( void )
 {
 	cl.gcmdSendValue = qtrue;
 	cl.gcmdValue = GENCMD_USE_BACTABIG;
+	cl.gcmdsDesiredThisFrame |= (1 << cl.gcmdValue);
 }
 
 void IN_GenCMD23( void )
 {
 	cl.gcmdSendValue = qtrue;
 	cl.gcmdValue = GENCMD_USE_HEALTHDISP;
+	cl.gcmdsDesiredThisFrame |= (1 << cl.gcmdValue);
 }
 
 void IN_GenCMD24( void )
 {
 	cl.gcmdSendValue = qtrue;
 	cl.gcmdValue = GENCMD_USE_AMMODISP;
+	cl.gcmdsDesiredThisFrame |= (1 << cl.gcmdValue);
 }
 
 void IN_GenCMD25( void )
 {
 	cl.gcmdSendValue = qtrue;
 	cl.gcmdValue = GENCMD_USE_EWEB;
+	cl.gcmdsDesiredThisFrame |= (1 << cl.gcmdValue);
 }
 
 void IN_GenCMD26( void )
 {
 	cl.gcmdSendValue = qtrue;
 	cl.gcmdValue = GENCMD_USE_CLOAK;
+	cl.gcmdsDesiredThisFrame |= (1 << cl.gcmdValue);
 }
 
 void IN_GenCMD27( void )
 {
 	cl.gcmdSendValue = qtrue;
 	cl.gcmdValue = GENCMD_TAUNT;
+	cl.gcmdsDesiredThisFrame |= (1 << cl.gcmdValue);
 }
 
 void IN_GenCMD28( void )
 {
 	cl.gcmdSendValue = qtrue;
 	cl.gcmdValue = GENCMD_BOW;
+	cl.gcmdsDesiredThisFrame |= (1 << cl.gcmdValue);
 }
 
 void IN_GenCMD29( void )
 {
 	cl.gcmdSendValue = qtrue;
 	cl.gcmdValue = GENCMD_MEDITATE;
+	cl.gcmdsDesiredThisFrame |= (1 << cl.gcmdValue);
 }
 
 void IN_GenCMD30( void )
 {
 	cl.gcmdSendValue = qtrue;
 	cl.gcmdValue = GENCMD_FLOURISH;
+	cl.gcmdsDesiredThisFrame |= (1 << cl.gcmdValue);
 }
 
 void IN_GenCMD31( void )
 {
 	cl.gcmdSendValue = qtrue;
 	cl.gcmdValue = GENCMD_GLOAT;
+	cl.gcmdsDesiredThisFrame |= (1 << cl.gcmdValue);
 }
 
 
@@ -1246,6 +1278,74 @@ void CL_CmdButtons( usercmd_t *cmd ) {
 		cmd->buttons |= BUTTON_ATTACK;
 }
 
+genCmds_t cmdsLight[] = {
+	GENCMD_SABERSWITCH,
+	GENCMD_SABERATTACKCYCLE,
+	GENCMD_FORCE_SPEED,
+	GENCMD_FORCE_PROTECT,
+	GENCMD_FORCE_ABSORB,
+	GENCMD_FORCE_HEALOTHER,
+	GENCMD_FORCE_DISTRACT,
+	GENCMD_FORCE_HEAL,
+	GENCMD_FORCE_THROW,
+	GENCMD_FORCE_PULL,
+	GENCMD_FORCE_SEEING,
+	GENCMD_FORCE_RAGE,
+	GENCMD_FORCE_FORCEPOWEROTHER,
+	GENCMD_USE_BACTABIG,
+	GENCMD_USE_BACTA,
+	GENCMD_USE_JETPACK,
+	GENCMD_USE_FIELD,
+	GENCMD_USE_SENTRY,
+	GENCMD_USE_SEEKER,
+	GENCMD_USE_HEALTHDISP,
+	GENCMD_USE_AMMODISP,
+	GENCMD_USE_EWEB,
+	GENCMD_USE_CLOAK,
+	GENCMD_USE_ELECTROBINOCULARS,
+	GENCMD_ZOOM,
+	GENCMD_TAUNT,
+	GENCMD_BOW,
+	GENCMD_MEDITATE,
+	GENCMD_FLOURISH,
+	GENCMD_GLOAT,
+	GENCMD_ENGAGE_DUEL,
+};
+
+genCmds_t cmdsDark[] = {
+	GENCMD_SABERSWITCH,
+	GENCMD_SABERATTACKCYCLE,
+	GENCMD_FORCE_SPEED,
+	GENCMD_FORCE_RAGE,
+	GENCMD_FORCE_FORCEPOWEROTHER,
+	GENCMD_FORCE_THROW,
+	GENCMD_FORCE_PULL,
+	GENCMD_FORCE_SEEING,
+	GENCMD_FORCE_PROTECT,
+	GENCMD_FORCE_ABSORB,
+	GENCMD_FORCE_HEALOTHER,
+	GENCMD_FORCE_DISTRACT,
+	GENCMD_FORCE_HEAL,
+	GENCMD_USE_BACTABIG,
+	GENCMD_USE_BACTA,
+	GENCMD_USE_JETPACK,
+	GENCMD_USE_FIELD,
+	GENCMD_USE_SENTRY,
+	GENCMD_USE_SEEKER,
+	GENCMD_USE_HEALTHDISP,
+	GENCMD_USE_AMMODISP,
+	GENCMD_USE_EWEB,
+	GENCMD_USE_CLOAK,
+	GENCMD_USE_ELECTROBINOCULARS,
+	GENCMD_ZOOM,
+	GENCMD_TAUNT,
+	GENCMD_BOW,
+	GENCMD_MEDITATE,
+	GENCMD_FLOURISH,
+	GENCMD_GLOAT,
+	GENCMD_ENGAGE_DUEL,
+};
+
 
 /*
 ==============
@@ -1262,16 +1362,79 @@ void CL_FinishMove( usercmd_t *cmd ) {
 	cmd->forcesel = cl.cgameForceSelection;
 	cmd->invensel = cl.cgameInvenSelection;
 
-	if (cl.gcmdSendValue)
-	{
-		cmd->generic_cmd = cl.gcmdValue;
+	if (cl_fixSimultaneousInputs->integer) {
+		if (cl.gcmdSendValue && cl.gcmdsDesiredThisFrame) { // actually pressed a button this frame = clear out any pending
+			cl.gcmdsPending = 0;
+		}
+		else if (!cl.gcmdSendValue && cl.gcmdsPending) { // didn't press a button this frame + commands pending = use the pending ones
+			cl.gcmdSendValue = qtrue;
+			cl.gcmdsDesiredThisFrame = cl.gcmdsPending;
+			cl.gcmdsPending = 0;
+		}
+	}
+
+	assert(sizeof(cmdsDark) == sizeof(cmdsLight));
+
+	if (cl.gcmdSendValue) {
+		if (cl_fixSimultaneousInputs->integer) {
+			int numGenCmds = 0;
+			for (int i = GENCMD_SABERSWITCH; i <= GENCMD_GLOAT; i++) {
+				if (cl.gcmdsDesiredThisFrame & (1 << i))
+					++numGenCmds;
+			}
+
+			// special case for absorb+protect: one cancels out the other, so don't bother doing anything special
+			// probably a panic fatfinger, so just use protect
+			if (numGenCmds > 1 && cl.gcmdsDesiredThisFrame & (1 << GENCMD_FORCE_ABSORB) && cl.gcmdsDesiredThisFrame & (1 << GENCMD_FORCE_PROTECT)) {
+				cl.gcmdsDesiredThisFrame &= ~(1 << GENCMD_FORCE_ABSORB);
+				--numGenCmds;
+			}
+
+			if (numGenCmds > 1) { // multiple commands attempted; try to use the most preferred one and remember the others to attempt in subsequent frame(s)
+				const genCmds_t *order = ui_forceAlignment->integer == 2 ? cmdsDark : cmdsLight;
+				bool executed = false;
+				cl.gcmdsPending = 0;
+				for (int i = 0; i < sizeof(cmdsDark) / sizeof(genCmds_t); i++) {
+					if (cl.gcmdsDesiredThisFrame & (1 << order[i])) {
+						if (!executed) { // use the first one
+							cmd->generic_cmd = order[i];
+							executed = true;
+						}
+						else { // remember the rest
+							cl.gcmdsPending |= (1 << order[i]);
+						}
+					}
+				}
+			}
+			else { // just one command
+				if (cl.gcmdValue) { // it's the button we actually pressed this frame
+					cmd->generic_cmd = cl.gcmdValue;
+				}
+				else { // it's the final remaining pending command
+					const genCmds_t *order = ui_forceAlignment->integer == 2 ? cmdsDark : cmdsLight;
+					for (int i = 0; i < sizeof(cmdsDark) / sizeof(genCmds_t); i++) {
+						if (cl.gcmdsDesiredThisFrame & (1 << order[i])) {
+							cmd->generic_cmd = order[i];
+							break;
+						}
+					}
+				}
+
+				cl.gcmdsPending = 0;
+			}
+		}
+		else {
+			cmd->generic_cmd = cl.gcmdValue;
+		}
 		//cl.gcmdSendValue = qfalse;
 		cl.gcmdSentValue = qtrue;
 	}
-	else
-	{
+	else {
 		cmd->generic_cmd = 0;
+		cl.gcmdsPending = 0;
 	}
+
+	cl.gcmdsDesiredThisFrame = cl.gcmdValue = 0;
 
 	// send the current server time so the amount of movement
 	// can be determined without allowing cheating

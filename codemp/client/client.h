@@ -126,6 +126,8 @@ typedef struct clientActive_s {
 	qboolean	gcmdSendValue;
 	qboolean	gcmdSentValue;
 	byte		gcmdValue;
+	uint32_t	gcmdsDesiredThisFrame;
+	uint32_t	gcmdsPending;
 
 	// cmds[cmdNumber] is the predicted command, [cmdNumber-1] is the last
 	// properly generated command
@@ -464,6 +466,9 @@ extern	cvar_t	*cl_topLeftFont;
 
 extern	cvar_t	*cl_fpsSaver;
 extern	cvar_t	*cl_ratioFix;
+
+extern	cvar_t	*cl_fixSimultaneousInputs;
+extern	cvar_t	*ui_forceAlignment;
 
 //=================================================
 

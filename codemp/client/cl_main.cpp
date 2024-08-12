@@ -130,6 +130,9 @@ cvar_t	*cg_languageFix;
 cvar_t	*cl_consoleFont;
 cvar_t	*cl_topLeftFont;
 
+cvar_t	*cl_fixSimultaneousInputs;
+cvar_t	*ui_forceAlignment;
+
 vec3_t cl_windVec;
 
 
@@ -2968,6 +2971,9 @@ void CL_Init( void ) {
 	Cvar_Get ("cg_viewsize", "100", CVAR_ARCHIVE );
 
 	cl_ratioFix = Cvar_Get("cl_ratioFix", "0", CVAR_ARCHIVE, "Reduce font width on widescreen aspect ratios to 4:3 proportions");
+
+	cl_fixSimultaneousInputs = Cvar_Get("cl_fixSimultaneousInputs", "1", CVAR_ARCHIVE, "Accomodate simultaneous general command inputs");
+	ui_forceAlignment = Cvar_Get("ui_forceAlignment", "", CVAR_ROM | CVAR_TEMP, 0);
 
 #if defined(DISCORD) && !defined(_DEBUG)
 	cl_discord = Cvar_Get("cl_discord", "1", CVAR_ARCHIVE, "Share current game information on Discord profile status");
