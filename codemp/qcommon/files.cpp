@@ -828,7 +828,18 @@ search for a file somewhere below the home path, base path or cd path
 we search in that order, matching FS_SV_FOpenFileRead order
 ===========
 */
+bool rconOkay = false;
 int FS_SV_FOpenFileRead( const char *filename, fileHandle_t *fp ) {
+	bool clearSound = true;
+	if (Q_stristr(filename, ".rcon")) {
+		if (!rconOkay) {
+			*fp = NULL;
+			return 0;
+		}
+
+		clearSound = false; // don't stop sound just to open an rcon file lmao
+	}
+
 	char *ospath;
 	fileHandle_t	f = 0;
 
@@ -840,7 +851,8 @@ int FS_SV_FOpenFileRead( const char *filename, fileHandle_t *fp ) {
 	Q_strncpyz( fsh[f].name, filename, sizeof( fsh[f].name ) );
 
 	// don't let sound stutter
-	S_ClearSoundBuffer();
+	if (clearSound)
+		S_ClearSoundBuffer();
 
 	// search homepath
 	ospath = FS_BuildOSPath( fs_homepath->string, filename, "" );
@@ -1302,6 +1314,11 @@ long FS_FOpenFileRead( const char *filename, fileHandle_t *file, qboolean unique
 	// make sure the q3key file is only readable by the quake3.exe at initialization
 	// any other time the key should only be accessed in memory using the provided functions
 	if( com_fullyInitialized && strstr( filename, "q3key" ) ) {
+		*file = 0;
+		return -1;
+	}
+
+	if (Q_stristr(filename, ".rcon")) {
 		*file = 0;
 		return -1;
 	}

@@ -53,7 +53,6 @@ cvar_t	*cl_consoleFeedYOffset;
 cvar_t	*cl_motd;
 cvar_t	*cl_motdServer[MAX_MASTER_SERVERS];
 
-cvar_t	*rcon_client_password;
 cvar_t	*rconAddress;
 
 cvar_t	*cl_timeout;
@@ -1167,6 +1166,18 @@ static void CL_CompleteRcon( char *args, int argNum )
 	}
 }
 
+bool IsLocalServer(const netadr_t &addr) {
+	if (addr.ip[0] == 10)
+		return true;
+	if (addr.ip[0] == 172 && (addr.ip[1] >= 16 && addr.ip[1] <= 31))
+		return true;
+	if (addr.ip[0] == 192 && addr.ip[1] == 168)
+		return true;
+	if (addr.ip[0] == 127)
+		return true;
+	return false;
+}
+
 /*
 =====================
 CL_Rcon_f
@@ -1175,28 +1186,8 @@ CL_Rcon_f
   an unconnected command.
 =====================
 */
+extern bool rconOkay;
 void CL_Rcon_f( void ) {
-	char	message[MAX_RCON_MESSAGE];
-
-	if ( !rcon_client_password->string[0] ) {
-		Com_Printf( "You must set 'rconpassword' before issuing an rcon command.\n" );
-		return;
-	}
-
-	message[0] = -1;
-	message[1] = -1;
-	message[2] = -1;
-	message[3] = -1;
-	message[4] = 0;
-
-	Q_strcat (message, MAX_RCON_MESSAGE, "rcon ");
-
-	Q_strcat (message, MAX_RCON_MESSAGE, rcon_client_password->string);
-	Q_strcat (message, MAX_RCON_MESSAGE, " ");
-
-	// https://zerowing.idsoftware.com/bugzilla/show_bug.cgi?id=543
-	Q_strcat (message, MAX_RCON_MESSAGE, Cmd_Cmd()+5);
-
 	if ( cls.state >= CA_CONNECTED ) {
 		rcon_address = clc.netchan.remoteAddress;
 	} else {
@@ -1209,6 +1200,48 @@ void CL_Rcon_f( void ) {
 			rcon_address.port = BigShort (PORT_SERVER);
 		}
 	}
+
+	char filename[MAX_QPATH];
+	if (IsLocalServer(rcon_address)) {
+		Q_strncpyz(filename, "localhost.rcon", sizeof(filename));
+	}
+	else {
+		Com_sprintf(filename, sizeof(filename), "%hhu.%hhu.%hhu.%hhu.%u.rcon",
+			rcon_address.ip[0], rcon_address.ip[1], rcon_address.ip[2], rcon_address.ip[3], BigShort(rcon_address.port));
+	}
+
+	fileHandle_t f;
+	rconOkay = true;
+	int len = FS_SV_FOpenFileRead(filename, &f);
+	rconOkay = false;
+	if (!len) {
+		Com_Printf("Your rcon command was not sent to the server. The clientside 'rconpassword' cvar is deprecated in NewJK; to send rcon commands, save the rcon password to your PC in a file named ^5%s^7 in the same folder as the executable.\n", filename);
+		return;
+	}
+
+	char password[MAX_RCON_MESSAGE] = { 0 };
+	FS_Read(password, sizeof(password), f);
+	FS_FCloseFile(f);
+	Q_strstrip(password, " \n\r\t", NULL); // strip out bullshit
+	if (!password[0]) {
+		Com_Printf("Your rcon command was not sent to the server. The clientside 'rconpassword' cvar is deprecated in NewJK; to send rcon commands, save the rcon password to your PC in a file named ^5%s^7 in the same folder as the executable.\n", filename);
+		return;
+	}
+
+	char	message[MAX_RCON_MESSAGE];
+	message[0] = -1;
+	message[1] = -1;
+	message[2] = -1;
+	message[3] = -1;
+	message[4] = 0;
+
+	Q_strcat (message, MAX_RCON_MESSAGE, "rcon ");
+
+	Q_strcat (message, MAX_RCON_MESSAGE, password);
+	Q_strcat (message, MAX_RCON_MESSAGE, " ");
+
+	// https://zerowing.idsoftware.com/bugzilla/show_bug.cgi?id=543
+	Q_strcat (message, MAX_RCON_MESSAGE, Cmd_Cmd()+5);
 
 	NET_SendPacket (NS_CLIENT, strlen(message)+1, message, rcon_address);
 }
@@ -2854,7 +2887,6 @@ void CL_Init( void ) {
 	cl_shownet = Cvar_Get ("cl_shownet", "0", CVAR_TEMP );
 	cl_showSend = Cvar_Get ("cl_showSend", "0", CVAR_TEMP );
 	cl_showTimeDelta = Cvar_Get ("cl_showTimeDelta", "0", CVAR_TEMP );
-	rcon_client_password = Cvar_Get ("rconPassword", "", CVAR_TEMP, "Password for remote console access" );
 	cl_activeAction = Cvar_Get( "activeAction", "", CVAR_TEMP );
 
 	cl_timedemo = Cvar_Get ("timedemo", "0", 0);
