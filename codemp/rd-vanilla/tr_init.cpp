@@ -723,7 +723,7 @@ static void GLimp_InitExtensions( void )
 		qglGetIntegerv( GL_MAX_GENERAL_COMBINERS_NV, &iNumGeneralCombiners );
 
 	glConfigExt.doGammaCorrectionWithShaders = qfalse;
-	if ( r_gammaShaders->integer && qglActiveTextureARB && bTexRectSupported && bARBVertexProgram && bARBFragmentProgram )
+	if ( /*r_gammaShaders->integer && */qglActiveTextureARB && bTexRectSupported && bARBVertexProgram && bARBFragmentProgram )
 	{
 #if !defined(__APPLE__)
 		qglTexImage3D = (PFNGLTEXIMAGE3DPROC)ri->GL_GetProcAddress("glTexImage3D");
