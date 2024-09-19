@@ -490,8 +490,10 @@ static void IN_DeactivateMouse( void )
 		SDL_SetWindowGrab( SDL_window, SDL_FALSE );
 		SDL_SetRelativeMouseMode( SDL_FALSE );
 
+#if 0
 		// Don't warp the mouse unless the cursor is within the window
 		if( SDL_GetWindowFlags( SDL_window ) & SDL_WINDOW_MOUSE_FOCUS )
+#endif
 			SDL_WarpMouseInWindow( SDL_window, cls.glconfig.vidWidth / 2, cls.glconfig.vidHeight / 2 );
 
 		mouseActive = qfalse;
@@ -810,6 +812,10 @@ uint8_t ConvertUTF32ToExpectedCharset( uint32_t utf32 )
 	}
 }
 
+extern void FixFocusLoss(bool cgameStarted);
+extern cvar_t *r_cgameControlsAlwaysOnTop;
+extern cvar_t *r_alwaysOnTop;
+
 /*
 ===============
 IN_ProcessEvents
@@ -825,15 +831,28 @@ static void IN_ProcessEvents( void )
 	if( !SDL_WasInit( SDL_INIT_VIDEO ) )
 			return;
 
+	if (com_unfocused->integer) {
 #ifdef _WIN32
-	if (com_unfocused->integer == 1) {
 		int doAlert = Cvar_VariableIntegerValue("cl_alertWindow");
 		if (doAlert) {
 			GLimp_Alert();
 			Cvar_Set("cl_alertWindow", "0");
 		}
-	}
 #endif
+		FixFocusLoss(cls.cgameStarted);
+	}
+	else if (com_minimized->integer) {
+		FixFocusLoss(cls.cgameStarted);
+	}
+	else if (r_cgameControlsAlwaysOnTop->integer == 2 || (r_cgameControlsAlwaysOnTop->integer == 0 && r_alwaysOnTop->integer == 2)) {
+		// periodically fix focus loss even if we don't seem to be unfocused/minimized
+		static int lastTime = 0;
+		const int now = Sys_Milliseconds();
+		if (!lastTime || now - lastTime >= 1000) {
+			FixFocusLoss(cls.cgameStarted);
+			lastTime = now;
+		}
+	}
 
 	while( SDL_PollEvent( &e ) )
 	{
@@ -926,20 +945,21 @@ static void IN_ProcessEvents( void )
 			case SDL_WINDOWEVENT:
 				switch( e.window.event )
 				{
-					case SDL_WINDOWEVENT_MINIMIZED: Cvar_SetValue( "com_minimized", 1 ); break;
-					case SDL_WINDOWEVENT_RESTORED:
-					case SDL_WINDOWEVENT_MAXIMIZED: Cvar_SetValue( "com_minimized", 0 ); break;
-					case SDL_WINDOWEVENT_FOCUS_LOST:
-					{
-						Cvar_SetValue( "com_unfocused", 1 );
+					case SDL_WINDOWEVENT_MINIMIZED:
+						Cvar_SetValue("com_minimized", 1);
 						break;
-					}
-
+					case SDL_WINDOWEVENT_RESTORED:
+					case SDL_WINDOWEVENT_MAXIMIZED:
+						FixFocusLoss(cls.cgameStarted);
+						Cvar_SetValue( "com_minimized", 0 );
+						break;
+					case SDL_WINDOWEVENT_FOCUS_LOST:
+						FixFocusLoss(cls.cgameStarted);
+						Cvar_SetValue("com_unfocused", 1);
+						break;
 					case SDL_WINDOWEVENT_FOCUS_GAINED:
-					{
 						Cvar_SetValue( "com_unfocused", 0 );
 						break;
-					}
 				}
 				break;
 
@@ -1177,8 +1197,9 @@ void IN_Frame (void) {
 		// Window not got focus
 		IN_DeactivateMouse( );
 	}
-	else
-		IN_ActivateMouse( );
+	else {
+		IN_ActivateMouse();
+	}
 
 	IN_ProcessEvents( );
 }

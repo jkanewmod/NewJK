@@ -645,6 +645,8 @@ void SCR_DrawScreenField( stereoFrame_t stereoFrame ) {
 	}
 }
 
+extern void SetAlwaysOnTop(bool cgameStarted);
+
 /*
 ==================
 SCR_UpdateScreen
@@ -659,6 +661,8 @@ void SCR_UpdateScreen( void ) {
 	if ( !scr_initialized ) {
 		return;				// not initialized yet
 	}
+
+	SetAlwaysOnTop(cls.cgameStarted);
 
 	if ( ++recursive > 2 ) {
 		Com_Error( ERR_FATAL, "SCR_UpdateScreen: recursively called" );

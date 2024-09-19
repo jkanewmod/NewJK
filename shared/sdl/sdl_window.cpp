@@ -56,6 +56,8 @@ cvar_t	*r_swapInterval;
 cvar_t	*r_stereo;
 cvar_t	*r_mode;
 cvar_t	*r_displayRefresh;
+cvar_t	*r_cgameControlsAlwaysOnTop;
+cvar_t	*r_alwaysOnTop;
 
 // Window surface cvars
 cvar_t	*r_stencilbits;
@@ -800,6 +802,8 @@ window_t WIN_Init( const windowDesc_t *windowDesc, glconfig_t *glConfig )
 	r_stereo			= Cvar_Get( "r_stereo",				"0",		CVAR_ARCHIVE|CVAR_LATCH );
 	r_mode				= Cvar_Get( "r_mode",				"-2",		CVAR_ARCHIVE|CVAR_LATCH );
 	r_displayRefresh	= Cvar_Get( "r_displayRefresh",		"0",		CVAR_LATCH );
+	r_cgameControlsAlwaysOnTop = Cvar_Get( "r_cgameControlsAlwaysOnTop",	"0",		CVAR_ROM | CVAR_TEMP );
+	r_alwaysOnTop		= Cvar_Get( "r_alwaysOnTop",		"0",		CVAR_ARCHIVE );
 	Cvar_CheckRange( r_displayRefresh, 0, 240, qtrue );
 
 	// Window render surface cvars
@@ -948,4 +952,38 @@ qboolean WIN_GL_ExtensionSupported( const char *extension )
 
 void CL_SetWindowTitle(const char *s) {
 	SDL_SetWindowTitle(screen, VALIDSTRING(s) ? s : CLIENT_WINDOW_TITLE);
+}
+
+void SetAlwaysOnTop(bool cgameStarted) {
+	static bool initialized = false;
+	static bool lastCgameStarted = false;
+	if (!initialized || r_alwaysOnTop->modified || r_cgameControlsAlwaysOnTop->modified || cgameStarted != lastCgameStarted) {
+		initialized = qtrue;
+		r_alwaysOnTop->modified = r_cgameControlsAlwaysOnTop->modified = qfalse;
+		if (!cgameStarted)
+			SDL_SetWindowAlwaysOnTop(screen, SDL_FALSE);
+		else if (r_cgameControlsAlwaysOnTop->integer)
+			SDL_SetWindowAlwaysOnTop(screen, r_cgameControlsAlwaysOnTop->integer == 2 ? SDL_TRUE : SDL_FALSE);
+		else
+			SDL_SetWindowAlwaysOnTop(screen, r_alwaysOnTop->integer ? SDL_TRUE : SDL_FALSE);
+	}
+	lastCgameStarted = cgameStarted;
+}
+
+void FixFocusLoss(bool cgameStarted) {
+	if (!cgameStarted)
+		return;
+
+	if (r_cgameControlsAlwaysOnTop->integer) {
+		if (r_cgameControlsAlwaysOnTop->integer != 2)
+			return;
+	}
+	else {
+		if (r_alwaysOnTop->integer != 2)
+			return;
+	}
+
+	SDL_SetHint(SDL_HINT_FORCE_RAISEWINDOW, "1");
+	SDL_RaiseWindow(screen);
+	SDL_SetHint(SDL_HINT_FORCE_RAISEWINDOW, "0");
 }
