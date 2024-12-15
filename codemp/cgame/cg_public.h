@@ -441,7 +441,8 @@ typedef enum cgameImportLegacy_e {
 	CG_R_FONT_DRAWSTRING_FLOAT,
 	CG_R_FONT_STRLENPIXELS_FLOAT,
 	CG_S_SOUNDLENGTH,
-	CG_SETWINDOWTITLE
+	CG_SETWINDOWTITLE,
+	CG_KEYCATCHLOCK
 } cgameImportLegacy_t;
 
 typedef enum cgameExportLegacy_e {

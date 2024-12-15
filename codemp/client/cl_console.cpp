@@ -85,6 +85,8 @@ Con_MessageMode_f
 void Con_MessageMode_f (void) {	//yell
 	if (clc.demoplaying || !cls.cgameStarted)
 		return;
+	if (cl_keycatchLock->integer && !(Key_GetCatcher() & KEYCATCH_MESSAGE))
+		return;
 	chat_playerNum = -1;
 	chat_team = qfalse;
 	Field_Clear( &chatField );
@@ -101,6 +103,8 @@ Con_MessageMode2_f
 void Con_MessageMode2_f (void) {	//team chat
 	if (clc.demoplaying || !cls.cgameStarted)
 		return;
+	if (cl_keycatchLock->integer && !(Key_GetCatcher() & KEYCATCH_MESSAGE))
+		return;
 	chat_playerNum = -1;
 	chat_team = qtrue;
 	Field_Clear( &chatField );
@@ -116,6 +120,8 @@ Con_MessageMode3_f
 void Con_MessageMode3_f (void)
 {		//target chat
 	if (clc.demoplaying)
+		return;
+	if (cl_keycatchLock->integer && !(Key_GetCatcher() & KEYCATCH_MESSAGE))
 		return;
 	if (!cls.cgameStarted)
 	{
@@ -142,6 +148,8 @@ Con_MessageMode4_f
 void Con_MessageMode4_f (void)
 {	//attacker
 	if (clc.demoplaying)
+		return;
+	if (cl_keycatchLock->integer && !(Key_GetCatcher() & KEYCATCH_MESSAGE))
 		return;
 	if (!cls.cgameStarted)
 	{

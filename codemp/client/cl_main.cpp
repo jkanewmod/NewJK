@@ -61,6 +61,7 @@ cvar_t	*cl_packetdup;
 cvar_t	*cl_timeNudge;
 cvar_t	*cl_enableTimeNudge;
 cvar_t	*cl_showTimeDelta;
+cvar_t	* cl_keycatchLock;
 
 cvar_t	*cl_commandSize;
 
@@ -2888,6 +2889,7 @@ void CL_Init( void ) {
 	cl_showSend = Cvar_Get ("cl_showSend", "0", CVAR_TEMP );
 	cl_showTimeDelta = Cvar_Get ("cl_showTimeDelta", "0", CVAR_TEMP );
 	cl_activeAction = Cvar_Get( "activeAction", "", CVAR_TEMP );
+	cl_keycatchLock = Cvar_Get( "cl_keycatchLock", "", CVAR_ROM | CVAR_INTERNAL );
 
 	cl_timedemo = Cvar_Get ("timedemo", "0", 0);
 	cl_aviFrameRate = Cvar_Get ("cl_aviFrameRate", "25", CVAR_ARCHIVE);

@@ -911,6 +911,8 @@ void CL_AdjustAngles( void ) {
 	}
 }
 
+extern int keycatchLockTime;
+
 /*
 ================
 CL_KeyMove
@@ -927,7 +929,7 @@ void CL_KeyMove( usercmd_t *cmd ) {
 	// the walking flag is to keep animations consistant
 	// even during acceleration and develeration
 	//
-	if ( in_speed.active ^ cl_run->integer ) {
+	if ( in_speed.active ^ cl_run->integer || (keycatchLockTime && Sys_Milliseconds() < keycatchLockTime) || cl_keycatchLock->integer) {
 		movespeed = 127;
 		cmd->buttons &= ~BUTTON_WALKING;
 	} else {
@@ -950,7 +952,7 @@ void CL_KeyMove( usercmd_t *cmd ) {
 	up += movespeed * CL_KeyState (&in_up);
 	up -= movespeed * CL_KeyState (&in_down);
 
-	forward += movespeed * CL_KeyState (&in_forward);
+	forward += movespeed * ((keycatchLockTime && Sys_Milliseconds() < keycatchLockTime) ? 1 : CL_KeyState(&in_forward));
 	forward -= movespeed * CL_KeyState (&in_back);
 
 	cmd->forwardmove = ClampChar( forward );

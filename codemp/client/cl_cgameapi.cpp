@@ -844,6 +844,22 @@ static void CGVM_Cmd_RemoveCommand( const char *cmd_name ) {
 
 extern void CL_SetWindowTitle(const char *s);
 
+int keycatchLockTime = 0;
+static void KeycatchLock(int force) {
+	if (Key_GetCatcher() & KEYCATCH_UI) {
+		UIVM_SetActiveMenu(UIMENU_NONE);
+		if (force)
+			keycatchLockTime = force;
+	}
+
+	if (Key_GetCatcher() & KEYCATCH_MESSAGE) {
+		Key_SetCatcher(Key_GetCatcher() & ~KEYCATCH_MESSAGE);
+		Field_Clear(&chatField);
+		if (force)
+			keycatchLockTime = force;
+	}
+}
+
 // legacy syscall
 
 intptr_t CL_CgameSystemCalls( intptr_t *args ) {
@@ -1715,6 +1731,10 @@ intptr_t CL_CgameSystemCalls( intptr_t *args ) {
 
 	case CG_SETWINDOWTITLE:
 		CL_SetWindowTitle((const char *)VMA(1));
+		return 0;
+
+	case CG_KEYCATCHLOCK:
+		KeycatchLock(args[1]);
 		return 0;
 
 	default:
