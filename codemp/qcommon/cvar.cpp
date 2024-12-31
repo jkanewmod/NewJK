@@ -1175,7 +1175,7 @@ void Cvar_List_f( void ) {
 		var;
 		var=var->next, i++ )
 	{
-		if ( !var->name || (match && !Com_Filter( match, var->name, qfalse )) )
+		if ( !var->name || (match && !Com_Filter( match, var->name, qfalse ) && !Q_stristr(var->name, match)) )
 			continue;
 
 		cvars.push_back( var );
@@ -1212,6 +1212,8 @@ void Cvar_List_f( void ) {
 			Com_Printf( "          " S_COLOR_GREEN "%s" S_COLOR_WHITE "\n", description );
 	}
 
+	if (i != cvars.size())
+		Com_Printf("\n%i matching cvars", cvars.size());
 	Com_Printf( "\n%i total cvars\n", i );
 	if ( i != cvar_numIndexes )
 		Com_Printf( "%i cvar indexes\n", cvar_numIndexes );

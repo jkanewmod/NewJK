@@ -209,7 +209,11 @@ char *GetServerDetails() {
 
 static void handleDiscordReady( const DiscordUser* connectedUser )
 {
+#if 0
 	Com_Printf( "*Discord: connected to user %s#%s - %s^7\n", connectedUser->username, connectedUser->discriminator, connectedUser->userId );
+#else
+	Com_Printf( "*Discord: connected to user %s^7\n", connectedUser->username );
+#endif
 }
 
 static void handleDiscordDisconnected( int errcode, const char* message )
