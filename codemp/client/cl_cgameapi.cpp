@@ -1970,6 +1970,7 @@ void CL_BindCGame( void ) {
 		if ( !ret ) {
 			//free VM?
 			cls.cgameStarted = qfalse;
+			Cvar_Set("r_cgameStarted", "0");
 			Com_Error( ERR_FATAL, "GetGameAPI failed on %s", dllName );
 		}
 		cge = ret;
@@ -1981,6 +1982,7 @@ void CL_BindCGame( void ) {
 	cgvm = VM_CreateLegacy( VM_CGAME, CL_CgameSystemCalls );
 	if ( !cgvm ) {
 		cls.cgameStarted = qfalse;
+		Cvar_Set("r_cgameStarted", "0");
 		Com_Error( ERR_DROP, "VM_CreateLegacy on cgame failed" );
 	}
 }

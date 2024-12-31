@@ -185,6 +185,8 @@ cvar_t *r_fullbrightcolor_weapon_min;
 cvar_t *r_fullbrightcolor_weapon_dpk;
 cvar_t *r_fullbrightcolor_weapon_stu;
 
+cvar_t *r_cgameStarted;
+
 // the limits apply to the sum of all scenes in a frame --
 // the main view, all the 3D icons, etc
 #define	DEFAULT_MAX_POLYS		600
@@ -1739,6 +1741,8 @@ Ghoul2 Insert Start
 	r_fullbrightcolor_weapon_min = ri->Cvar_Get("r_fullbrightcolor_weapon_min", "", CVAR_ROM | CVAR_INTERNAL, "");
 	r_fullbrightcolor_weapon_dpk = ri->Cvar_Get("r_fullbrightcolor_weapon_dpk", "", CVAR_ROM | CVAR_INTERNAL, "");
 	r_fullbrightcolor_weapon_stu = ri->Cvar_Get("r_fullbrightcolor_weapon_stu", "", CVAR_ROM | CVAR_INTERNAL, "");
+
+	r_cgameStarted = ri->Cvar_Get("r_cgameStarted", "0", CVAR_ROM | CVAR_INTERNAL, "");
 /*
 Ghoul2 Insert End
 */

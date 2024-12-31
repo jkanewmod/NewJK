@@ -1051,10 +1051,20 @@ void RB_CalcRotateTexCoords( float degsPerSecond, float *st )
 	texModInfo_t tmi;
 
 	degs = -degsPerSecond * timeScale;
-	index = degs * ( FUNCTABLE_SIZE / 360.0f );
 
-	sinValue = tr.sinTable[ index & FUNCTABLE_MASK ];
-	cosValue = tr.sinTable[ ( index + FUNCTABLE_SIZE / 4 ) & FUNCTABLE_MASK ];
+	if (r_cgameStarted->integer)
+	{
+		index = degs * ( FUNCTABLE_SIZE / 360.0f );
+
+		sinValue = tr.sinTable[ index & FUNCTABLE_MASK ];
+		cosValue = tr.sinTable[ ( index + FUNCTABLE_SIZE / 4 ) & FUNCTABLE_MASK ];
+	}
+	else
+	{
+		float radians = degs * ((float)M_PI / 180.0f);
+		sinValue = sin(radians);
+		cosValue = cos(radians);
+	}
 
 	tmi.matrix[0][0] = cosValue;
 	tmi.matrix[1][0] = -sinValue;

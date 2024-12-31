@@ -696,6 +696,7 @@ void CL_ShutdownAll( qboolean shutdownRef ) {
 
 	cls.uiStarted = qfalse;
 	cls.cgameStarted = qfalse;
+	Cvar_Set("r_cgameStarted", "0");
 	cls.rendererStarted = qfalse;
 	cls.soundRegistered = qfalse;
 }
@@ -1313,6 +1314,7 @@ void CL_Vid_Restart_f( void ) {
 	cls.rendererStarted = qfalse;
 	cls.uiStarted = qfalse;
 	cls.cgameStarted = qfalse;
+	Cvar_Set("r_cgameStarted", "0");
 	cls.soundRegistered = qfalse;
 
 	// unpause so the cgame definately gets a snapshot and renders a frame
@@ -1338,6 +1340,7 @@ void CL_Vid_Restart_f( void ) {
 	// start the cgame if connected
 	if ( cls.state > CA_CONNECTED && cls.state != CA_CINEMATIC ) {
 		cls.cgameStarted = qtrue;
+		Cvar_Set("r_cgameStarted", "1");
 		CL_InitCGame();
 		// send pure checksums
 		CL_SendPureChecksums();
@@ -1475,6 +1478,7 @@ void CL_DownloadsComplete( void ) {
 
 	// initialize the CGame
 	cls.cgameStarted = qtrue;
+	Cvar_Set("r_cgameStarted", "1");
 	CL_InitCGame();
 
 	// set pure checksums

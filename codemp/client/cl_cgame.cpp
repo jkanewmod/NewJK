@@ -592,6 +592,7 @@ void CL_ShutdownCGame( void ) {
 		return;
 
 	cls.cgameStarted = qfalse;
+	Cvar_Set("r_cgameStarted", "0");
 
 	CL_UnbindCGame();
 }

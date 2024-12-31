@@ -1252,6 +1252,8 @@ extern cvar_t *r_fullbrightcolor_weapon_min;
 extern cvar_t *r_fullbrightcolor_weapon_dpk;
 extern cvar_t *r_fullbrightcolor_weapon_stu;
 
+extern cvar_t *r_cgameStarted;
+
 struct FullbrightEnt {
 	trRefEntity_t *ent;
 	vec3_t ambientLight, directedLight, lightDir;
