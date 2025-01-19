@@ -382,6 +382,10 @@ typedef struct console_s {
 	int		times[NUM_CON_TIMES];	// cls.realtime time the line was generated
 								// for transparent notify lines
 	vec4_t	color;
+
+	int     notifyHead;                // current index for notify lines
+	int     notifyIndex[NUM_CON_TIMES];  // maps to con.current line number
+	int     notifyTime[NUM_CON_TIMES];   // timestamps for those lines
 } console_t;
 
 extern	clientStatic_t		cls;

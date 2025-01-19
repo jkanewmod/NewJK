@@ -280,7 +280,10 @@ void Con_ClearNotify( void ) {
 
 	for ( i = 0 ; i < NUM_CON_TIMES ; i++ ) {
 		con.times[i] = 0;
+		con.notifyTime[i] = 0;
+		con.notifyIndex[i] = 0;
 	}
+	con.notifyHead = -1;
 }
 
 
@@ -395,6 +398,10 @@ void Con_Init (void) {
 		historyEditLines[i].widthInChars = g_console_field_width;
 	}
 
+	con.notifyHead = -1;
+	memset(con.notifyIndex, 0, sizeof(con.notifyIndex));
+	memset(con.notifyTime, 0, sizeof(con.notifyTime));
+
 	Cmd_AddCommand( "toggleconsole", Con_ToggleConsoleFake_f, "" );
 	Cmd_AddCommand( "toggleconsole2", Con_ToggleConsole_f, "Toggles the console on/off" );
 	Cmd_AddCommand( "togglemenu", Con_ToggleMenu_f, "Show/hide the menu" );
@@ -440,6 +447,15 @@ static void Con_Linefeed (qboolean skipnotify)
 			  con.times[con.current % NUM_CON_TIMES] = 0;
 		else
 			  con.times[con.current % NUM_CON_TIMES] = cls.realtime;
+	}
+
+	if (!skipnotify) {
+		con.notifyHead++;
+		{
+			int nIndex = con.notifyHead % NUM_CON_TIMES;
+			con.notifyIndex[nIndex] = con.current;
+			con.notifyTime[nIndex]  = cls.realtime;
+		}
 	}
 
 	con.x = 0;
@@ -562,7 +578,6 @@ DRAWING
 ==============================================================================
 */
 
-
 /*
 ================
 Con_DrawInput
@@ -631,74 +646,77 @@ void Con_DrawNotify (void)
 	re->SetColor( g_color_table[currentColor] );
 
 	v = cl_consoleFeedYBase->integer + cl_consoleFeedYOffset->integer;
-	for (i= con.current-NUM_CON_TIMES+1 ; i<=con.current ; i++)
+
 	{
-		if (i < 0)
-			continue;
-		time = con.times[i % NUM_CON_TIMES];
-		if (time == 0)
-			continue;
-		time = cls.realtime - time;
-		if (time > con_notifytime->value*1000)
-			continue;
-		text = con.text + (i % con.totallines)*con.linewidth;
+		int first = con.notifyHead - (NUM_CON_TIMES - 1);
+		if (first < 0)
+			first = 0;
 
-		if (cl.snap.ps.pm_type != PM_INTERMISSION && Key_GetCatcher( ) & (KEYCATCH_UI | KEYCATCH_CGAME) ) {
-			continue;
-		}
-
-
-		if (!cl_conXOffset)
+		for (i = first; i <= con.notifyHead; i++)
 		{
-			cl_conXOffset = Cvar_Get ("cl_conXOffset", "0", 0);
-		}
+			int slot = i % NUM_CON_TIMES;
+			if (slot < 0)
+				slot += NUM_CON_TIMES;
 
-		// asian language needs to use the new font system to print glyphs...
-		//
-		// (ignore colours since we're going to print the whole thing as one string)
-		//
-		if (re->Language_IsAsian())
-		{
-			static int iFontIndex = re->RegisterFont("ocr_a");	// this seems naughty
-			const float fFontScale = 0.75f*con.yadjust;
-			const int iPixelHeightToAdvance =   2+(1.3/con.yadjust) * re->Font_HeightPixels(iFontIndex, fFontScale);	// for asian spacing, since we don't want glyphs to touch.
+			time = con.notifyTime[slot];
+			if (time == 0)
+				continue;
+			time = cls.realtime - time;
+			if (time > con_notifytime->value * 1000)
+				continue;
 
-			// concat the text to be printed...
-			//
-			char sTemp[4096]={0};	// ott
-			for (x = 0 ; x < con.linewidth ; x++)
+			text = con.text + ((con.notifyIndex[slot] % con.totallines) * con.linewidth);
+
+			if (cl.snap.ps.pm_type != PM_INTERMISSION && Key_GetCatcher( ) & (KEYCATCH_UI | KEYCATCH_CGAME)) {
+				continue;
+			}
+
+			if (!cl_conXOffset)
 			{
-				if ( ( (text[x]>>8)&Q_COLOR_BITS ) != currentColor ) {
-					currentColor = (text[x]>>8)&Q_COLOR_BITS;
-					strcat(sTemp,va("^%i", (text[x]>>8)&Q_COLOR_BITS) );
-				}
-				strcat(sTemp,va("%c",text[x] & 0xFF));
+				cl_conXOffset = Cvar_Get ("cl_conXOffset", "0", 0);
 			}
-			//
-			// and print...
-			//
-			re->Font_DrawString(cl_conXOffset->integer + con.xadjust*(con.xadjust + (1* SMALLCHAR_NOTIFY_WIDTH/*aesthetics*/)), con.yadjust*(v), sTemp, g_color_table[currentColor], iFontIndex, -1, fFontScale);
 
-			v +=  iPixelHeightToAdvance;
-		}
-		else
-		{
-			for (x = 0 ; x < con.linewidth ; x++) {
-				if ( ( text[x] & 0xff ) == ' ' ) {
-					continue;
-				}
-				if ( ( (text[x]>>8)&Q_COLOR_BITS ) != currentColor ) {
-					currentColor = (text[x]>>8)&Q_COLOR_BITS;
-					re->SetColor( g_color_table[currentColor] );
-				}
-				if (!cl_conXOffset)
+			// asian language needs to use the new font system to print glyphs...
+			if (re->Language_IsAsian())
+			{
+				static int iFontIndex = re->RegisterFont("ocr_a");	// this seems naughty
+				const float fFontScale = 0.75f*con.yadjust;
+				const int iPixelHeightToAdvance =   2+(1.3/con.yadjust) * re->Font_HeightPixels(iFontIndex, fFontScale);
+
+				// concat the text to be printed...
+				char sTemp[4096]={0};	// ott
+				for (x = 0 ; x < con.linewidth ; x++)
 				{
-					cl_conXOffset = Cvar_Get ("cl_conXOffset", "0", 0);
+					if ( ( (text[x]>>8)&Q_COLOR_BITS ) != currentColor ) {
+						currentColor = (text[x]>>8)&Q_COLOR_BITS;
+						strcat(sTemp,va("^%i", (text[x]>>8)&Q_COLOR_BITS) );
+					}
+					strcat(sTemp,va("%c",text[x] & 0xFF));
 				}
-				SCR_DrawSmallChar_ConsoleNotify( (int)(cl_conXOffset->integer + con.xadjust + (x+1)* SMALLCHAR_NOTIFY_WIDTH), v, text[x] & 0xff );
-			}
+				// and print...
+				re->Font_DrawString(cl_conXOffset->integer + con.xadjust*(con.xadjust + (1* SMALLCHAR_NOTIFY_WIDTH/*aesthetics*/)), con.yadjust*(v), sTemp, g_color_table[currentColor], iFontIndex, -1, fFontScale);
 
-			v += SMALLCHAR_NOTIFY_HEIGHT;
+				v +=  iPixelHeightToAdvance;
+			}
+			else
+			{
+				for (x = 0 ; x < con.linewidth ; x++) {
+					if ( ( text[x] & 0xff ) == ' ' ) {
+						continue;
+					}
+					if ( ( (text[x]>>8)&Q_COLOR_BITS ) != currentColor ) {
+						currentColor = (text[x]>>8)&Q_COLOR_BITS;
+						re->SetColor( g_color_table[currentColor] );
+					}
+					if (!cl_conXOffset)
+					{
+						cl_conXOffset = Cvar_Get ("cl_conXOffset", "0", 0);
+					}
+					SCR_DrawSmallChar_ConsoleNotify( (int)(cl_conXOffset->integer + con.xadjust + (x+1)* SMALLCHAR_NOTIFY_WIDTH), v, text[x] & 0xff );
+				}
+
+				v += SMALLCHAR_NOTIFY_HEIGHT;
+			}
 		}
 	}
 
@@ -727,9 +745,11 @@ void Con_DrawNotify (void)
 				} else if (!strcmp(teamPrompt, "Dice equipo:")) {
 					Q_strncpyz(teamPrompt, "Equipo", sizeof(teamPrompt));
 				}
-				char *colon = strchr(teamPrompt, ':');
-				if (colon)
-					*colon = '\0';
+				{
+					char *colon = strchr(teamPrompt, ':');
+					if (colon)
+						*colon = '\0';
+				}
 			}
 
 			Q_strncpyz(prompt, SE_GetString("MP_SVGAME", "SAY"), sizeof(prompt));
@@ -738,32 +758,35 @@ void Con_DrawNotify (void)
 					Q_strncpyz(prompt, "Dire", sizeof(prompt));
 					extraSpace = qtrue;
 				}
-				char *colon = strchr(prompt, ':');
-				if (colon)
-					*colon = '\0';
+				{
+					char *colon = strchr(prompt, ':');
+					if (colon)
+						*colon = '\0';
+				}
 			}
 		}
 
 		// append digits remaining and re-append ':' char
-		int digitsRemaining = Com_Clampi(0, 149, 149 - ChatStrLen());
-		char *fullPrompt = va("%s%s" S_COLOR_WHITE "%s%s:",
-			chat_team ? S_COLOR_CYAN : S_COLOR_WHITE,
-			chat_team ? teamPrompt : prompt,
-			digitsRemaining <= 50 ? va(" (%d)", digitsRemaining) : "",
-			extraSpace ? " " : "");
+		{
+			int digitsRemaining = Com_Clampi(0, 149, 149 - ChatStrLen());
+			char *fullPrompt = va("%s%s" S_COLOR_WHITE "%s%s:",
+				chat_team ? S_COLOR_CYAN : S_COLOR_WHITE,
+				chat_team ? teamPrompt : prompt,
+				digitsRemaining <= 50 ? va(" (%d)", digitsRemaining) : "",
+				extraSpace ? " " : "");
 
-		if (cl_ratioFix->integer == 1)
-			SCR_DrawStringExt2(8 * cls.widthRatioCoef, v, BIGCHAR_WIDTH*cls.widthRatioCoef, BIGCHAR_HEIGHT, fullPrompt, colorWhite, qfalse, qfalse);
-		else
-			SCR_DrawBigString(8, v, fullPrompt, 1.0f, qfalse);
-		skip = strlen(fullPrompt) + 1 - 4/*two color codes*/;
+			if (cl_ratioFix->integer == 1)
+				SCR_DrawStringExt2(8 * cls.widthRatioCoef, v, BIGCHAR_WIDTH*cls.widthRatioCoef, BIGCHAR_HEIGHT, fullPrompt, colorWhite, qfalse, qfalse);
+			else
+				SCR_DrawBigString(8, v, fullPrompt, 1.0f, qfalse);
+			skip = strlen(fullPrompt) + 1 - 4/*two color codes*/;
 
-		Field_BigDraw( &chatField, skip * BIGCHAR_WIDTH, v,
-			SCREEN_WIDTH - ( skip + 1 ) * BIGCHAR_WIDTH, qtrue, qtrue );
+			Field_BigDraw( &chatField, skip * BIGCHAR_WIDTH, v,
+				SCREEN_WIDTH - ( skip + 1 ) * BIGCHAR_WIDTH, qtrue, qtrue );
 
-		v += BIGCHAR_HEIGHT;
+			v += BIGCHAR_HEIGHT;
+		}
 	}
-
 }
 
 /*
@@ -877,8 +900,6 @@ void Con_DrawSolidConsole( float frac ) {
 		//
 		if (re->Language_IsAsian())
 		{
-			// concat the text to be printed...
-			//
 			char sTemp[4096]={0};	// ott
 			for (x = 0 ; x < con.linewidth ; x++)
 			{
@@ -888,9 +909,6 @@ void Con_DrawSolidConsole( float frac ) {
 				}
 				strcat(sTemp,va("%c",text[x] & 0xFF));
 			}
-			//
-			// and print...
-			//
 			re->Font_DrawString(con.xadjust*(con.xadjust + (1*SMALLCHAR_WIDTH/*(aesthetics)*/)), con.yadjust*(y), sTemp, g_color_table[currentColor], iFontIndexForAsian, -1, fFontScaleForAsian);
 		}
 		else
