@@ -549,6 +549,51 @@ void CL_PlayDemo_f( void ) {
 	// open the demo file
 	arg = Cmd_Args();
 
+	// try exact string typed
+	{
+		char rawArg[MAX_OSPATH] = { 0 };
+		char *cmd = Cmd_Cmd();
+		char *p = Com_SkipTokens(cmd, 1, " \t"); // skip first token ("demo")
+		while (*p && isspace((unsigned char)*p)) {
+			p++;
+		}
+		Q_strncpyz(rawArg, p, sizeof(rawArg));
+
+		if (rawArg[0]) {
+			Com_sprintf(extension, sizeof(extension), ".dm_%d", PROTOCOL_LEGACY);
+			if (!Q_stricmp(rawArg + strlen(rawArg) - strlen(extension), extension)) {
+				Com_sprintf(name, sizeof(name), "demos/%s", rawArg);
+			}
+			else {
+				Com_sprintf(name, sizeof(name), "demos/%s.dm_%d", rawArg, PROTOCOL_LEGACY);
+			}
+
+			if (!FS_FileExists(name)) {
+				Com_sprintf(extension, sizeof(extension), ".dm_%d", PROTOCOL_VERSION);
+				if (!Q_stricmp(rawArg + strlen(rawArg) - strlen(extension), extension)) {
+					Com_sprintf(name, sizeof(name), "demos/%s", rawArg);
+				}
+				else {
+					Com_sprintf(name, sizeof(name), "demos/%s.dm_%d", rawArg, PROTOCOL_VERSION);
+				}
+			}
+
+			if (!FS_FileExists(name)) {
+				Com_sprintf(name, sizeof(name), "demos/%s", rawArg);
+			}
+
+			// test if this file actually exists
+			{
+				fileHandle_t f;
+				FS_FOpenFileRead(name, &f, qtrue);
+				if (f) {
+					FS_FCloseFile(f);
+					arg = rawArg; // only use rawArg if it definitely exists
+				}
+			}
+		}
+	}
+
 	//could probably be alot cleaner
 	//look for the old protocol first
 	Com_sprintf(extension, sizeof(extension), ".dm_%d", PROTOCOL_LEGACY);
@@ -570,11 +615,36 @@ void CL_PlayDemo_f( void ) {
 	}
 
 	if (!FS_FileExists(name)) { //couldn't find a file with either extension?
-		Com_sprintf(name, sizeof(name), "demos/%s", arg); //strip the extension, if they see either extension in the error box then they probably did something dumb
+		Com_sprintf(name, sizeof(name), "demos/%s", arg);
 	}
+
+	// don't overwrite clc.demofile unless we're sure it's valid
+	{
+		fileHandle_t f;
+		FS_FOpenFileRead(name, &f, qtrue);
+		if (!f) {
+			char errorMsg[1024];
+			if (!Q_stricmp(arg, "(null)"))
+				Com_sprintf(errorMsg, sizeof(errorMsg), "%s\n", SE_GetString("CON_TEXT_NO_DEMO_SELECTED"));
+			else
+				Com_sprintf(errorMsg, sizeof(errorMsg), "Unable to open %s.\n", name);
+
+			Com_Printf(errorMsg);
+			return;
+		}
+		FS_FCloseFile(f);
+	}
+
+	// make sure a local server is killed
+	// 2 means don't force disconnect of local client
+	Cvar_Set("sv_killserver", "2");
+
+	CL_Disconnect(qtrue);
 
 	FS_FOpenFileRead( name, &clc.demofile, qtrue );
 	if (!clc.demofile) {
+		// theoretically shouldn't happen since we tested above,
+		// but just in case
 		char errorMsg[1024];
 		if (!Q_stricmp(arg, "(null)"))
 			Com_sprintf(errorMsg, sizeof(errorMsg), "%s\n", SE_GetString("CON_TEXT_NO_DEMO_SELECTED"));
@@ -584,14 +654,6 @@ void CL_PlayDemo_f( void ) {
 		Com_Printf(errorMsg);
 		return;
 	}
-
-	// make sure a local server is killed
-	// 2 means don't force disconnect of local client
-	Cvar_Set("sv_killserver", "2");
-
-	CL_Disconnect(qtrue);
-
-	FS_FOpenFileRead( name, &clc.demofile, qtrue ); // reopen since the disconnect cleared it out
 
 	Q_strncpyz( clc.demoName, arg, sizeof( clc.demoName ) );
 	Cvar_Set("demoname", arg);
