@@ -777,9 +777,9 @@ void Con_DrawNotify(void)
 
 		char promptBuf[128] = { 0 };
 		if (digitsRemaining <= 50)
-			Com_sprintf(promptBuf, sizeof(promptBuf), "^7%s (%d): ", promptBase, digitsRemaining);
+			Com_sprintf(promptBuf, sizeof(promptBuf), "^9%s (%d): ", promptBase, digitsRemaining);
 		else
-			Com_sprintf(promptBuf, sizeof(promptBuf), "^7%s: ", promptBase);
+			Com_sprintf(promptBuf, sizeof(promptBuf), "^9%s: ", promptBase);
 
 		const char *typed = chatField.buffer;
 		int len = strlen(typed);
