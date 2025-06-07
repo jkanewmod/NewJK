@@ -63,7 +63,7 @@ void Con_ToggleConsole_f (void) {
 		Field_Clear( &g_consoleField );
 	g_consoleField.widthInChars = g_console_field_width;
 
-	Con_ClearNotify ();
+	//Con_ClearNotify ();
 	Key_SetCatcher( Key_GetCatcher( ) ^ KEYCATCH_CONSOLE );
 }
 
@@ -633,17 +633,17 @@ Con_DrawNotify
 Draws the last few lines of output transparently over the game top
 ================
 */
-void Con_DrawNotify (void)
+void Con_DrawNotify(void)
 {
 	int		x, v;
-	short	*text;
+	short *text;
 	int		i;
 	int		time;
-	int		skip;
 	int		currentColor;
+	int drawnLines = 0;
 
 	currentColor = 7;
-	re->SetColor( g_color_table[currentColor] );
+	re->SetColor(g_color_table[currentColor]);
 
 	v = cl_consoleFeedYBase->integer + cl_consoleFeedYOffset->integer;
 
@@ -667,125 +667,281 @@ void Con_DrawNotify (void)
 
 			text = con.text + ((con.notifyIndex[slot] % con.totallines) * con.linewidth);
 
-			if (cl.snap.ps.pm_type != PM_INTERMISSION && Key_GetCatcher( ) & (KEYCATCH_UI | KEYCATCH_CGAME)) {
+			/*if (cl.snap.ps.pm_type != PM_INTERMISSION && Key_GetCatcher() & (KEYCATCH_UI | KEYCATCH_CGAME)) {
 				continue;
-			}
+			}*/
 
 			if (!cl_conXOffset)
 			{
-				cl_conXOffset = Cvar_Get ("cl_conXOffset", "0", 0);
+				cl_conXOffset = Cvar_Get("cl_conXOffset", "0", 0);
 			}
 
 			// asian language needs to use the new font system to print glyphs...
 			if (re->Language_IsAsian())
 			{
 				static int iFontIndex = re->RegisterFont("ocr_a");	// this seems naughty
-				const float fFontScale = 0.75f*con.yadjust;
-				const int iPixelHeightToAdvance =   2+(1.3/con.yadjust) * re->Font_HeightPixels(iFontIndex, fFontScale);
+				const float fFontScale = 0.75f * con.yadjust;
+				const int iPixelHeightToAdvance = 2 + (1.3 / con.yadjust) * re->Font_HeightPixels(iFontIndex, fFontScale);
 
 				// concat the text to be printed...
-				char sTemp[4096]={0};	// ott
-				for (x = 0 ; x < con.linewidth ; x++)
+				char sTemp[4096] = { 0 };	// ott
+				for (x = 0; x < con.linewidth; x++)
 				{
-					if ( ( (text[x]>>8)&Q_COLOR_BITS ) != currentColor ) {
-						currentColor = (text[x]>>8)&Q_COLOR_BITS;
-						strcat(sTemp,va("^%i", (text[x]>>8)&Q_COLOR_BITS) );
+					if (((text[x] >> 8) & Q_COLOR_BITS) != currentColor) {
+						currentColor = (text[x] >> 8) & Q_COLOR_BITS;
+						strcat(sTemp, va("^%i", (text[x] >> 8) & Q_COLOR_BITS));
 					}
-					strcat(sTemp,va("%c",text[x] & 0xFF));
+					strcat(sTemp, va("%c", text[x] & 0xFF));
 				}
 				// and print...
-				re->Font_DrawString(cl_conXOffset->integer + con.xadjust*(con.xadjust + (1* SMALLCHAR_NOTIFY_WIDTH/*aesthetics*/)), con.yadjust*(v), sTemp, g_color_table[currentColor], iFontIndex, -1, fFontScale);
+				re->Font_DrawString(cl_conXOffset->integer + con.xadjust * (con.xadjust + (1 * SMALLCHAR_NOTIFY_WIDTH/*aesthetics*/)), con.yadjust * (v), sTemp, g_color_table[currentColor], iFontIndex, -1, fFontScale);
 
-				v +=  iPixelHeightToAdvance;
+				v += iPixelHeightToAdvance;
 			}
 			else
 			{
-				for (x = 0 ; x < con.linewidth ; x++) {
-					if ( ( text[x] & 0xff ) == ' ' ) {
+				for (x = 0; x < con.linewidth; x++) {
+					if ((text[x] & 0xff) == ' ') {
 						continue;
 					}
-					if ( ( (text[x]>>8)&Q_COLOR_BITS ) != currentColor ) {
-						currentColor = (text[x]>>8)&Q_COLOR_BITS;
-						re->SetColor( g_color_table[currentColor] );
+					if (((text[x] >> 8) & Q_COLOR_BITS) != currentColor) {
+						currentColor = (text[x] >> 8) & Q_COLOR_BITS;
+						re->SetColor(g_color_table[currentColor]);
 					}
 					if (!cl_conXOffset)
 					{
-						cl_conXOffset = Cvar_Get ("cl_conXOffset", "0", 0);
+						cl_conXOffset = Cvar_Get("cl_conXOffset", "0", 0);
 					}
-					SCR_DrawSmallChar_ConsoleNotify( (int)(cl_conXOffset->integer + con.xadjust + (x+1)* SMALLCHAR_NOTIFY_WIDTH), v, text[x] & 0xff );
+					SCR_DrawSmallChar_ConsoleNotify((int)(cl_conXOffset->integer + con.xadjust + (x + 1) * SMALLCHAR_NOTIFY_WIDTH), v, text[x] & 0xff);
 				}
 
+				++drawnLines;
 				v += SMALLCHAR_NOTIFY_HEIGHT;
 			}
 		}
+
+		{
+			if (drawnLines < NUM_CON_TIMES)
+			{
+				const int missing = NUM_CON_TIMES - drawnLines;
+				v += missing * SMALLCHAR_NOTIFY_HEIGHT;
+			}
+		}
 	}
 
-	re->SetColor( NULL );
+	re->SetColor(NULL);
 
-	if (Key_GetCatcher( ) & (KEYCATCH_UI | KEYCATCH_CGAME) ) {
+	if (Key_GetCatcher() & (KEYCATCH_UI | KEYCATCH_CGAME)) {
 		return;
 	}
 
-	// draw the chat line
-	if ( Key_GetCatcher( ) & KEYCATCH_MESSAGE )
-	{
-		static qboolean extraSpace = qfalse;
+	if (Key_GetCatcher() & KEYCATCH_MESSAGE) {
+		// initialize
 		static char language[32] = { 0 }, teamPrompt[32] = { 0 }, prompt[32] = { 0 };
-
-		if (strcmp(language, se_language->string)) { // (re)initialize
-			extraSpace = qfalse;
+		if (Q_stricmp(language, se_language->string)) {
 			Q_strncpyz(language, se_language->string, sizeof(language));
 			Q_strncpyz(teamPrompt, SE_GetString("MP_SVGAME", "SAY_TEAM"), sizeof(teamPrompt));
 			if (teamPrompt[0]) {
-				if (!strcmp(teamPrompt, "Say Team:") || !strcmp(teamPrompt, "Team-Text:")) {
+				if (!strcmp(teamPrompt, "Say Team:") || !strcmp(teamPrompt, "Team-Text:"))
 					Q_strncpyz(teamPrompt, "Team", sizeof(teamPrompt));
-				} else if (!strcmp(teamPrompt, "A équipe :")) {
+				else if (!strcmp(teamPrompt, "A équipe :"))
 					Q_strncpyz(teamPrompt, "Équipe", sizeof(teamPrompt));
-					extraSpace = qtrue;
-				} else if (!strcmp(teamPrompt, "Dice equipo:")) {
+				else if (!strcmp(teamPrompt, "Dice equipo:"))
 					Q_strncpyz(teamPrompt, "Equipo", sizeof(teamPrompt));
-				}
-				{
-					char *colon = strchr(teamPrompt, ':');
-					if (colon)
-						*colon = '\0';
-				}
+
+				if (char *c = strchr(teamPrompt, ':')) *c = '\0';
 			}
 
 			Q_strncpyz(prompt, SE_GetString("MP_SVGAME", "SAY"), sizeof(prompt));
+
 			if (prompt[0]) {
-				if (!strcmp(prompt, "Dire :")) {
+				if (!strcmp(prompt, "Dire :"))
 					Q_strncpyz(prompt, "Dire", sizeof(prompt));
-					extraSpace = qtrue;
-				}
-				{
-					char *colon = strchr(prompt, ':');
-					if (colon)
-						*colon = '\0';
-				}
+				if (char *c = strchr(prompt, ':')) *c = '\0';
 			}
 		}
 
-		// append digits remaining and re-append ':' char
+		const int chatFont = FONT_MEDIUM | STYLE_DROPSHADOW;
+		const float fontSize = 0.75f;
+		const int lineH = re->Font_HeightPixels(chatFont, fontSize);
+		const int linePad = 2;
+		const int linePitch = lineH + linePad;
+		const int leftPad = 64;
+		const int rightPad = 64;
+		const int maxPix = SCREEN_WIDTH - leftPad - rightPad;
+		const int textMaxPix = maxPix - 28;
+
+		// prompt line
+		const int digitsRemaining = Com_Clampi(0, 149, 149 - ChatStrLen());
+		const char *promptBase = chat_team ? teamPrompt : prompt;
+
+		char promptBuf[128] = { 0 };
+		if (digitsRemaining <= 50)
+			Com_sprintf(promptBuf, sizeof(promptBuf), "^7%s (%d): ", promptBase, digitsRemaining);
+		else
+			Com_sprintf(promptBuf, sizeof(promptBuf), "^7%s: ", promptBase);
+
+		const char *typed = chatField.buffer;
+		int len = strlen(typed);
+
+		auto isColor = [&](int idx)->bool { return (typed[idx] == '^' && idx + 1 < len && typed[idx + 1] >= '0' && typed[idx + 1] <= '9'); };
+		auto substrPx = [&](int first, int lastIncl)->float {
+			if (lastIncl < first)
+				return 0.0f;
+
+			if (first < 0)
+				first = 0;
+
+			if (lastIncl >= len)
+				lastIncl = len - 1;
+
+			int n = lastIncl - first + 1;
+			if (n >= MAX_EDIT_LINE)
+				n = MAX_EDIT_LINE - 1;
+
+			char tmp[MAX_EDIT_LINE];
+			memcpy(tmp, typed + first, n);
+			tmp[n] = '\0';
+
+			return re->ext.Font_StrLenPixels(tmp, chatFont, fontSize);
+		};
+
+		// calculate background box height
+		int bgLines = 1;
+		int lastLineStart = 0;
 		{
-			int digitsRemaining = Com_Clampi(0, 149, 149 - ChatStrLen());
-			char *fullPrompt = va("%s%s" S_COLOR_WHITE "%s%s:",
-				chat_team ? S_COLOR_CYAN : S_COLOR_WHITE,
-				chat_team ? teamPrompt : prompt,
-				digitsRemaining <= 50 ? va(" (%d)", digitsRemaining) : "",
-				extraSpace ? " " : "");
+			int   lineStart = 0;
+			bool  after = false;
 
-			if (cl_ratioFix->integer == 1)
-				SCR_DrawStringExt2(8 * cls.widthRatioCoef, v, BIGCHAR_WIDTH*cls.widthRatioCoef, BIGCHAR_HEIGHT, fullPrompt, colorWhite, qfalse, qfalse);
-			else
-				SCR_DrawBigString(8, v, fullPrompt, 1.0f, qfalse);
-			skip = strlen(fullPrompt) + 1 - 4/*two color codes*/;
+			while (lineStart < len) {
+				lastLineStart = lineStart;
+				float width = 0.0f;
+				int   i = lineStart, lastSpace = -1;
 
-			Field_BigDraw( &chatField, skip * BIGCHAR_WIDTH, v,
-				SCREEN_WIDTH - ( skip + 1 ) * BIGCHAR_WIDTH, qtrue, qtrue );
+				while (i < len)
+				{
+					if (after) {
+						after = false;
+						++i;
+						continue;
+					}
+					if (isColor(i)) {
+						after = true;
+						++i;
+						continue;
+					}
+					if (typed[i] == ' ')
+						lastSpace = i;
 
-			v += BIGCHAR_HEIGHT;
+					float w = substrPx(i, i);
+					if (width + w > textMaxPix) break;
+					width += w;
+					++i;
+				}
+
+				int wrap = (i == len) ? len : (lastSpace > lineStart) ? lastSpace + 1 : i;
+
+				lineStart = wrap;
+				++bgLines;
+			}
+
+			float caretW = re->ext.Font_StrLenPixels("|", chatFont, fontSize);
+			float caretX = substrPx(lastLineStart, chatField.cursor - 1);
+			if (caretX + caretW > textMaxPix)
+				++bgLines;
 		}
+		if (bgLines < 2)
+			bgLines = 2;
+
+		// background box
+		float bgCol[4] = { 0.25f, 0.25f, 0.25f, 0.5f };
+		re->SetColor(bgCol);
+		re->DrawStretchPic(leftPad - 4, v, maxPix - 16, bgLines * lineH + (bgLines - 1) * linePad + 8, 0, 0, 0, 0, cls.whiteShader);
+		re->SetColor(NULL);
+
+		// prompt text
+		re->Font_DrawString_Float(leftPad, v, promptBuf, colorWhite, chatFont, -1, fontSize);
+
+		// chat text
+		int lineStart = 0;
+		int y = v + linePitch;
+		char curColor = chat_team ? '5' : '2';
+		bool afterCaret = false, hasColor = false;
+
+		int breaks[64], nLines = 0;
+		const int segmentLimit = MAX_EDIT_LINE - 4;
+
+		while (lineStart < len) {
+			char  startColor = curColor;
+			float width = 0.0f;
+			int   i = lineStart, lastSpace = -1;
+
+			while (i < len) {
+				if (afterCaret) { curColor = typed[i]; hasColor = true; afterCaret = false; ++i; continue; }
+				if (isColor(i)) { afterCaret = true; ++i; continue; }
+				if (typed[i] == ' ') lastSpace = i;
+
+				float w = substrPx(i, i);
+				if (width + w > textMaxPix) break;
+				width += w;
+				++i;
+			}
+
+			int wrap = (i == len) ? len : (lastSpace > lineStart) ? lastSpace + 1 : i;
+
+			char seg[MAX_EDIT_LINE + 4];
+			int  segN = wrap - lineStart;
+			if (segN > segmentLimit)
+				segN = segmentLimit;
+
+			if (isColor(lineStart)) {
+				memcpy(seg, typed + lineStart, segN);
+				seg[segN] = '\0';
+			}
+			else {
+				memcpy(seg + 2, typed + lineStart, segN);
+				seg[0] = '^'; seg[1] = startColor;
+				seg[segN + 2] = '\0';
+			}
+
+			re->Font_DrawString_Float(leftPad, y, seg, colorWhite, chatFont, -1, fontSize);
+
+			breaks[nLines++] = lineStart;
+			y += linePitch;
+			lineStart = wrap;
+		}
+
+		if (nLines == 0) {
+			breaks[0] = 0;
+			nLines = 1;
+		}
+
+		// blinking cursor
+		if (!(cls.realtime & 0x100)) {
+			int curLine = 0;
+			while (curLine + 1 < nLines && chatField.cursor >= breaks[curLine + 1])
+				++curLine;
+
+			float caretX = substrPx(breaks[curLine], chatField.cursor - 1);
+			int caretY = v + (curLine + 1) * linePitch;
+
+			char gStr[4] = { '^', hasColor ? curColor : '9', kg.key_overstrikeMode ? '_' : '|', 0 };
+
+			float glyphW = re->ext.Font_StrLenPixels(gStr, chatFont, fontSize);
+			if (glyphW <= 0.0f)
+				glyphW = 2.0f;
+			if (caretX + glyphW > textMaxPix) {
+				caretX = 0.0f;
+				caretY += linePitch;
+			}
+
+			float correctX = -2;
+			if (cl_ratioFix->integer)
+				correctX *= cls.widthRatioCoef;
+			re->Font_DrawString_Float(leftPad + caretX + correctX, caretY, gStr, colorWhite, chatFont, -1, fontSize);
+		}
+
+		v = y;
 	}
 }
 
@@ -1030,7 +1186,7 @@ void Con_Close( void ) {
 		return;
 	}
 	Field_Clear( &g_consoleField );
-	Con_ClearNotify ();
+	//Con_ClearNotify ();
 	Key_SetCatcher( Key_GetCatcher( ) & ~KEYCATCH_CONSOLE );
 	con.finalFrac = 0;				// none visible
 	con.displayFrac = 0;
