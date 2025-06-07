@@ -826,7 +826,7 @@ void Console_Key( int key ) {
 			Field_AutoComplete(&g_consoleField, qtrue);
 
 		// print executed command
-		Com_Printf( "%c%s\n", CONSOLE_PROMPT_CHAR, g_consoleField.buffer );
+		Com_Printf( "*%c%s\n", CONSOLE_PROMPT_CHAR, g_consoleField.buffer );
 
 		// check if cgame wants to eat the command...?
 		if ( cls.cgameStarted && cl.mSharedMemory ) {
