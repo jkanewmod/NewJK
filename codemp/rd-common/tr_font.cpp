@@ -1809,7 +1809,10 @@ void RE_Font_DrawString_Float(float ox, float oy, const char *psText, const floa
 			break;
 		case 32:						// Space
 			pLetter = curfont->GetLetter(' ');
-			fx += curfont->mbRoundCalcs ? Round(pLetter->horizAdvance * fScale) : pLetter->horizAdvance * fScale;
+			if (cl_ratioFix->integer == 1)
+				fx += curfont->mbRoundCalcs ? Round(pLetter->horizAdvance * fScale) : pLetter->horizAdvance * fScale * tr.widthRatioCoef;
+			else
+				fx += curfont->mbRoundCalcs ? Round(pLetter->horizAdvance * fScale) : pLetter->horizAdvance * fScale;
 			bNextTextWouldOverflow = (iMaxPixelWidth != -1 && ((fx - fox) > (float)iMaxPixelWidth)) ? qtrue : qfalse; // yeuch
 			break;
 		case '_':	// has a special word-break usage if in Thai (and followed by a thai char), and should not be displayed, else treat as normal
@@ -1866,7 +1869,10 @@ void RE_Font_DrawString_Float(float ox, float oy, const char *psText, const floa
 
 				RE_StretchPic(curfont->mbRoundCalcs ? fx + Round(pLetter->horizOffset * fThisScale) : fx + pLetter->horizOffset * fThisScale, // float x
 					(uiLetter > (unsigned)g_iNonScaledCharRange) ? fy - fAsianYAdjust : fy,	// float y
-					curfont->mbRoundCalcs ? Round(pLetter->width * fThisScale) : pLetter->width * fThisScale,	// float w
+					curfont->mbRoundCalcs
+					? Round(pLetter->width * fThisScale)
+					: (cl_ratioFix->integer == 1 ? pLetter->width * fThisScale * tr.widthRatioCoef : pLetter->width * fThisScale)
+					,	// float w
 					curfont->mbRoundCalcs ? Round(pLetter->height * fThisScale) : pLetter->height * fThisScale, // float h
 					pLetter->s,						// float s1
 					pLetter->t,						// float t1
