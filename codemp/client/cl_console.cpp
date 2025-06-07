@@ -729,6 +729,8 @@ void Con_DrawNotify(void)
 		}
 	}
 
+	v = 168;
+
 	re->SetColor(NULL);
 
 	if (Key_GetCatcher() & (KEYCATCH_UI | KEYCATCH_CGAME)) {
