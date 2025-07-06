@@ -178,6 +178,7 @@ cvar_t		*s_volume;
 cvar_t		*s_volumeVoice;
 cvar_t		*s_volumeAnnouncer;
 cvar_t		*s_volumeWeapon;
+cvar_t		*s_unfocused;
 cvar_t		*s_testsound;
 cvar_t		*s_khz;
 cvar_t		*s_allowDynamicMusic;
@@ -464,6 +465,7 @@ void S_Init( void ) {
 	Cvar_CheckRange(s_volumeVoice, 0, 1, qfalse);
 	s_volumeAnnouncer = Cvar_Get("s_volumeAnnouncer", "", CVAR_ARCHIVE, "Announcer volume (0-1)");
 	s_volumeWeapon = Cvar_Get("s_volumeWeapon", "", CVAR_ARCHIVE, "Announcer volume (0-1)");
+	s_unfocused = Cvar_Get("s_unfocused", "0", CVAR_ARCHIVE, "Play sound while unfocused/minimized");
 	s_musicVolume = Cvar_Get ("s_musicvolume", "0.25", CVAR_ARCHIVE, "Music volume (0-1)" );
 	Cvar_CheckRange(s_musicVolume, 0, 1, qfalse);
 	s_separation = Cvar_Get ("s_separation", "0.5", CVAR_ARCHIVE);
@@ -4728,7 +4730,7 @@ static qboolean S_UpdateBackgroundTrack_Actual( MusicInfo_t *pMusicInfo, qboolea
 	int		r;
 
 	float fMasterVol = fDefaultVolume; // s_musicVolume->value;
-	if (s_mute->integer || com_minimized->integer || com_unfocused->integer)
+	if (s_mute->integer || (com_minimized->integer && !s_unfocused->integer) || (com_unfocused->integer && !s_unfocused->integer))
 		fMasterVol = 0;
 
 	if (bMusic_IsDynamic)

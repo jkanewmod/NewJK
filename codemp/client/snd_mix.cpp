@@ -431,7 +431,7 @@ void S_PaintChannels( int endtime ) {
 	}
 
 	int weapon_vol = (int)(weapon_vol_static * s_volumeMaster->value), weapon_vol_local = (int)(weapon_vol_local_static * s_volumeMaster->value);
-	if (s_mute->integer || com_minimized->integer || com_unfocused->integer)
+	if (s_mute->integer || (com_minimized->integer && !s_unfocused->integer) || (com_unfocused->integer && !s_unfocused->integer))
 		snd_vol = normal_vol = voice_vol = announcer_vol = weapon_vol = weapon_vol_local = 0;
 
 //Com_Printf ("%i to %i\n", s_paintedtime, endtime);

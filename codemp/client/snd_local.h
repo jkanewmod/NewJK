@@ -223,6 +223,7 @@ extern cvar_t	*s_volume;
 extern cvar_t	*s_volumeVoice;
 extern cvar_t	*s_volumeAnnouncer;
 extern cvar_t	*s_volumeWeapon;
+extern cvar_t	*s_unfocused;
 extern cvar_t	*s_nosound;
 extern cvar_t	*s_khz;
 extern cvar_t	*s_allowDynamicMusic;
