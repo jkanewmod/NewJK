@@ -185,6 +185,10 @@ void UIVM_CvarHelp( const char *cvarName, qboolean enter, char *helpBuffer, size
 
 char *Cvar_DescriptionString( const cvar_t *var, qboolean enter = qfalse )
 {
+	if (!Q_stricmpn(var->name, "sv_", 3) && !com_sv_running->integer) {
+		return ""; // avoid noob confusion by hiding server cvar help unless actually a server
+	}
+
 	static char description[4096];
 
 	// give UI a chance to fill description
