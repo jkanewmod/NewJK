@@ -25,6 +25,7 @@ along with this program; if not, see <http://www.gnu.org/licenses/>.
 
 #include "client.h"
 #include "snd_local.h"
+#include <cstring>
 #include <string>
 #include <sstream>
 #include <map>

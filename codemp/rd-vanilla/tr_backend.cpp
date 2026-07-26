@@ -714,7 +714,7 @@ static void DoEndSurface(const char *name, bool canFullbright) {
 
 		float r, g, b;
 		int usingWhiteTextureInt;
-		if (weaponCvar && VALIDSTRING(weaponCvar->string) && canFullbright && sscanf_s(weaponCvar->string, "%f %f %f %d", &r, &g, &b, &usingWhiteTextureInt) == 4) {
+		if (weaponCvar && VALIDSTRING(weaponCvar->string) && canFullbright && sscanf(weaponCvar->string, "%f %f %f %d", &r, &g, &b, &usingWhiteTextureInt) == 4) {
 			float ambientLight[3], directedLight[3], lightDir[3];
 			VectorCopy(backEnd.currentEntity->ambientLight, ambientLight);
 			VectorCopy(backEnd.currentEntity->directedLight, directedLight);

@@ -26,6 +26,8 @@ along with this program; if not, see <http://www.gnu.org/licenses/>.
 #include "tr_local.h"
 #include "tr_quicksprite.h"
 
+#include <algorithm>
+
 /*
 
   THIS ENTIRE FILE IS BACK END
@@ -1835,7 +1837,7 @@ void RB_StageIteratorGeneric( void )
 		if (!Q_stricmpn(input->shader->name + 7, "weapons2/", 9)) {
 			isWeapon = true;
 			if (!forceFullbright && !forceFullbrightWhiteShader) {
-				auto fullbrightPlayer = std::find_if(fullbrightPlayers.begin(), fullbrightPlayers.end(), [&](auto &p) { return p.ent == backEnd.currentEntity; });
+				auto fullbrightPlayer = std::find_if(fullbrightPlayers.begin(), fullbrightPlayers.end(), [&](const FullbrightEnt &p) { return p.ent == backEnd.currentEntity; });
 				if (fullbrightPlayer != fullbrightPlayers.end()) {
 					// this is a non-fullbright weapon held by a fullbright player
 					backupFullbrightPlayer = FullbrightEnt(backEnd.currentEntity);

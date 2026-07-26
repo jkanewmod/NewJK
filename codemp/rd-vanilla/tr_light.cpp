@@ -181,7 +181,7 @@ static bool R_SetupEntityLightingGrid( trRefEntity_t *ent ) {
 			float r = 255, g = 255, b = 255;
 			int useWhiteTexture = 0;
 			if (VALIDSTRING(s))
-				sscanf_s(s, "%f %f %f %d", &r, &g, &b, &useWhiteTexture);
+				sscanf(s, "%f %f %f %d", &r, &g, &b, &useWhiteTexture);
 			ent->ambientLight[0] = ent->directedLight[0] = r;
 			ent->ambientLight[1] = ent->directedLight[1] = g;
 			ent->ambientLight[2] = ent->directedLight[2] = b;
