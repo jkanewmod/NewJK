@@ -321,7 +321,9 @@ typedef struct uiImport_s {
 	qboolean		(*R_Language_UsesSpaces)				( void );
 	unsigned int	(*R_AnyLanguage_ReadCharFromString)		( const char *psText, int *piAdvanceCount, qboolean *pbIsTrailingPunctuation );
 
-	void			(*R_AddLightToScene)					( const vec3_t org, float intensity, float r, float g, float b );
+	// noShadowFromEntity names an entity that must not cast into this light's own shadow,
+	// or ENTITYNUM_NONE; only rd-rend2 acts on it
+	void			(*R_AddLightToScene)					( const vec3_t org, float intensity, float r, float g, float b, int noShadowFromEntity );
 	void			(*R_AddPolysToScene)					( qhandle_t hShader, int numVerts, const polyVert_t *verts, int num );
 	void			(*R_AddRefEntityToScene)				( const refEntity_t *re );
 	void			(*R_ClearScene)							( void );

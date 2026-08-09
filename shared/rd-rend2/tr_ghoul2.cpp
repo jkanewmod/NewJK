@@ -997,7 +997,8 @@ static int G2_ComputeLOD( trRefEntity_t *ent, const model_t *currentModel, int l
 	float projectedRadius;
 	int lod;
 
-	if ( currentModel->numLods < 2  || ent->e.renderfx & RF_NOLOD )
+	// newjk: RF_NOLOD no longer forces LOD 0 here, matching tr_mesh.cpp
+	if ( currentModel->numLods < 2 )
 	{	// model has only 1 LOD level, skip computations and bias
 		return(0);
 	}
@@ -1158,7 +1159,8 @@ static int G2_GetBonePoolIndex(	const mdxaHeader_t *pMDXAHeader, int iFrame, int
 	const int iOffsetToIndex = (iFrame * pMDXAHeader->numBones * 3) + (iBone * 3);
 	mdxaIndex_t *pIndex = (mdxaIndex_t *)((byte*)pMDXAHeader + pMDXAHeader->ofsFrames + iOffsetToIndex);
 
-	return (pIndex->iIndex[2] << 16) + (pIndex->iIndex[1] << 8) + (pIndex->iIndex[0]);
+	// newjk: the three index bytes are contiguous, so mask rather than reassembling them
+	return pIndex->iIndex & 0x00FFFFFF;
 }
 
 /*static inline*/ void UnCompressBone(
@@ -4579,7 +4581,19 @@ qboolean R_LoadMDXM(model_t *mod, void *buffer, const char *mod_name, qboolean &
 					lastWeight -= weights[w];
 				}
 
-				assert(lastWeight > 0);
+				// lastWeight can end up <= 0 for a vertex whose earlier per-influence
+				// weights, once truncated (not rounded) to bytes, already sum to 255 or
+				// more -- a floating-point/export edge case in the source .glm rather
+				// than anything the loader itself got wrong. Previously this was an
+				// assert(), which meant any client hitting this vertex (Release builds
+				// included, where NDEBUG doesn't apply here) would hard-crash outright.
+				// Clamp instead: the resulting weight distribution for this one vertex
+				// is very slightly off, which is imperceptible, versus a guaranteed crash.
+				if (lastWeight <= 0)
+				{
+					ri.Printf(PRINT_WARNING, "R_LoadMDXM: vertex weights for %s summed past 255 after truncation (surface %d, vertex %d) -- clamping instead of crashing.\n", mod_name, n, k);
+					lastWeight = 1;
+				}
 
 				// Ensure that all the weights add up to 1.0
 				weights[lastInfluence] = lastWeight;

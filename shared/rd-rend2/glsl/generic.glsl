@@ -564,6 +564,13 @@ in vec3 var_WSPosition;
 out vec4 out_Color;
 out vec4 out_Glow;
 
+// fullbright override, same pair lightall.glsl carries. A stage that declares rgbGen identity
+// (or declares no rgbGen at all, which defaults to identity) is never promoted to the lightall
+// program by CollapseStagesToGLSL, so without these here it renders its normal texture and
+// ignores fullbright entirely - models/players/stormpilot/helmet's first stage is exactly that.
+uniform vec4 u_FullbrightOverride;
+uniform float u_FullbrightOverrideWhite;
+
 
 #if defined(USE_FOG)
 #if defined(USE_VOLUMETRIC_FOG)
@@ -674,6 +681,17 @@ void main()
 	color *= vec4(1.0) - u_FogColorMask * fogColorOpacity.a;
 #endif
 #endif
+
+	if (u_FullbrightOverride.a > 0.5)
+	{
+		// matches lightall.glsl's block: "!" (u_FullbrightOverrideWhite) discards texture
+		// detail by taking the diffuse to white first, then tints by the flat color. Glow is
+		// zeroed so a fullbright surface cannot bleed into the bloom buffer.
+		vec3 overrideDiffuse = mix(color.rgb, vec3(1.0), u_FullbrightOverrideWhite);
+		out_Color = vec4(overrideDiffuse * u_FullbrightOverride.rgb, color.a);
+		out_Glow = vec4(0.0, 0.0, 0.0, color.a);
+		return;
+	}
 
 	out_Color = color;
 	out_Glow = mix(vec4(0.0, 0.0, 0.0, color.a), color, u_EnableTextures.x);

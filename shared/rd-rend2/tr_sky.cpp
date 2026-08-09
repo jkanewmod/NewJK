@@ -455,6 +455,23 @@ static void DrawSkySide( struct image_s *image, const int mins[2], const int max
 		UNIFORM_ENABLETEXTURES, 0.0f, 0.0f, 0.0f, 0.0f);
 	uniformDataWriter.SetUniformInt(
 		UNIFORM_ALPHA_TEST_TYPE, ALPHA_TEST_NONE);
+	// GLSL_SetUniforms() only calls glUniform*() for entries actually present
+	// in a DrawItem's uniform list - anything omitted keeps whatever value was
+	// last set on that GL program object by a *different* draw (uniforms are
+	// program-object state, not per-draw state). u_FullbrightOverride is a
+	// plain, non-block uniform shared by every tr.lightallShader[] variant,
+	// so it must be explicitly reset here or the sky can inherit a stale
+	// "force flat color" value left behind by some fullbright entity's draw.
+	uniformDataWriter.SetUniformVec4(
+		UNIFORM_FULLBRIGHTOVERRIDE, 0.0f, 0.0f, 0.0f, 0.0f);
+	uniformDataWriter.SetUniformFloat(
+		UNIFORM_FULLBRIGHTOVERRIDEWHITE, 0.0f);
+	// Same reasoning, same fix, for u_LightOverrideAmbient/Directed (the
+	// held-weapon-of-a-fullbright-player exemption's per-surface uniforms).
+	uniformDataWriter.SetUniformVec4(
+		UNIFORM_LIGHTOVERRIDEAMBIENT, 0.0f, 0.0f, 0.0f, 0.0f);
+	uniformDataWriter.SetUniformVec3(
+		UNIFORM_LIGHTOVERRIDEDIRECTED, 0.0f, 0.0f, 0.0f);
 
 	samplerBindingsWriter.AddStaticImage(image, TB_DIFFUSEMAP);
 

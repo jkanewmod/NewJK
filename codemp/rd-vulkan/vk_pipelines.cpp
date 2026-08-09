@@ -601,6 +601,10 @@ static void vk_set_pipeline_color_blend_attachment_factor( const Vk_Pipeline_Def
         case GLS_SRCBLEND_ONE_MINUS_DST_COLOR:
             attachment_blend_state->srcColorBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_DST_COLOR;
             break;
+        // newjk: blends against the per-draw constant rather than a vertex/texture alpha
+        case GLS_SRCBLEND_CONST_ALPHA:
+            attachment_blend_state->srcColorBlendFactor = VK_BLEND_FACTOR_CONSTANT_ALPHA;
+            break;
         case GLS_SRCBLEND_SRC_ALPHA:
             attachment_blend_state->srcColorBlendFactor = VK_BLEND_FACTOR_SRC_ALPHA;
             break;
@@ -642,6 +646,10 @@ static void vk_set_pipeline_color_blend_attachment_factor( const Vk_Pipeline_Def
         case GLS_DSTBLEND_ONE_MINUS_SRC_ALPHA:
             attachment_blend_state->dstColorBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA;
             break;
+        // newjk: destination half of the constant-alpha blend above
+        case GLS_DSTBLEND_ONE_MINUS_CONST_ALPHA:
+            attachment_blend_state->dstColorBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_CONSTANT_ALPHA;
+            break;
         case GLS_DSTBLEND_DST_ALPHA:
             attachment_blend_state->dstColorBlendFactor = VK_BLEND_FACTOR_DST_ALPHA;
             break;
@@ -679,7 +687,10 @@ VkPipeline vk_create_pipeline( const Vk_Pipeline_Def *def, renderPass_t renderPa
     VkPipelineColorBlendAttachmentState attachment_blend_state = {};
     VkPipelineColorBlendStateCreateInfo blend_state;
     VkPipelineDynamicStateCreateInfo dynamic_state;
-    VkDynamicState dynamic_state_array[3] = { VK_DYNAMIC_STATE_VIEWPORT, VK_DYNAMIC_STATE_SCISSOR, VK_DYNAMIC_STATE_DEPTH_BIAS };
+    VkDynamicState dynamic_state_array[4] = { VK_DYNAMIC_STATE_VIEWPORT, VK_DYNAMIC_STATE_SCISSOR, VK_DYNAMIC_STATE_DEPTH_BIAS,
+        /* needed by GLS_SRCBLEND_CONST_ALPHA - the fade factor is per-draw, so baking it into the
+        pipeline would mean a fresh pipeline per alpha value */
+        VK_DYNAMIC_STATE_BLEND_CONSTANTS };
     VkGraphicsPipelineCreateInfo create_info;
 
 #ifdef USE_VBO_SS

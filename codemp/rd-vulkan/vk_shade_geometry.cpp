@@ -22,6 +22,8 @@ along with this program; if not, see <http://www.gnu.org/licenses/>.
 */
 
 #include "tr_local.h"
+// newjk: std::find / std::find_if, used against the fullbright entity lists below
+#include <algorithm>
 
 static VkBuffer shade_bufs[10];
 static int bind_base;
@@ -1020,6 +1022,17 @@ void ComputeColors( const int b, color4ub_t *dest, const shaderStage_t *pStage, 
 	//
 	// rgbGen
 	//
+	// newjk: a forced fullbright color replaces rgbGen entirely - write it straight into every
+	// vertex rather than computing one
+	if (forceFullbright) {
+		for (i = 0; i < tess.numVertexes; i++) {
+			dest[i][0] = (byte)forceFullbrightColor[0];
+			dest[i][1] = (byte)forceFullbrightColor[1];
+			dest[i][2] = (byte)forceFullbrightColor[2];
+			dest[i][3] = 0xff;
+		}
+	}
+	else
 	switch (forceRGBGen)
 	{
 	case CGEN_IDENTITY:
@@ -1120,6 +1133,8 @@ void ComputeColors( const int b, color4ub_t *dest, const shaderStage_t *pStage, 
 	//
 	// alphaGen
 	//
+	// newjk: fullbright fixed alpha at 0xff above, so alphaGen must not run and undo it
+	if (!forceFullbright)
 	switch ( forceAlphaGen )
 	{
 	case AGEN_SKIP:
@@ -1499,6 +1514,13 @@ void R_BindAnimatedImage( const textureBundle_t *bundle ) {
 
 	if ( ( r_fullbright->value /*|| tr.refdef.doFullbright */ ) && bundle->isLightmap )
 	{
+		vk_bind( tr.whiteImage );
+		return;
+	}
+
+	// newjk: the "!" fullbright form shows no texture detail at all, so bind white and let the
+	// forced color be the whole result
+	if ( forceFullbrightWhiteShader ) {
 		vk_bind( tr.whiteImage );
 		return;
 	}
@@ -1938,6 +1960,38 @@ static void vk_compute_colors( const int b, const shaderStage_t *pStage, int for
 		vertColor[2] *= scale;
 	}
 
+	/*
+		fullbright on the VBO path (r_vbo_models 1). This function wholly replaces ComputeColors
+		when tess.vbo_model is set, and carried no fullbright handling at all - so mechanisms (A)
+		and (B) silently did nothing there. Only the "!" white-texture bind survived, which is why
+		a fullbright weapon rendered pure white instead of its chosen color.
+
+		Two things are required, not one. baseColor carries the flat color, and rgbGen has to stop
+		requesting shading: gen_frag.tmpl's needsShading() treats every rgbGen >= 9 except fog,
+		const and lightmapstyle as lit, and would otherwise multiply the flat color by the
+		entity's UBO lighting. CGEN_IDENTITY is the value meaning "just use baseColor".
+
+		Deliberately placed after the overbright multiply above - the CPU path writes the
+		fullbright color straight into the vertex color bytes with no overbright scaling, so
+		scaling it here would make the two paths disagree on the same cvar value.
+	*/
+	if ( forceFullbright ) {
+		baseColor[0] = forceFullbrightColor[0] / 255.0f;
+		baseColor[1] = forceFullbrightColor[1] / 255.0f;
+		baseColor[2] = forceFullbrightColor[2] / 255.0f;
+		vertColor[0] = vertColor[1] = vertColor[2] = 0.0f;
+
+		// ComputeColors sets alpha to 0xff and skips alphaGen entirely under fullbright. Let a
+		// forced entity alpha still win, matching the CPU path where ForceAlpha runs afterwards.
+		if ( !( backEnd.currentEntity && ( backEnd.currentEntity->e.renderfx & RF_FORCE_ENT_ALPHA ) ) ) {
+			baseColor[3] = 1.0f;
+			vertColor[3] = 0.0f;
+			alphaGen = AGEN_IDENTITY;
+		}
+
+		rgbGen = CGEN_IDENTITY;
+	}
+
 	uniform_global.bundle[b].rgbGen = (uint32_t)rgbGen;
 	uniform_global.bundle[b].alphaGen = (uint32_t)alphaGen;
 
@@ -2331,6 +2385,63 @@ void RB_SurfaceSpritesVBO( srfSprites_t *surf )
 #endif
 
 static ss_input ssInput;
+/*
+	TYPE_*_IDENTITY / _FIXED_COLOR pipelines (a stage declaring rgbGen identity or const, or
+	declaring no rgbGen at all, which defaults to identity) bind no per-vertex color buffer -
+	see their case in vk_get_pipeline_layout, which pushes only xyz/texcoord/normal. Any
+	override that works by writing tess.svars.colors therefore cannot reach them: forced entity
+	alpha stays at 1.0, and a forced fullbright color never applies. Swap in the equivalent
+	color-carrying type, matching what the forceRGBGen substitution already does for RF_RGB_TINT.
+
+	The target must have the identical binding set:
+	- ENV maps to ENV, never the plain type. An ENV stage's texcoord binding is already gone
+	  (tessFlags trades TESS_ST0 for TESS_ENV in FinishShader), so a non-ENV target would leave
+	  that binding declared but unsupplied and silently drop the environment mapping - the
+	  vertex/fragment module pair differs between the two as well.
+	- MULTI_TEXTURE_ADD2_IDENTITY/_FIXED_COLOR maps to ADD2_1_1, not ADD2. ADD2_1_1 is tex_mode 1
+	  (second texture sampled untinted) while ADD2 is tex_mode 2 (color1 *= frag_color0), which
+	  would square a forced alpha rather than reproduce it - see gen_frag.tmpl's tex_mode switch.
+	  MUL2_IDENTITY -> MUL2 is tex_mode 0 either way.
+
+	Returns qtrue when the type actually changed, since the caller then has to set TESS_RGBA0 so
+	vk_bind_geometry supplies the color binding the new type declares.
+*/
+static qboolean vk_escape_colorless_pipeline( Vk_Shader_Type *shaderType )
+{
+	const Vk_Shader_Type before = *shaderType;
+
+	switch ( before ) {
+		case TYPE_SINGLE_TEXTURE_IDENTITY:
+		case TYPE_SINGLE_TEXTURE_FIXED_COLOR:
+			*shaderType = TYPE_SINGLE_TEXTURE;
+			break;
+		case TYPE_SINGLE_TEXTURE_IDENTITY_ENV:
+		case TYPE_SINGLE_TEXTURE_FIXED_COLOR_ENV:
+			*shaderType = TYPE_SINGLE_TEXTURE_ENV;
+			break;
+		case TYPE_MULTI_TEXTURE_ADD2_IDENTITY:
+		case TYPE_MULTI_TEXTURE_ADD2_FIXED_COLOR:
+			*shaderType = TYPE_MULTI_TEXTURE_ADD2_1_1;
+			break;
+		case TYPE_MULTI_TEXTURE_ADD2_IDENTITY_ENV:
+		case TYPE_MULTI_TEXTURE_ADD2_FIXED_COLOR_ENV:
+			*shaderType = TYPE_MULTI_TEXTURE_ADD2_1_1_ENV;
+			break;
+		case TYPE_MULTI_TEXTURE_MUL2_IDENTITY:
+		case TYPE_MULTI_TEXTURE_MUL2_FIXED_COLOR:
+			*shaderType = TYPE_MULTI_TEXTURE_MUL2;
+			break;
+		case TYPE_MULTI_TEXTURE_MUL2_IDENTITY_ENV:
+		case TYPE_MULTI_TEXTURE_MUL2_FIXED_COLOR_ENV:
+			*shaderType = TYPE_MULTI_TEXTURE_MUL2_ENV;
+			break;
+		default:
+			break;
+	}
+
+	return (qboolean)( *shaderType != before );
+}
+
 void RB_StageIteratorGeneric( void )
 {
 	const shaderStage_t		*pStage;
@@ -2344,11 +2455,16 @@ void RB_StageIteratorGeneric( void )
 	qboolean				is_mdv_vbo;
 	qboolean				push_uniform;
 
+	// newjk: set when this surface is a weapon held by a fullbright player, whose real lighting
+	// is swapped in for the draw and restored from the backup afterwards
+	bool overridingFullbrightEnt = false;
+	FullbrightEnt backupFullbrightPlayer;
+
 #ifdef USE_VBO
 	if (tess.vbo_world_index != 0) {
 		VBO_PrepareQueues();
 		tess.vboStage = 0;
-	} 
+	}
 	else
 #endif
 	{
@@ -2361,6 +2477,47 @@ void RB_StageIteratorGeneric( void )
 		return;
 	}
 #endif
+
+	/*
+		fullbright setup has to sit after the dlight-pass early return above, not before it:
+		forceFullbright/forceFullbrightWhiteShader are file-scope globals cleared only at the
+		very end of this function, so setting them on a path that returns early leaks the last
+		fullbright entity's flat color onto every surface drawn afterwards (a "!" fullbright
+		item turning a nearby saber into a blocky solid red/yellow). Only r_dlightMode 2 routes
+		models through that pass, which is why it never showed up at 0 or 1.
+
+		note the lighting pass is NOT indifferent to this state - it reaches R_BindAnimatedImage,
+		which swaps in tr.whiteImage while forceFullbrightWhiteShader is set. Deferring is safe
+		because both flags are guaranteed false on entry here: nothing sets them before
+		RB_LightingPass (DoEndSurface self-clears before it), and this function's own set now
+		happens below. Don't relocate either the set or the clear without rechecking that.
+	*/
+	if (!Q_stricmpn(tess.shader->name, "models/", 7)) {
+		bool isWeapon = false;
+		if (!Q_stricmpn(tess.shader->name + 7, "weapons2/", 9)) {
+			isWeapon = true;
+			if (!forceFullbright && !forceFullbrightWhiteShader) {
+				auto fullbrightPlayer = std::find_if(fullbrightPlayers.begin(), fullbrightPlayers.end(), [&](const FullbrightEnt &p) { return p.ent == backEnd.currentEntity; });
+				if (fullbrightPlayer != fullbrightPlayers.end()) {
+					// this is a non-fullbright weapon held by a fullbright player
+					backupFullbrightPlayer = FullbrightEnt(backEnd.currentEntity);
+					VectorCopy(fullbrightPlayer->ambientLight, backEnd.currentEntity->ambientLight);
+					VectorCopy(fullbrightPlayer->directedLight, backEnd.currentEntity->directedLight);
+					VectorCopy(fullbrightPlayer->lightDir, backEnd.currentEntity->lightDir);
+					backEnd.currentEntity->ambientLightInt = fullbrightPlayer->ambientLightInt;
+					overridingFullbrightEnt = true;
+				}
+			}
+		}
+
+		if (!overridingFullbrightEnt && !(isWeapon && forceFullbright && !forceFullbrightWhiteShader)) {
+			auto forceWhite = std::find(forceWhiteEnts.begin(), forceWhiteEnts.end(), backEnd.currentEntity);
+			if (forceWhite != forceWhiteEnts.end()) {
+				VectorCopy(backEnd.currentEntity->ambientLight, forceFullbrightColor);
+				forceFullbright = forceFullbrightWhiteShader = true;
+			}
+		}
+	}
 
 	tess_flags = tess.shader->tessFlags;
 
@@ -2406,10 +2563,27 @@ void RB_StageIteratorGeneric( void )
 	{
 		int			forceRGBGen = 0;
 		qboolean	is_refraction = qfalse;
+		// newjk: set when a forced entity alpha needs a color-carrying pipeline
+		qboolean	forceEntAlpha = qfalse;
 
 		pStage = tess.xstages[stage];
 
 		if ( !pStage || !pStage->active )
+			break;
+
+		/*
+			"!" fullbright promises 100% pure solid color with zero texture detail showing
+			through, so only the base stage may draw. Every overlay stage on the stock pickup
+			shaders is additive/screen/dst-color (models/map_objects/mp/medpac_mp stage 1 is
+			GL_ONE_MINUS_DST_COLOR GL_ONE with rgbGen wave sin at 0.75Hz, and shield_sm_mp,
+			psd_mp, bacta_mp, boon, shield and the force_* pickups are the same shape), so they
+			can only brighten the flat color - washing it out, and pulsing it toward white once
+			per wave period. Stopping here is what actually delivers the documented behavior,
+			and it does so regardless of which blend mode or collapsed pipeline a given overlay
+			resolves to. Plain (non-"!") fullbright is untouched: it tints while intentionally
+			keeping texture detail, so its overlays still belong.
+		*/
+		if ( stage > 0 && forceFullbrightWhiteShader )
 			break;
 
 #ifdef USE_VBO
@@ -2426,6 +2600,12 @@ void RB_StageIteratorGeneric( void )
 
 		if ( backEnd.currentEntity ) {
 			assert( backEnd.currentEntity->e.renderfx >= 0 );
+			// non-VBO stages only compute a bundle's vertex color when tessFlags/forceRGBGen
+			// already say it's needed (see the ComputeColors gate below) - RF_FORCE_ENT_ALPHA
+			// needs that too, or the CPU-side ForceAlpha() call further down ends up patching
+			// stale/never-computed color data, and a stage whose pipeline actually needs the
+			// color attribute bound (see the shader_type escape below) never gets it filled in.
+			forceEntAlpha = (qboolean)( ( backEnd.currentEntity->e.renderfx & RF_FORCE_ENT_ALPHA ) != 0 );
 #if defined(USE_VBO_GHOUL2)
 			if ( is_ghoul2_vbo && backEnd.currentEntity->e.renderfx & ( RF_DISINTEGRATE1 | RF_DISINTEGRATE2 ) )
 				vk_compute_disintegration( &forceRGBGen );
@@ -2491,7 +2671,7 @@ void RB_StageIteratorGeneric( void )
 					ComputeTexCoords( i, &pStage->bundle[i] );
 
 
-				if ( (tess_flags & (TESS_RGBA0 << i)) || forceRGBGen )
+				if ( (tess_flags & (TESS_RGBA0 << i)) || forceRGBGen || forceEntAlpha )
 					ComputeColors( i, tess.svars.colors[i], pStage, forceRGBGen );
 			}
 		}
@@ -2513,6 +2693,9 @@ void RB_StageIteratorGeneric( void )
 		else {
 			pipeline = pStage->vk_pipeline[fog_stage];
 		}
+
+		// >= 0 means this stage fades via GLS_SRCBLEND_CONST_ALPHA and needs the factor uploaded
+		float constBlendAlpha = -1.0f;
 
 		// for 2D flipped images
 		if ( backEnd.projection2D ) {
@@ -2539,17 +2722,54 @@ void RB_StageIteratorGeneric( void )
 				def.state_bits = GLS_SRCBLEND_SRC_ALPHA | GLS_DSTBLEND_ONE_MINUS_SRC_ALPHA | GLS_DEPTHMASK_TRUE;
 	
 			if ( backEnd.currentEntity->e.renderfx & RF_FORCE_ENT_ALPHA ) {
-				ForceAlpha( (unsigned char *) tess.svars.colors, backEnd.currentEntity->e.shaderRGBA[3] );
-				
-				def.state_bits = GLS_SRCBLEND_SRC_ALPHA | GLS_DSTBLEND_ONE_MINUS_SRC_ALPHA;	
+				// multitexture-collapsed stages (TYPE_BLEND2_MIX_ALPHA etc, see gen_frag.tmpl's
+				// tex_mode 5/6) read a separate vertex-color stream per bundle and blend their
+				// alphas together (e.g. mix(color0, color1, color1.a)) - forcing only bundle 0
+				// leaves the other bundle(s) at their natural ~1.0 alpha, which dominates the
+				// mix and renders opaque regardless of the entity's forced alpha. Force every
+				// bundle this stage actually uses so they all agree.
+				if ( !( def.state_bits & GLS_BLEND_BITS ) ) {
+					/* An opaque stage never consulted alpha, so fading it with SRC_ALPHA would
+					suddenly make it obey its texture's alpha channel. On a multi-stage skin that
+					erases the stage exactly where a tinted base layer shows through an untinted
+					detail layer, so the char_color tint vanishes. Fade by the entity alpha alone.
+					No ForceAlpha needed - the constant factor carries the fade. */
+					constBlendAlpha = backEnd.currentEntity->e.shaderRGBA[3] * (1.0f/255.0f);
+					def.state_bits = GLS_SRCBLEND_CONST_ALPHA | GLS_DSTBLEND_ONE_MINUS_CONST_ALPHA;
+				}
+				else {
+				int b;
+				for ( b = 0; b < pStage->numTexBundles && b < NUM_TEXTURE_BUNDLES; b++ )
+					ForceAlpha( (unsigned char *) tess.svars.colors[b], backEnd.currentEntity->e.shaderRGBA[3] );
+
+				def.state_bits = GLS_SRCBLEND_SRC_ALPHA | GLS_DSTBLEND_ONE_MINUS_SRC_ALPHA;
+				}
 				
 				// depth write, so faces through the model will be stomped over by nearer ones. this works because
 				// we draw RF_FORCE_ENT_ALPHA stuff after everything else, including standard alpha surfs.
 #ifdef RF_ALPHA_DEPTH
-				if ( backEnd.currentEntity->e.renderfx & RF_ALPHA_DEPTH ) 
+				if ( backEnd.currentEntity->e.renderfx & RF_ALPHA_DEPTH )
 					def.state_bits |= GLS_DEPTHMASK_TRUE;
 #endif
 
+				if ( vk_escape_colorless_pipeline( &def.shader_type ) )
+					tess_flags |= TESS_RGBA0;
+
+
+			}
+
+			/*
+				the same escape is needed for fullbright, which reaches this stage through a
+				completely separate path. A stage that declares no rgbGen at all defaults to
+				identity - models/players/stormpilot/helmet's first stage is exactly that - so
+				it resolves to a colorless pipeline and the flat fullbright color has nowhere
+				to land. With "!" also forcing tr.whiteImage the surface then renders pure
+				white rather than the chosen color, which is why a fullbright pilot had a white
+				head while the rest of the model was correct.
+			*/
+			if ( forceFullbright || forceFullbrightWhiteShader ) {
+				if ( vk_escape_colorless_pipeline( &def.shader_type ) )
+					tess_flags |= TESS_RGBA0;
 			}
 
 			//want to use RGBGen from ent
@@ -2652,6 +2872,12 @@ void RB_StageIteratorGeneric( void )
 		}
 #endif
 
+		// newjk: push the per-draw blend constant before the draw
+		if ( constBlendAlpha >= 0.0f ) {
+			const float bc[4] = { 0.0f, 0.0f, 0.0f, constBlendAlpha };
+			qvkCmdSetBlendConstants( vk.cmd->command_buffer, bc );
+		}
+
 		vk_bind_pipeline( pipeline );
 		vk_bind_geometry( tess_flags );
 		vk_draw_geometry( tess.depthRange, qtrue );
@@ -2719,5 +2945,14 @@ void RB_StageIteratorGeneric( void )
 			// Draw the surfacesprite
 			RB_DrawSurfaceSprites( pStage, &ssInput );
 		}
+	}
+
+	forceFullbright = forceFullbrightWhiteShader = false;
+
+	if (overridingFullbrightEnt) { // restore
+		VectorCopy(backupFullbrightPlayer.ambientLight, backEnd.currentEntity->ambientLight);
+		VectorCopy(backupFullbrightPlayer.directedLight, backEnd.currentEntity->directedLight);
+		VectorCopy(backupFullbrightPlayer.lightDir, backEnd.currentEntity->lightDir);
+		backEnd.currentEntity->ambientLightInt = backupFullbrightPlayer.ambientLightInt;
 	}
 }

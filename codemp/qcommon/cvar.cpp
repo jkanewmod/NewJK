@@ -1131,6 +1131,9 @@ void Cvar_WriteVariables( fileHandle_t f ) {
 			continue;
 
 		if( var->flags & CVAR_ARCHIVE ) {
+			// don't write out a CVAR_NODEFAULT cvar that is still sitting at its default
+			if( (var->flags & CVAR_NODEFAULT) && !var->latchedString && !strcmp( var->string, var->resetString ) )
+				continue;
 			cvars.push_back( var );
 		}
 	}

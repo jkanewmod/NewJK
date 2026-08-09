@@ -23,6 +23,12 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 
 #include "tr_local.h"
 
+// newjk: per-frame fullbright bookkeeping, cleared in R_InitNextFrame. fullbrightPlayers caches
+// each fullbright player's real light so their held weapon can stay normally lit; forceWhiteEnts
+// are entities whose texture must go flat white.
+std::vector<FullbrightPlayerEnt> fullbrightPlayers;
+std::vector<trRefEntity_t *> forceWhiteEnts;
+
 #define	DLIGHT_AT_RADIUS		16
 // at the edge of a dlight's influence, this amount of light will be added
 
@@ -129,7 +135,9 @@ R_SetupEntityLightingGrid
 
 =================
 */
-static void R_SetupEntityLightingGrid( trRefEntity_t *ent, world_t *world ) {
+// newjk: returns qtrue when a fullbright color was forced, so the caller skips the normal
+// lighting post-processing that would scale it away
+static qboolean R_SetupEntityLightingGrid( trRefEntity_t *ent, world_t *world ) {
 	vec3_t	lightOrigin;
 	int		pos[3];
 	int		i, j;
@@ -143,8 +151,105 @@ static void R_SetupEntityLightingGrid( trRefEntity_t *ent, world_t *world ) {
 		ent->ambientLight[0] = ent->ambientLight[1] = ent->ambientLight[2] = 255.0f;
 		ent->directedLight[0] = ent->directedLight[1] = ent->directedLight[2] = 255.0f;
 		VectorCopy(tr.sunDirection, ent->lightDir);
-		return;
+		return qfalse;
 	}
+
+	// Generic per-entity fullbright: RF_FULLBRIGHT plus a 6-bit color index encoded
+	// across RF_OTHER1-6 selects a "r_fullbrightcolor<index>" cvar (set clientside,
+	// "r g b useWhiteTexture") to force this entity's ambient/directed light to,
+	// instead of the real lightgrid sample. Mirrors rd-vanilla's
+	// R_SetupEntityLightingGrid. RF_OTHER7 ("isPlayer") means: this entity's held
+	// weapon (a surface of the same G2 ref-entity, matched by "models/weapons2/"
+	// shader-name prefix - see RB_IterateStagesGeneric) should stay normally lit
+	// instead of inheriting this flat fullbright override, same as rd-vanilla -
+	// cache the real (non-fullbright) light here so that surface-level hook can
+	// use it. The r_fullbrightcolor_weapon_* per-weapon-model global override
+	// (cg_fullbrightWeapons) is a separate, unrelated mechanism handled entirely
+	// in RB_IterateStagesGeneric, not here.
+	if (ent->e.renderfx & RF_FULLBRIGHT)
+	{
+		int index = 0;
+		if (ent->e.renderfx & RF_OTHER1) index |= 1;
+		if (ent->e.renderfx & RF_OTHER2) index |= 2;
+		if (ent->e.renderfx & RF_OTHER3) index |= 4;
+		if (ent->e.renderfx & RF_OTHER4) index |= 8;
+		if (ent->e.renderfx & RF_OTHER5) index |= 16;
+		if (ent->e.renderfx & RF_OTHER6) index |= 32;
+
+		if (ent->e.renderfx & RF_OTHER7) {
+			vec3_t realOrigin;
+			if (ent->e.renderfx & RF_LIGHTING_ORIGIN)
+				VectorCopy(ent->e.lightingOrigin, realOrigin);
+			else
+				VectorCopy(ent->e.origin, realOrigin);
+
+			FullbrightPlayerEnt cacheEnt;
+			cacheEnt.ent = ent;
+			if (!R_LightForPoint(realOrigin, cacheEnt.ambientLight, cacheEnt.directedLight, cacheEnt.lightDir)) {
+				VectorSet(cacheEnt.ambientLight, 255.0f, 255.0f, 255.0f);
+				VectorSet(cacheEnt.directedLight, 255.0f, 255.0f, 255.0f);
+				VectorCopy(tr.sunDirection, cacheEnt.lightDir);
+			}
+			else {
+				/*
+					R_LightForPoint returns the bare lightgrid sample - R_SetupEntityLightingGrid
+					stops before the post-processing that R_SetupEntityLighting normally applies
+					on top. rd-vanilla/rd-vulkan's FullbrightEnt cache does apply it, so without
+					this the held weapon of a fullbright player renders noticeably darker here
+					than on the other two renderers, and unbounded at the top end. Same order and
+					same tr.hdrLighting guard as the normal entity path further down this file.
+				*/
+				if (tr.hdrLighting != qtrue) {
+					if (ent->e.renderfx & RF_MINLIGHT) {
+						if (ent->e.shaderRGBA[0] == 255 && ent->e.shaderRGBA[1] == 255 && ent->e.shaderRGBA[2] == 0) {
+							cacheEnt.ambientLight[0] += tr.identityLight * 255;
+							cacheEnt.ambientLight[1] += tr.identityLight * 255;
+							cacheEnt.ambientLight[2] += tr.identityLight * 0;
+						}
+						else {
+							cacheEnt.ambientLight[0] += tr.identityLight * 16;
+							cacheEnt.ambientLight[1] += tr.identityLight * 96;
+							cacheEnt.ambientLight[2] += tr.identityLight * 150;
+						}
+					}
+					else {
+						// give everything a minimum light add
+						cacheEnt.ambientLight[0] += tr.identityLight * 32;
+						cacheEnt.ambientLight[1] += tr.identityLight * 32;
+						cacheEnt.ambientLight[2] += tr.identityLight * 32;
+					}
+
+					for (int c = 0; c < 3; c++) {
+						if (cacheEnt.ambientLight[c] > tr.identityLightByte)
+							cacheEnt.ambientLight[c] = tr.identityLightByte;
+					}
+				}
+			}
+			fullbrightPlayers.push_back(cacheEnt);
+		}
+
+		if (index > 0 && index < 64) {
+			const char *s = ri.Cvar_VariableString(va("r_fullbrightcolor%d", index));
+			float r = 255, g = 255, b = 255;
+			int useWhiteTexture = 0;
+			if (VALIDSTRING(s))
+				sscanf(s, "%f %f %f %d", &r, &g, &b, &useWhiteTexture);
+			ent->ambientLight[0] = ent->directedLight[0] = r;
+			ent->ambientLight[1] = ent->directedLight[1] = g;
+			ent->ambientLight[2] = ent->directedLight[2] = b;
+			VectorCopy(tr.sunDirection, ent->lightDir);
+			if (useWhiteTexture)
+				forceWhiteEnts.push_back(ent);
+			return qtrue;
+		}
+		else {
+			ent->ambientLight[0] = ent->ambientLight[1] = ent->ambientLight[2] = 255.0f;
+			ent->directedLight[0] = ent->directedLight[1] = ent->directedLight[2] = 255.0f;
+			VectorCopy(tr.sunDirection, ent->lightDir);
+			return qfalse;
+		}
+	}
+
 	if ( ent->e.renderfx & RF_LIGHTING_ORIGIN ) {
 		// seperate lightOrigins are needed so an object that is
 		// sinking into the ground can still be lit, and so
@@ -288,6 +393,7 @@ static void R_SetupEntityLightingGrid( trRefEntity_t *ent, world_t *world ) {
 	VectorScale( ent->directedLight, r_directedScale->value, ent->directedLight );
 
 	VectorNormalize2( direction, ent->lightDir );
+	return qfalse;
 }
 
 
@@ -353,9 +459,11 @@ void R_SetupEntityLighting( const trRefdef_t *refdef, trRefEntity_t *ent ) {
 	}
 
 	// if NOWORLDMODEL, only use dynamic lights (menu system, etc)
+	// newjk: true once a fullbright color has been forced, which the blocks below must not undo
+	qboolean customFullbright = qfalse;
 	if ( !(refdef->rdflags & RDF_NOWORLDMODEL )
 		&& tr.world->lightGridData ) {
-		R_SetupEntityLightingGrid( ent, tr.world );
+		customFullbright = R_SetupEntityLightingGrid( ent, tr.world );
 	} else {
 		ent->ambientLight[0] = ent->ambientLight[1] =
 			ent->ambientLight[2] = tr.identityLight * 150;
@@ -364,8 +472,9 @@ void R_SetupEntityLighting( const trRefdef_t *refdef, trRefEntity_t *ent ) {
 		VectorCopy( tr.sunDirection, ent->lightDir );
 	}
 
-	// only do min lighting when there is no hdr light data
-	if (tr.hdrLighting != qtrue)
+	// only do min lighting when there is no hdr light data, and skip it entirely
+	// for entities whose color was already deliberately set by fullbright above
+	if (tr.hdrLighting != qtrue && !customFullbright)
 	{
 		if (ent->e.renderfx & RF_MINLIGHT)
 		{ //the minlight flag is now for items rotating on their holo thing
@@ -384,12 +493,6 @@ void R_SetupEntityLighting( const trRefdef_t *refdef, trRefEntity_t *ent ) {
 				ent->ambientLight[2] += tr.identityLight * 150;
 			}
 		}
-		// bonus items and view weapons have a fixed minimum add
-		else if (ent->e.renderfx & RF_MORELIGHT) {
-			ent->ambientLight[0] += tr.identityLight * 96;
-			ent->ambientLight[1] += tr.identityLight * 96;
-			ent->ambientLight[2] += tr.identityLight * 96;
-		}
 		else {
 			// give everything a minimum light add
 			ent->ambientLight[0] += tr.identityLight * 32;
@@ -397,9 +500,6 @@ void R_SetupEntityLighting( const trRefdef_t *refdef, trRefEntity_t *ent ) {
 			ent->ambientLight[2] += tr.identityLight * 32;
 		}
 	}
-
-	d = VectorLength( ent->directedLight );
-	VectorScale( ent->lightDir, d, lightDir );
 
 	// clamp ambient
 	if (tr.hdrLighting != qtrue)
@@ -421,13 +521,19 @@ void R_SetupEntityLighting( const trRefdef_t *refdef, trRefEntity_t *ent ) {
 	((byte *)&ent->ambientLightInt)[2] = Q_ftol(ent->ambientLight[2]);
 	((byte *)&ent->ambientLightInt)[3] = 0xff;
 
-	// transform the direction to local space
-	VectorNormalize( lightDir );
-	VectorCopy(lightDir, ent->lightDir);
+	// transform the direction to local space; fullbright entities keep the raw
+	// world-space sun direction R_SetupEntityLightingGrid() gave them instead
+	if (!customFullbright) {
+		d = VectorLength( ent->directedLight );
+		VectorScale( ent->lightDir, d, lightDir );
 
-	ent->modelLightDir[0] = DotProduct( lightDir, ent->e.axis[0] );
-	ent->modelLightDir[1] = DotProduct( lightDir, ent->e.axis[1] );
-	ent->modelLightDir[2] = DotProduct( lightDir, ent->e.axis[2] );
+		VectorNormalize( lightDir );
+		VectorCopy(lightDir, ent->lightDir);
+
+		ent->modelLightDir[0] = DotProduct( lightDir, ent->e.axis[0] );
+		ent->modelLightDir[1] = DotProduct( lightDir, ent->e.axis[1] );
+		ent->modelLightDir[2] = DotProduct( lightDir, ent->e.axis[2] );
+	}
 }
 
 /*

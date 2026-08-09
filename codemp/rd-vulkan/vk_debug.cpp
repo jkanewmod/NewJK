@@ -56,7 +56,12 @@ void QDECL vk_debug( const char *msg, ... ) {
 	Q_vsnprintf(text, sizeof(text), msg, argptr);
 	va_end(argptr);
 
-	Com_Printf( S_COLOR_CYAN "%s\n", text );
+	// PRINT_DEVELOPER, not the PRINT_ALL Com_Printf() would give it - this is
+	// low-level internal Vulkan diagnostic spam (frame-by-frame command
+	// buffer/pipeline chatter), not something a normal user running a Debug
+	// build should ever see in their console; only surface it when they've
+	// explicitly asked for verbose output via developer 1.
+	ri.Printf( PRINT_DEVELOPER, S_COLOR_CYAN "%s\n", text );
 
 	fp = fopen("./vk_log.log", "a");
 	fprintf(fp, "%s", text);

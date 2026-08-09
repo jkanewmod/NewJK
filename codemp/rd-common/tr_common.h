@@ -27,7 +27,9 @@ along with this program; if not, see <http://www.gnu.org/licenses/>.
 #include "../rd-common/tr_public.h"
 #include "../rd-common/tr_font.h"
 
-extern refimport_t *ri;
+// a value rather than a pointer, so these shared sources compile identically against
+// all three backends
+extern refimport_t ri;
 
 /*
 ================================================================================

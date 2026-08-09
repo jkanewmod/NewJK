@@ -272,6 +272,10 @@ void GL_State( uint32_t stateBits )
 			case GLS_SRCBLEND_ALPHA_SATURATE:
 				srcFactor = GL_SRC_ALPHA_SATURATE;
 				break;
+			// blends against the constant set by qglBlendColor rather than a vertex/texture alpha
+			case GLS_SRCBLEND_CONST_ALPHA:
+				srcFactor = GL_CONSTANT_ALPHA;
+				break;
 			default:
 				srcFactor = GL_ONE;		// to get warning to shut up
 				Com_Error( ERR_DROP, "GL_State: invalid src blend state bits\n" );
@@ -303,6 +307,10 @@ void GL_State( uint32_t stateBits )
 				break;
 			case GLS_DSTBLEND_ONE_MINUS_DST_ALPHA:
 				dstFactor = GL_ONE_MINUS_DST_ALPHA;
+				break;
+			// destination half of the constant-alpha blend above
+			case GLS_DSTBLEND_ONE_MINUS_CONST_ALPHA:
+				dstFactor = GL_ONE_MINUS_CONSTANT_ALPHA;
 				break;
 			default:
 				dstFactor = GL_ONE;		// to get warning to shut up
@@ -1006,11 +1014,16 @@ void RB_RenderDrawSurfList( drawSurf_t *drawSurfs, int numDrawSurfs ) {
 
 	backEnd.refdef.floatTime = originalTime;
 
-	// draw the contents of the last shader batch
-	//assert(entityNum < MAX_GENTITIES);
-
+	/*
+		draw the contents of the last shader batch - through DoEndSurface like every other batch
+		in the loop above, not bare RB_EndSurface. DoEndSurface is where the per-weapon-model
+		fullbright override (cg_fullbrightWeapons) is applied, so flushing the final batch
+		without it means whichever surface happens to sort last never gets its override color.
+		Sort order shifts with view angle and distance, so a world weapon pickup would flicker
+		between its override color and its normal skin as the camera moved.
+	*/
 	if (oldShader != NULL) {
-		RB_EndSurface();
+		DoEndSurface( oldShader->name, oldEntityNum >= 0 ? !(backEnd.refdef.entities[oldEntityNum].e.renderfx & RF_ISCORPSE) : true );
 	}
 
 #ifdef _CRAZY_ATTRIB_DEBUG

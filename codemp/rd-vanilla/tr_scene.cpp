@@ -206,6 +206,10 @@ RE_AddRefEntityToScene
 
 =====================
 */
+// rend2-only feature, no-op here - see cg_public.h's R_SetNextEntityNum comment.
+void RE_SetNextEntityNum( int entityNum ) {
+}
+
 void RE_AddRefEntityToScene( const refEntity_t *ent ) {
 	if ( !tr.registered ) {
 		return;
@@ -367,7 +371,9 @@ RE_AddLightToScene
 
 =====================
 */
-void RE_AddLightToScene( const vec3_t org, float intensity, float r, float g, float b ) {
+// noShadowFromEntity is accepted for signature parity and ignored: this backend has no
+// shadow pass to exempt an entity from
+void RE_AddLightToScene( const vec3_t org, float intensity, float r, float g, float b, int noShadowFromEntity ) {
 	RE_AddDynamicLightToScene( org, intensity, r, g, b, qfalse );
 }
 

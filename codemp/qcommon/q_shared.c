@@ -25,6 +25,13 @@ along with this program; if not, see <http://www.gnu.org/licenses/>.
 // q_shared.c -- stateless support routines that are included in each code dll
 #include "q_shared.h"
 
+// single defining TU for the Com_Error/Com_Printf function-pointer storage declared
+// extern in q_shared.h (see the comment there)
+#if defined( _GAME ) || defined( _CGAME ) || defined( UI_BUILD )
+	NORETURN_PTR void (*Com_Error)( int level, const char *error, ... ) = NULL;
+	void (*Com_Printf)( const char *msg, ... ) = NULL;
+#endif
+
 /*
 -------------------------
 GetIDForString

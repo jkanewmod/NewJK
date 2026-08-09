@@ -153,40 +153,51 @@ set(MPRend2Files
 	${CMAKE_CURRENT_BINARY_DIR}/glsl_shaders.cpp)
 
 set(MPRend2IncludeDirectories ${MPRend2IncludeDirectories} ${OpenJKLibDir})
-add_library(${MPRend2} SHARED ${MPRend2Files})
+# newjk: target renamed to MPRend2Renderer, matching the MPVanillaRenderer/MPVulkanRenderer
+# naming and the rd-rend2_${Architecture} output name set in the top-level CMakeLists
+add_library(${MPRend2Renderer} SHARED ${MPRend2Files})
 
 if(NOT MSVC)
 	# remove "lib" prefix for .so/.dylib files
-	set_target_properties(${MPRend2} PROPERTIES PREFIX "")
+	set_target_properties(${MPRend2Renderer} PROPERTIES PREFIX "")
 endif()
 
 if(WIN32)
-	install(TARGETS ${MPRend2}
+	# newjk: renamed target, see add_library above
+	install(TARGETS ${MPRend2Renderer}
 		RUNTIME
 		DESTINATION ${JKAInstallDir}
 		COMPONENT ${JKAMPClientComponent})
 else(WIN32)
 	if(MakeApplicationBundles AND BuildMPEngine)
-		install(TARGETS ${MPRend2}
+		# newjk: renamed target, see add_library above
+		install(TARGETS ${MPRend2Renderer}
 			LIBRARY
 			DESTINATION "${JKAInstallDir}/${MPEngine}.app/Contents/MacOS/"
 			COMPONENT ${JKAMPClientComponent})
 	else()
-		install(TARGETS ${MPRend2}
+		# newjk: renamed target, see add_library above
+		install(TARGETS ${MPRend2Renderer}
 			LIBRARY
 			DESTINATION ${JKAInstallDir}
 			COMPONENT ${JKAMPClientComponent})
 	endif()
 endif()
 
-set_target_properties(${MPRend2} PROPERTIES COMPILE_DEFINITIONS "${SharedDefines}")
+# newjk: RENDERER_HAS_OWN_MODEL_T suppresses tr_types.h's shared model_t/skin_t, which this
+# backend defines itself
+set_target_properties(${MPRend2Renderer} PROPERTIES COMPILE_DEFINITIONS "${SharedDefines};RENDERER_HAS_OWN_MODEL_T")
 
 # Hide symbols not explicitly marked public.
-set_property(TARGET ${MPRend2} APPEND PROPERTY COMPILE_OPTIONS ${OPENJK_VISIBILITY_FLAGS})
-set_target_properties(${MPRend2} PROPERTIES INCLUDE_DIRECTORIES "${MPRend2IncludeDirectories}")
-set_target_properties(${MPRend2} PROPERTIES PROJECT_LABEL "MP Rend2 Renderer")
-target_link_libraries(${MPRend2} ${MPRend2Libraries})
-target_include_directories(${MPRend2} PRIVATE ${CMAKE_CURRENT_BINARY_DIR})
+set_property(TARGET ${MPRend2Renderer} APPEND PROPERTY COMPILE_OPTIONS ${OPENJK_VISIBILITY_FLAGS})
+# newjk: renamed target, see add_library above
+set_target_properties(${MPRend2Renderer} PROPERTIES INCLUDE_DIRECTORIES "${MPRend2IncludeDirectories}")
+# newjk: renamed target, see add_library above
+set_target_properties(${MPRend2Renderer} PROPERTIES PROJECT_LABEL "MP Rend2 Renderer")
+# newjk: renamed target, see add_library above
+target_link_libraries(${MPRend2Renderer} ${MPRend2Libraries})
+# newjk: renamed target, see add_library above
+target_include_directories(${MPRend2Renderer} PRIVATE ${CMAKE_CURRENT_BINARY_DIR})
 
 # GLSL shader file generator
 add_executable(compact_glsl
@@ -194,7 +205,8 @@ add_executable(compact_glsl
 	${SharedDir}/rd-rend2/tr_allocator.cpp
 	${SharedDir}/rd-rend2/tr_allocator.h
 	${SharedDir}/rd-rend2/tr_glsl_parse.cpp)
-target_compile_definitions(compact_glsl PRIVATE "GLSL_BUILDTOOL" "NOMINMAX")
+# newjk: the shader build tool includes the same headers, so it needs the same define
+target_compile_definitions(compact_glsl PRIVATE "GLSL_BUILDTOOL" "NOMINMAX" "RENDERER_HAS_OWN_MODEL_T")
 if (NOT WIN32 AND NOT APPLE)
 	target_compile_definitions(compact_glsl PRIVATE "ARCH_STRING=\"${Architecture}\"")
 endif()

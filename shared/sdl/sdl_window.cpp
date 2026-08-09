@@ -21,6 +21,7 @@ along with this program; if not, see <http://www.gnu.org/licenses/>.
 
 #include <SDL.h>
 #include <SDL_syswm.h>
+#include <SDL_vulkan.h>					// surface creation and loader entry for the Vulkan backend
 #include "qcommon/qcommon.h"
 #include "rd-common/tr_types.h"
 #include "sys/sys_local.h"
@@ -142,9 +143,13 @@ GLimp_Minimize
 Minimize the game so that user is back at the desktop
 ===============
 */
+void WIN_VK_MinimizeFix(void);
 void GLimp_Minimize(void)
 {
 	SDL_MinimizeWindow( screen );
+	// mark minimized immediately; Vulkan must stop presenting before the swapchain is
+	// rebuilt, and the SDL event arrives too late for that
+	WIN_VK_MinimizeFix();
 }
 
 #ifdef _WIN32
@@ -177,8 +182,14 @@ void WIN_Present( window_t *window )
 		bool	needToToggle;
 		bool	sdlToggled = qfalse;
 
-		// Find out the current state
-		fullscreen = (SDL_GetWindowFlags( screen ) & SDL_WINDOW_FULLSCREEN) != 0;
+		// Find out the current state. Compare against the full FULLSCREEN_DESKTOP
+		// mask, not just the shared SDL_WINDOW_FULLSCREEN bit, so a borderless
+		// window that's using SDL_WINDOW_FULLSCREEN_DESKTOP (see GLimp_SetMode)
+		// isn't mistaken for the true-exclusive-fullscreen state r_fullscreen
+		// actually controls - otherwise toggling r_fullscreen while r_noborder's
+		// desktop-filling borderless window is active would think it's already
+		// in the requested state and silently no-op.
+		fullscreen = (SDL_GetWindowFlags( screen ) & SDL_WINDOW_FULLSCREEN_DESKTOP) == SDL_WINDOW_FULLSCREEN;
 
 		if ( r_fullscreen->integer && Cvar_VariableIntegerValue( "in_nograb" ) )
 		{
@@ -360,9 +371,18 @@ static rserr_t GLimp_SetMode(glconfig_t *glConfig, const windowDesc_t *windowDes
 	int display = 0;
 	int x = SDL_WINDOWPOS_UNDEFINED, y = SDL_WINDOWPOS_UNDEFINED;
 
-	if ( windowDesc->api == GRAPHICS_API_OPENGL )
+	// the window must be created with the right client-API flag up front; it cannot be
+	// changed afterwards
+	switch ( windowDesc->api )
 	{
-		flags |= SDL_WINDOW_OPENGL;
+		case GRAPHICS_API_OPENGL:
+			flags |= SDL_WINDOW_OPENGL;
+			break;
+		case GRAPHICS_API_VULKAN:
+			flags |= SDL_WINDOW_VULKAN;
+			break;
+		default:
+			break;
 	}
 
 	Com_Printf( "Initializing display\n");
@@ -482,7 +502,27 @@ static rserr_t GLimp_SetMode(glconfig_t *glConfig, const windowDesc_t *windowDes
 	else
 	{
 		if( noborder )
-			flags |= SDL_WINDOW_BORDERLESS;
+		{
+			// A plain SDL_WINDOW_BORDERLESS top-level window, even one sized to
+			// cover the whole desktop, is still just an ordinary window as far as
+			// the compositor is concerned - on Wayland (and some X11 WMs, KDE
+			// Plasma included) that means always-on-top panels/taskbars are
+			// deliberately drawn over it, since there's no client-side way to ask
+			// an ordinary window to sit above compositor-owned surfaces. Real
+			// "borderless fullscreen windowed" (what SDL_WINDOW_FULLSCREEN_DESKTOP
+			// actually is - borderless, no display mode change, but a genuine
+			// xdg-shell/EWMH fullscreen request under the hood) gets the
+			// compositor's normal fullscreen handling instead, which does cover
+			// panels. Only do this when the requested size actually matches the
+			// desktop resolution, since FULLSCREEN_DESKTOP always uses the
+			// desktop's current mode and ignores any smaller requested size - a
+			// genuinely small borderless window still needs plain BORDERLESS.
+			if ( desktopMode.w > 0 && glConfig->vidWidth == desktopMode.w
+				&& glConfig->vidHeight == desktopMode.h )
+				flags |= SDL_WINDOW_FULLSCREEN_DESKTOP;
+			else
+				flags |= SDL_WINDOW_BORDERLESS;
+		}
 
 		glConfig->isFullscreen = qfalse;
 	}
@@ -499,7 +539,8 @@ static rserr_t GLimp_SetMode(glconfig_t *glConfig, const windowDesc_t *windowDes
 	stencilBits = r_stencilbits->integer;
 	samples = r_ext_multisample->integer;
 
-	if ( windowDesc->api == GRAPHICS_API_OPENGL )
+	// both accelerated APIs walk the same color/depth/stencil fallback ladder
+	if ( windowDesc->api == GRAPHICS_API_OPENGL || windowDesc->api == GRAPHICS_API_VULKAN )
 	{
 		for (i = 0; i < 16; i++)
 		{
@@ -564,63 +605,68 @@ static rserr_t GLimp_SetMode(glconfig_t *glConfig, const windowDesc_t *windowDes
 			else
 				perChannelColorBits = 4;
 
-			SDL_GL_SetAttribute( SDL_GL_RED_SIZE, perChannelColorBits );
-			SDL_GL_SetAttribute( SDL_GL_GREEN_SIZE, perChannelColorBits );
-			SDL_GL_SetAttribute( SDL_GL_BLUE_SIZE, perChannelColorBits );
-			SDL_GL_SetAttribute( SDL_GL_DEPTH_SIZE, testDepthBits );
-			SDL_GL_SetAttribute( SDL_GL_STENCIL_SIZE, testStencilBits );
-
-			SDL_GL_SetAttribute( SDL_GL_MULTISAMPLEBUFFERS, samples ? 1 : 0 );
-			SDL_GL_SetAttribute( SDL_GL_MULTISAMPLESAMPLES, samples );
-
-			if ( windowDesc->gl.majorVersion )
+			// everything to the swap-interval call below is GL context setup; Vulkan
+			// configures its own device and swapchain later, inside the renderer
+			if ( windowDesc->api == GRAPHICS_API_OPENGL )
 			{
-				int compactVersion = windowDesc->gl.majorVersion * 100 + windowDesc->gl.minorVersion * 10;
+				SDL_GL_SetAttribute( SDL_GL_RED_SIZE, perChannelColorBits );
+				SDL_GL_SetAttribute( SDL_GL_GREEN_SIZE, perChannelColorBits );
+				SDL_GL_SetAttribute( SDL_GL_BLUE_SIZE, perChannelColorBits );
+				SDL_GL_SetAttribute( SDL_GL_DEPTH_SIZE, testDepthBits );
+				SDL_GL_SetAttribute( SDL_GL_STENCIL_SIZE, testStencilBits );
 
-				SDL_GL_SetAttribute( SDL_GL_CONTEXT_MAJOR_VERSION, windowDesc->gl.majorVersion );
-				SDL_GL_SetAttribute( SDL_GL_CONTEXT_MINOR_VERSION, windowDesc->gl.minorVersion );
+				SDL_GL_SetAttribute( SDL_GL_MULTISAMPLEBUFFERS, samples ? 1 : 0 );
+				SDL_GL_SetAttribute( SDL_GL_MULTISAMPLESAMPLES, samples );
 
-				if ( windowDesc->gl.profile == GLPROFILE_ES || compactVersion >= 320 )
+				if ( windowDesc->gl.majorVersion )
 				{
-					int profile;
-					switch ( windowDesc->gl.profile )
+					int compactVersion = windowDesc->gl.majorVersion * 100 + windowDesc->gl.minorVersion * 10;
+
+					SDL_GL_SetAttribute( SDL_GL_CONTEXT_MAJOR_VERSION, windowDesc->gl.majorVersion );
+					SDL_GL_SetAttribute( SDL_GL_CONTEXT_MINOR_VERSION, windowDesc->gl.minorVersion );
+
+					if ( windowDesc->gl.profile == GLPROFILE_ES || compactVersion >= 320 )
 					{
-					default:
-					case GLPROFILE_COMPATIBILITY:
-						profile = SDL_GL_CONTEXT_PROFILE_COMPATIBILITY;
-						break;
+						int profile;
+						switch ( windowDesc->gl.profile )
+						{
+						default:
+						case GLPROFILE_COMPATIBILITY:
+							profile = SDL_GL_CONTEXT_PROFILE_COMPATIBILITY;
+							break;
 
-					case GLPROFILE_CORE:
-						profile = SDL_GL_CONTEXT_PROFILE_CORE;
-						break;
+						case GLPROFILE_CORE:
+							profile = SDL_GL_CONTEXT_PROFILE_CORE;
+							break;
 
-					case GLPROFILE_ES:
-						profile = SDL_GL_CONTEXT_PROFILE_ES;
-						break;
+						case GLPROFILE_ES:
+							profile = SDL_GL_CONTEXT_PROFILE_ES;
+							break;
+						}
+
+						SDL_GL_SetAttribute( SDL_GL_CONTEXT_PROFILE_MASK, profile );
 					}
-
-					SDL_GL_SetAttribute( SDL_GL_CONTEXT_PROFILE_MASK, profile );
 				}
-			}
 
-			if ( windowDesc->gl.contextFlags & GLCONTEXT_DEBUG )
-			{
-				SDL_GL_SetAttribute( SDL_GL_CONTEXT_FLAGS, SDL_GL_CONTEXT_DEBUG_FLAG );
-			}
+				if ( windowDesc->gl.contextFlags & GLCONTEXT_DEBUG )
+				{
+					SDL_GL_SetAttribute( SDL_GL_CONTEXT_FLAGS, SDL_GL_CONTEXT_DEBUG_FLAG );
+				}
 
-			if(r_stereo->integer)
-			{
-				glConfig->stereoEnabled = qtrue;
-				SDL_GL_SetAttribute(SDL_GL_STEREO, 1);
-			}
-			else
-			{
-				glConfig->stereoEnabled = qfalse;
-				SDL_GL_SetAttribute(SDL_GL_STEREO, 0);
-			}
+				if(r_stereo->integer)
+				{
+					glConfig->stereoEnabled = qtrue;
+					SDL_GL_SetAttribute(SDL_GL_STEREO, 1);
+				}
+				else
+				{
+					glConfig->stereoEnabled = qfalse;
+					SDL_GL_SetAttribute(SDL_GL_STEREO, 0);
+				}
 
-			SDL_GL_SetAttribute( SDL_GL_DOUBLEBUFFER, 1 );
-			SDL_GL_SetAttribute( SDL_GL_ACCELERATED_VISUAL, !r_allowSoftwareGL->integer );
+				SDL_GL_SetAttribute( SDL_GL_DOUBLEBUFFER, 1 );
+				SDL_GL_SetAttribute( SDL_GL_ACCELERATED_VISUAL, !r_allowSoftwareGL->integer );
+			}
 
 			if( ( screen = SDL_CreateWindow( windowTitle, x, y,
 				windowDpiScaledWidth, windowDpiScaledHeight, flags ) ) == NULL )
@@ -656,15 +702,18 @@ static rserr_t GLimp_SetMode(glconfig_t *glConfig, const windowDesc_t *windowDes
 				}
 			}
 
-			if( ( opengl_context = SDL_GL_CreateContext( screen ) ) == NULL )
+			if ( windowDesc->api == GRAPHICS_API_OPENGL )
 			{
-				Com_Printf( "SDL_GL_CreateContext failed: %s\n", SDL_GetError( ) );
-				continue;
-			}
+				if( ( opengl_context = SDL_GL_CreateContext( screen ) ) == NULL )
+				{
+					Com_Printf( "SDL_GL_CreateContext failed: %s\n", SDL_GetError( ) );
+					continue;
+				}
 
-			if ( SDL_GL_SetSwapInterval( r_swapInterval->integer ) == -1 )
-			{
-				Com_DPrintf( "SDL_GL_SetSwapInterval failed: %s\n", SDL_GetError() );
+				if ( SDL_GL_SetSwapInterval( r_swapInterval->integer ) == -1 )
+				{
+					Com_DPrintf( "SDL_GL_SetSwapInterval failed: %s\n", SDL_GetError() );
+				}
 			}
 
 			glConfig->colorBits = testColorBits;
@@ -676,7 +725,8 @@ static rserr_t GLimp_SetMode(glconfig_t *glConfig, const windowDesc_t *windowDes
 			break;
 		}
 
-		if (opengl_context == NULL) {
+		// only GL has a context that could have failed here; Vulkan has none yet
+		if ( windowDesc->api == GRAPHICS_API_OPENGL && opengl_context == NULL ) {
 			SDL_FreeSurface(icon);
 			return RSERR_UNKNOWN;
 		}
@@ -948,6 +998,123 @@ void *WIN_GL_GetProcAddress( const char *proc )
 qboolean WIN_GL_ExtensionSupported( const char *extension )
 {
 	return SDL_GL_ExtensionSupported( extension ) == SDL_TRUE ? qtrue : qfalse;
+}
+
+// Vulkan platform hooks, mirroring the WIN_GL_* set above.
+
+// set com_minimized here rather than waiting for the SDL event, so presentation stops
+// before the swapchain becomes invalid
+void WIN_VK_MinimizeFix(void) {
+	Cvar_SetValue("com_minimized", 1);
+}
+
+// re-checks the window flags before trusting com_minimized, and clears it once the window
+// is back, so a stale flag cannot stall presentation forever
+qboolean WIN_VK_IsMinimized(void) {
+	if ( com_minimized->integer )
+	{
+		//double check
+		Uint32 flags = SDL_GetWindowFlags( screen );
+
+		if( ( flags & SDL_WINDOW_MINIMIZED ) || ( flags & SDL_WINDOW_HIDDEN ) )
+			return qtrue;
+
+		Cvar_SetValue( "com_minimized", 0 );
+	}
+
+	return qfalse;
+}
+
+// loads the Vulkan loader via SDL and returns vkGetInstanceProcAddr; fatal on failure,
+// since the renderer cannot continue without it
+void *WIN_VK_GetInstanceProcAddress(void)
+{
+	int code = SDL_Vulkan_LoadLibrary(NULL);
+
+	if (code) {
+		Com_Error(ERR_FATAL, "Failed to load Vulkan library (code %d): %s", code, SDL_GetError());
+	}
+
+	return SDL_Vulkan_GetVkGetInstanceProcAddr();
+}
+
+// SDL owns the window, so it also creates the platform surface for it
+qboolean WIN_VK_createSurfaceImpl(VkInstance instance, VkSurfaceKHR *surface)
+{
+	if (!SDL_Vulkan_CreateSurface(screen, instance, surface))
+	{
+		surface = VK_NULL_HANDLE;
+		Com_Error(ERR_FATAL, "SDL_Vulkan_CreateSurface(): %s", SDL_GetError());
+	}
+
+	return qtrue;
+}
+
+// nothing to do: the window belongs to SDL and outlives the Vulkan device, which destroys
+// its own surface
+void WIN_VK_destroyWindow(void)
+{
+	return;
+}
+
+qboolean WIN_VK_ProbeSupport(void)
+{
+	// Headless check: try to create a throwaway VkInstance and see at least one physical
+	// device, without ever creating a window or surface. Kept to instance/device enumeration
+	// only -- real-world Vulkan crashes on broken/old drivers cluster around surface and
+	// swapchain teardown, not bare instance creation, so a window/surface is never touched
+	// here. Every step is failure-checked and this never calls Com_Error -- a probe must
+	// never be fatal, that's the entire point of it existing.
+	qboolean supported = qfalse;
+
+	// SDL_Vulkan_LoadLibrary() requires SDL_INIT_VIDEO, which otherwise doesn't happen until
+	// a window is actually created (GLimp_StartDriverAndSetMode, later, during real renderer
+	// init). Bring it up here using the same SDL_WasInit guard that call already uses, rather
+	// than tearing it back down afterward -- whichever renderer actually loads next (Vulkan or
+	// the fallback) needs it a moment later anyway, so this is strictly earlier, not extra.
+	if ( !SDL_WasInit( SDL_INIT_VIDEO ) && SDL_InitSubSystem( SDL_INIT_VIDEO ) != 0 )
+		return qfalse;
+
+	if ( SDL_Vulkan_LoadLibrary( NULL ) != 0 )
+		return qfalse;
+
+	PFN_vkGetInstanceProcAddr getInstanceProcAddr = (PFN_vkGetInstanceProcAddr)SDL_Vulkan_GetVkGetInstanceProcAddr();
+	PFN_vkCreateInstance createInstance = getInstanceProcAddr ?
+		(PFN_vkCreateInstance)getInstanceProcAddr( NULL, "vkCreateInstance" ) : NULL;
+
+	if ( createInstance )
+	{
+		VkApplicationInfo appInfo = {};
+		appInfo.sType = VK_STRUCTURE_TYPE_APPLICATION_INFO;
+		appInfo.apiVersion = VK_API_VERSION_1_0;
+
+		VkInstanceCreateInfo createInfo = {};
+		createInfo.sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO;
+		createInfo.pApplicationInfo = &appInfo;
+
+		VkInstance instance = VK_NULL_HANDLE;
+		if ( createInstance( &createInfo, NULL, &instance ) == VK_SUCCESS && instance != VK_NULL_HANDLE )
+		{
+			PFN_vkEnumeratePhysicalDevices enumeratePhysicalDevices =
+				(PFN_vkEnumeratePhysicalDevices)getInstanceProcAddr( instance, "vkEnumeratePhysicalDevices" );
+			PFN_vkDestroyInstance destroyInstance =
+				(PFN_vkDestroyInstance)getInstanceProcAddr( instance, "vkDestroyInstance" );
+
+			if ( enumeratePhysicalDevices )
+			{
+				uint32_t deviceCount = 0;
+				if ( enumeratePhysicalDevices( instance, &deviceCount, NULL ) == VK_SUCCESS && deviceCount > 0 )
+					supported = qtrue;
+			}
+
+			if ( destroyInstance )
+				destroyInstance( instance, NULL );
+		}
+	}
+
+	SDL_Vulkan_UnloadLibrary();
+
+	return supported;
 }
 
 void CL_SetWindowTitle(const char *s) {

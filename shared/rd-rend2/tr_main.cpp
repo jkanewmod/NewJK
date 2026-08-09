@@ -877,7 +877,13 @@ static void R_SetFarClip( viewParms_t *viewParms, const trRefdef_t *refdef )
 	// Bring in the zFar to the distanceCull distance
 	// The sky renders at zFar so need to move it out a little
 	// ...and make sure there is a minimum zfar to prevent problems
-	viewParms->zFar = Com_Clamp(2048.0f, tr.distanceCull * (1.732), sqrtf( farthestCornerDistance ));
+	// newjk: honor r_cullDistanceOverride when it reaches further than the map value
+	float cullDist;
+	if (tr.distanceCull < r_cullDistanceOverride->value)
+		cullDist = r_cullDistanceOverride->value;
+	else
+		cullDist = tr.distanceCull;
+	viewParms->zFar = Com_Clamp(2048.0f, cullDist * (1.732), sqrtf( farthestCornerDistance ));
 }
 
 /*
@@ -1918,8 +1924,6 @@ static void R_AddEntitySurface(const trRefdef_t *refdef, trRefEntity_t *ent, int
 	case RT_ELECTRICITY:
 	case RT_LINE:
 	case RT_ORIENTEDLINE:
-	case RT_LATHE:
-	case RT_CLOUDS:
 	case RT_CYLINDER:
 	case RT_SABER_GLOW:
 		// self blood sprites, talk balloons, etc should not be drawn in the primary
@@ -2046,6 +2050,12 @@ static void R_AddEntitySurfaces(const trRefdef_t *refdef)
 
 	for (int i = entityStart; i < numEntities; i++)
 	{
+		// newjk: skip the light owner so it cannot shadow itself
+		if ((tr.viewParms.flags & VPF_EXCLUDESHADOWCASTER) && i == tr.viewParms.excludeShadowCasterEntity)
+		{
+			continue;
+		}
+
 		trRefEntity_t *ent = refdef->entities + i;
 		R_AddEntitySurface(refdef, ent, i);
 	}
@@ -2067,6 +2077,7 @@ void R_GenerateDrawSurfs( viewParms_t *viewParms, trRefdef_t *refdef ) {
 		R_AddEntitySurface(refdef, ent, entityNum);
 		return;
 	}
+
 
 	R_AddWorldSurfaces(viewParms, refdef);
 
@@ -2746,6 +2757,39 @@ void R_GatherFrameViews(trRefdef_t *refdef)
 				shadowParms.zNear = 1.0f;
 
 				VectorCopy(refdef->dlights[i].origin, shadowParms.ori.origin);
+
+				// Lights that are essentially attached to (co-located with)
+				// an entity - e.g. the CTF flag-carrier glow - cause bad
+				// self-shadow acne/popping on that entity as its geometry
+				// (legs, etc) animates right next to the light. Only
+				// lights that explicitly opted in via RE_AddLightToScene's
+				// noShadowFromEntity arg get this treatment - most dlights
+				// (muzzle flashes, missiles, saber glow, constant-light
+				// props, ...) pass ENTITYNUM_NONE and are unaffected.
+				// Find the ref-entity whose game entity number exactly
+				// matches (cgame tags it via trap->R_SetNextEntityNum()
+				// just before adding the ref-entity - see
+				// CG_AddLegsRefEntityToScene in cg_players.c) and exclude
+				// it as a caster into this light's shadow, while
+				// everything else still gets shadowed normally.
+				if (refdef->dlights[i].noShadowFromEntity != ENTITYNUM_NONE)
+				{
+					int selfEntityNum = -1;
+					for (int k = 0; k < refdef->num_entities; k++)
+					{
+						if (refdef->entities[k].entityNum == refdef->dlights[i].noShadowFromEntity)
+						{
+							selfEntityNum = k;
+							break;
+						}
+					}
+
+					if (selfEntityNum != -1)
+					{
+						shadowParms.flags |= VPF_EXCLUDESHADOWCASTER;
+						shadowParms.excludeShadowCasterEntity = selfEntityNum;
+					}
+				}
 
 				for (j = 0; j < 6; j++)
 				{

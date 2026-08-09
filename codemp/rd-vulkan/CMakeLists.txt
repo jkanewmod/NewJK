@@ -113,7 +113,9 @@ set(MPVulkanRendererRdCommonFiles
 	"${MPDir}/rd-common/tr_image_png.cpp"
 	"${MPDir}/rd-common/tr_noise.cpp"
 	"${MPDir}/rd-common/tr_public.h"
-	"${MPDir}/rd-common/tr_types.h")
+	"${MPDir}/rd-common/tr_types.h"
+	# newjk: NewJK keeps its embedded fonts here, so this backend needs the header too
+	"${MPDir}/rd-common/embeddedfonts.h")
 source_group("rd-common" FILES ${MPVulkanRendererRdCommonFiles})
 set(MPVulkanRendererFiles ${MPVulkanRendererFiles} ${MPVulkanRendererRdCommonFiles})
 
@@ -164,10 +166,9 @@ source_group("common/safe" FILES ${MPVulkanRendererCommonSafeFiles})
 set(MPVulkanRendererFiles ${MPVulkanRendererFiles} ${MPVulkanRendererCommonSafeFiles})
 
 # Transparently use either bundled or system libjpeg.
+# newjk: NewJK does not build the turbojpeg config dir upstream expects, so only the plain
+# libjpeg include path applies here
 list(APPEND MPVulkanRendererIncludeDirectories ${JPEG_INCLUDE_DIR})
-if(UseInternalJPEG AND UseTurboJPEG)
-	list(APPEND MPVulkanRendererIncludeDirectories ${JPEG_CONFIG_DIR})
-endif()
 list(APPEND MPVulkanRendererLibraries          ${JPEG_LIBRARIES})
 
 # Transparently use either bundled or system libpng.  Order is important --
@@ -214,7 +215,9 @@ else(WIN32)
 	endif()
 endif()
 
-set_target_properties(${MPVulkanRenderer} PROPERTIES COMPILE_DEFINITIONS "${SharedDefines}")
+# newjk: RENDERER_HAS_OWN_MODEL_T suppresses tr_types.h's shared model_t/skin_t, which this
+# backend defines itself
+set_target_properties(${MPVulkanRenderer} PROPERTIES COMPILE_DEFINITIONS "${SharedDefines};RENDERER_HAS_OWN_MODEL_T")
 
 # Hide symbols not explicitly marked public.
 set_property(TARGET ${MPVulkanRenderer} APPEND PROPERTY COMPILE_OPTIONS ${OPENJK_VISIBILITY_FLAGS})

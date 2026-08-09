@@ -52,6 +52,10 @@ cvar_t	*r_measureOverdraw;
 
 cvar_t	*r_inGameVideo;
 cvar_t	*r_fastsky;
+// newjk: solid-color sky components used when r_fastsky is on
+cvar_t	*r_fastSkyR;
+cvar_t	*r_fastSkyG;
+cvar_t	*r_fastSkyB;
 cvar_t	*r_drawSun;
 cvar_t	*r_dynamiclight;
 // rjr - removed for hacking
@@ -67,6 +71,23 @@ cvar_t	*r_drawworld;
 cvar_t	*r_drawfog;
 cvar_t	*r_speeds;
 cvar_t	*r_fullbright;
+// newjk: set once cgame is running, so the renderer can tell menu from in-game
+cvar_t	*r_cgameStarted;
+// newjk: per-weapon-model fullbright colors, keyed by three-letter weapon code
+cvar_t *r_fullbrightcolor_weapon_sab;
+cvar_t *r_fullbrightcolor_weapon_pis;
+cvar_t *r_fullbrightcolor_weapon_bla;
+cvar_t *r_fullbrightcolor_weapon_dis;
+cvar_t *r_fullbrightcolor_weapon_bow;
+cvar_t *r_fullbrightcolor_weapon_rep;
+cvar_t *r_fullbrightcolor_weapon_dem;
+cvar_t *r_fullbrightcolor_weapon_gol;
+cvar_t *r_fullbrightcolor_weapon_roc;
+cvar_t *r_fullbrightcolor_weapon_con;
+cvar_t *r_fullbrightcolor_weapon_the;
+cvar_t *r_fullbrightcolor_weapon_min;
+cvar_t *r_fullbrightcolor_weapon_dpk;
+cvar_t *r_fullbrightcolor_weapon_stu;
 cvar_t	*r_novis;
 cvar_t	*r_nocull;
 cvar_t	*r_facePlaneCull;
@@ -127,6 +148,8 @@ cvar_t	*r_texturebitslm;
 
 cvar_t	*r_lightmap;
 cvar_t	*r_distanceCull;
+// newjk: raises the world cull distance above whatever the map asks for
+cvar_t	*r_cullDistanceOverride;
 cvar_t	*r_vertexLight;
 cvar_t	*r_uiFullScreen;
 cvar_t	*r_shadows;
@@ -439,9 +462,9 @@ void R_TakeScreenshot( int x, int y, int width, int height, char *fileName ) {
 
 	memcount = linelen * height;
 
-	// gamma correct
-	if(glConfig.deviceSupportsGamma && !glConfigExt.doGammaCorrectionWithShaders)
-		R_GammaCorrect(allbuf + offset, memcount);
+	// newjk: unconditional - this backend always applies gamma, so the captured
+	// buffer always needs correcting back
+	R_GammaCorrect(allbuf + offset, memcount);
 
 	ri.FS_WriteFile(fileName, buffer, memcount + 18);
 
@@ -459,7 +482,11 @@ void R_TakeScreenshotPNG( int x, int y, int width, int height, char *fileName ) 
 	int padlen=0;
 
 	buffer = RB_ReadPixels( x, y, width, height, &offset, &padlen, 0);
-	RE_SavePNG( fileName, buffer, width, height, 3 );
+
+	// newjk: PNG capture was missing gamma correction entirely, unlike TGA/JPEG
+	R_GammaCorrect( buffer + offset, (width * 3 + padlen) * height );
+
+	RE_SavePNG( fileName, buffer + offset, width, height, 3 );
 	ri.Hunk_FreeTempMemory( buffer );
 }
 
@@ -476,9 +503,8 @@ void R_TakeScreenshotJPEG( int x, int y, int width, int height, char *fileName )
 	buffer = RB_ReadPixels(x, y, width, height, &offset, &padlen, 0);
 	memcount = (width * 3 + padlen) * height;
 
-	// gamma correct
-	if(glConfig.deviceSupportsGamma && !glConfigExt.doGammaCorrectionWithShaders)
-		R_GammaCorrect(buffer + offset, memcount);
+	// newjk: unconditional, as above
+	R_GammaCorrect(buffer + offset, memcount);
 
 	RE_SaveJPG(fileName, r_screenshotJpegQuality->integer, width, height, buffer + offset, padlen);
 	ri.Hunk_FreeTempMemory(buffer);
@@ -555,10 +581,8 @@ static void R_LevelShot( void ) {
 		}
 	}
 
-	// gamma correct
-	if ( ( tr.overbrightBits > 0 ) && glConfig.deviceSupportsGamma && !glConfigExt.doGammaCorrectionWithShaders ) {
-		R_GammaCorrect( buffer + 18, LEVELSHOTSIZE * LEVELSHOTSIZE * 3 );
-	}
+	// newjk: unconditional, as above
+	R_GammaCorrect( buffer + 18, LEVELSHOTSIZE * LEVELSHOTSIZE * 3 );
 
 	ri.FS_WriteFile( checkname, buffer, LEVELSHOTSIZE * LEVELSHOTSIZE*3 + 18 );
 
@@ -604,17 +628,27 @@ void R_ScreenShot_f ( void ) {
 	if ( !strcmp( ri.Cmd_Argv(1), "silent" ) )
 		silent = qtrue;
 
-	if ( ri.Cmd_Argc() == 2 && !silent ) {
+	// newjk: >= 2 so multi-word (spaced) screenshot names are accepted
+	if ( ri.Cmd_Argc() >= 2 && !silent ) {
 		// explicit filename
-		Com_sprintf( checkname, sizeof( checkname ), "screenshots/%s.%s", ri.Cmd_Argv( 1 ), ext );
+		// newjk: take the whole argument string, so screenshot names may contain spaces
+		char args[MAX_OSPATH] = { 0 };
+		ri.Cmd_ArgsBuffer(args, sizeof(args));
+		Com_sprintf( checkname, sizeof( checkname ), "screenshots/%s.%s", args, ext );
 	}
 	else {
 		// timestamp the filename
 		R_ScreenshotFilename( checkname, sizeof( checkname ), ext );
 
-		if ( ri.FS_FileExists( checkname ) ) {
-			vk_debug("ScreenShot: Couldn't create a file\n" );
-			return;
+		// newjk: append " (N)" rather than refusing when the name is already taken
+		int num = 1;
+		while ( ri.FS_FileExists( checkname ) ) {
+			num++;
+			time_t rawtime;
+			char timeStr[32] = {0};
+			time( &rawtime );
+			strftime( timeStr, sizeof( timeStr ), "%Y-%m-%d_%H-%M-%S", localtime( &rawtime ) );
+			Com_sprintf( checkname, sizeof( checkname ), "screenshots/shot%s (%i).%s", timeStr, num, ext );
  		}
 	}
 
@@ -666,9 +700,8 @@ const void *RB_TakeVideoFrameCmd( const void *data )
 
 	memcount = padwidth * cmd->height;
 
-	// gamma correct
-	if (glConfig.deviceSupportsGamma)
-		R_GammaCorrect(cBuf, memcount);
+	// newjk: unconditional, as above
+	R_GammaCorrect(cBuf, memcount);
 
 	if (cmd->motionJpeg)
 	{
@@ -772,8 +805,15 @@ static const size_t numCommands = ARRAY_LEN( commands );
 R_Register
 ===============
 */
+// newjk: defined below; called from R_Register before any cvar is read
+static void R_ApplySafeVideoStartup( void );
+
 void R_Register( void )
 {
+	// Before any of the cvars below are read: if the previous launch never drew a frame, drop the
+	// demanding settings now so the values registered here are already the safe ones.
+	R_ApplySafeVideoStartup();
+
 	r_patchStitching 					= ri.Cvar_Get("r_patchStitching", 					"1", 						CVAR_ARCHIVE, "Enable stitching of neighbouring patch surfaces" );
 	//FIXME: lol badness
 	se_language 						= ri.Cvar_Get("se_language", 						"english", 					CVAR_ARCHIVE | CVAR_NORESTART, "");
@@ -816,6 +856,22 @@ void R_Register( void )
 	ri.Cvar_CheckRange( r_subdivisions, 0, 80, qfalse );
 
 	r_fullbright						= ri.Cvar_Get( "r_fullbright",						"0",						CVAR_ARCHIVE_ND, "" );
+	// newjk: ROM flag the client sets when cgame comes up
+	r_cgameStarted						= ri.Cvar_Get( "r_cgameStarted",					"0",						CVAR_ROM | CVAR_INTERNAL, "" );
+	r_fullbrightcolor_weapon_sab = ri.Cvar_Get("r_fullbrightcolor_weapon_sab", "", CVAR_ROM | CVAR_INTERNAL, "");
+	r_fullbrightcolor_weapon_pis = ri.Cvar_Get("r_fullbrightcolor_weapon_pis", "", CVAR_ROM | CVAR_INTERNAL, "");
+	r_fullbrightcolor_weapon_bla = ri.Cvar_Get("r_fullbrightcolor_weapon_bla", "", CVAR_ROM | CVAR_INTERNAL, "");
+	r_fullbrightcolor_weapon_dis = ri.Cvar_Get("r_fullbrightcolor_weapon_dis", "", CVAR_ROM | CVAR_INTERNAL, "");
+	r_fullbrightcolor_weapon_bow = ri.Cvar_Get("r_fullbrightcolor_weapon_bow", "", CVAR_ROM | CVAR_INTERNAL, "");
+	r_fullbrightcolor_weapon_rep = ri.Cvar_Get("r_fullbrightcolor_weapon_rep", "", CVAR_ROM | CVAR_INTERNAL, "");
+	r_fullbrightcolor_weapon_dem = ri.Cvar_Get("r_fullbrightcolor_weapon_dem", "", CVAR_ROM | CVAR_INTERNAL, "");
+	r_fullbrightcolor_weapon_gol = ri.Cvar_Get("r_fullbrightcolor_weapon_gol", "", CVAR_ROM | CVAR_INTERNAL, "");
+	r_fullbrightcolor_weapon_roc = ri.Cvar_Get("r_fullbrightcolor_weapon_roc", "", CVAR_ROM | CVAR_INTERNAL, "");
+	r_fullbrightcolor_weapon_con = ri.Cvar_Get("r_fullbrightcolor_weapon_con", "", CVAR_ROM | CVAR_INTERNAL, "");
+	r_fullbrightcolor_weapon_the = ri.Cvar_Get("r_fullbrightcolor_weapon_the", "", CVAR_ROM | CVAR_INTERNAL, "");
+	r_fullbrightcolor_weapon_min = ri.Cvar_Get("r_fullbrightcolor_weapon_min", "", CVAR_ROM | CVAR_INTERNAL, "");
+	r_fullbrightcolor_weapon_dpk = ri.Cvar_Get("r_fullbrightcolor_weapon_dpk", "", CVAR_ROM | CVAR_INTERNAL, "");
+	r_fullbrightcolor_weapon_stu = ri.Cvar_Get("r_fullbrightcolor_weapon_stu", "", CVAR_ROM | CVAR_INTERNAL, "");
 	r_intensity							= ri.Cvar_Get( "r_intensity",						"1",						CVAR_LATCH, "" );
 	r_singleShader						= ri.Cvar_Get( "r_singleShader",					"0",						CVAR_CHEAT|CVAR_LATCH, "" );
 	r_lodCurveError						= ri.Cvar_Get( "r_lodCurveError",					"250",						CVAR_ARCHIVE_ND, "" );
@@ -833,6 +889,13 @@ void R_Register( void )
 	r_zproj								= ri.Cvar_Get("r_zproj",							"64",						CVAR_ARCHIVE_ND, "" );
 	r_ignoreGLErrors					= ri.Cvar_Get( "r_ignoreGLErrors",					"1",						CVAR_ARCHIVE_ND, "" );
 	r_fastsky							= ri.Cvar_Get( "r_fastsky",							"0",						CVAR_ARCHIVE_ND, "" );
+	// newjk: r_fastsky clear color, matching rd-vanilla
+	r_fastSkyR							= ri.Cvar_Get( "r_fastSkyR",						"0.0",						CVAR_ARCHIVE|CVAR_INTERNAL, "" );
+	ri.Cvar_CheckRange(r_fastSkyR, 0.0f, 1.0f, qfalse);
+	r_fastSkyG							= ri.Cvar_Get( "r_fastSkyG",						"0.0",						CVAR_ARCHIVE|CVAR_INTERNAL, "" );
+	ri.Cvar_CheckRange(r_fastSkyG, 0.0f, 1.0f, qfalse);
+	r_fastSkyB							= ri.Cvar_Get( "r_fastSkyB",						"0.0",						CVAR_ARCHIVE|CVAR_INTERNAL, "" );
+	ri.Cvar_CheckRange(r_fastSkyB, 0.0f, 1.0f, qfalse);
 	r_inGameVideo						= ri.Cvar_Get( "r_inGameVideo",						"1",						CVAR_ARCHIVE_ND, "" );
 	r_drawSun							= ri.Cvar_Get( "r_drawSun",							"0",						CVAR_ARCHIVE_ND, "" );
 	r_dynamiclight						= ri.Cvar_Get( "r_dynamiclight",					"1",						CVAR_ARCHIVE, "" );
@@ -848,8 +911,9 @@ void R_Register( void )
 	r_roofCullFloorDist					= ri.Cvar_Get( "r_roofCeilFloorDist",				"128",						CVAR_CHEAT, "" ); //attempted smart method of culling out upwards facing surfaces on roofs for automap shots -rww
 	r_primitives						= ri.Cvar_Get( "r_primitives",						"0",						CVAR_ARCHIVE_ND, "" );
 	ri.Cvar_CheckRange( r_primitives, MIN_PRIMITIVES, MAX_PRIMITIVES, qtrue );
-	r_ambientScale						= ri.Cvar_Get( "r_ambientScale",					"0.6",						CVAR_NONE, "" );
-	r_directedScale						= ri.Cvar_Get( "r_directedScale",					"1",						CVAR_NONE, "" );
+	// newjk: cheat-protected - these scale world lighting
+	r_ambientScale						= ri.Cvar_Get( "r_ambientScale",					"0.6",						CVAR_CHEAT, "" );
+	r_directedScale						= ri.Cvar_Get( "r_directedScale",					"1",						CVAR_CHEAT, "" );
 	r_autoMap							= ri.Cvar_Get( "r_autoMap",							"0",						CVAR_ARCHIVE_ND, "" ); //automap renderside toggle for debugging -rww
 	r_autoMapBackAlpha					= ri.Cvar_Get( "r_autoMapBackAlpha",				"0",						CVAR_NONE, "" ); //alpha of automap bg -rww
 	r_autoMapDisable					= ri.Cvar_Get( "r_autoMapDisable",					"1",						CVAR_NONE, "" );
@@ -875,6 +939,8 @@ void R_Register( void )
 		" 3 - legacy fog + collapse\n");
 	r_lightmap							= ri.Cvar_Get( "r_lightmap",						"0",						CVAR_ARCHIVE_ND, "" );
 	r_distanceCull						= ri.Cvar_Get( "r_distanceCull",					"0",						CVAR_ARCHIVE_ND, "" );
+	// newjk: ROM/internal - driven by code, not by the player
+	r_cullDistanceOverride				= ri.Cvar_Get( "r_cullDistanceOverride",			"0",						CVAR_ROM | CVAR_INTERNAL, "" );
 	r_portalOnly						= ri.Cvar_Get( "r_portalOnly",						"0",						CVAR_CHEAT, "" );
 	r_skipBackEnd						= ri.Cvar_Get( "r_skipBackEnd",						"0",						CVAR_CHEAT, "" );
 	r_measureOverdraw					= ri.Cvar_Get( "r_measureOverdraw",					"0",						CVAR_NONE, "" );
@@ -902,7 +968,8 @@ void R_Register( void )
 	r_shadowRange						= ri.Cvar_Get( "r_shadowRange",						"1000",						CVAR_NONE, "" );
 	r_marksOnTriangleMeshes				= ri.Cvar_Get( "r_marksOnTriangleMeshes",			"0",						CVAR_ARCHIVE_ND, "" );
 	r_aspectCorrectFonts				= ri.Cvar_Get( "r_aspectCorrectFonts",				"0",						CVAR_ARCHIVE, "" );
-	cl_ratioFix							= ri.Cvar_Get( "cl_ratioFix",						"1",						CVAR_ARCHIVE, "" );
+	// newjk: read here so the renderer can match the client's aspect handling
+	cl_ratioFix							= ri.Cvar_Get( "cl_ratioFix",						"0",						CVAR_ARCHIVE, "" );
 	r_patchStitching					= ri.Cvar_Get( "r_patchStitching",					"1",						CVAR_ARCHIVE, "Enable stitching of neighbouring patch surfaces" );
 	r_maxpolys							= ri.Cvar_Get( "r_maxpolys",						XSTRING( DEFAULT_MAX_POLYS ),		CVAR_NONE, "" );
 	r_maxpolyverts						= ri.Cvar_Get( "r_maxpolyverts",					XSTRING( DEFAULT_MAX_POLYVERTS ),	CVAR_NONE, "" );
@@ -923,7 +990,9 @@ void R_Register( void )
 	ri.Cvar_CheckRange(r_ext_supersample, 0, 1, qtrue);
 	r_ext_alpha_to_coverage				= ri.Cvar_Get("r_ext_alpha_to_coverage",			"0",						CVAR_ARCHIVE_ND | CVAR_LATCH, "");
 	ri.Cvar_CheckRange(r_ext_alpha_to_coverage, 0, 1, qtrue);
-	r_fbo								= ri.Cvar_Get("r_fbo",								"0",						CVAR_ARCHIVE_ND | CVAR_LATCH, "");
+	// Always on (required by forced shader-based gamma correction, see vk_init.cpp);
+	// no longer a user-facing toggle.
+	r_fbo								= ri.Cvar_Get("r_fbo",								"1",						CVAR_ROM | CVAR_INTERNAL, "");
 	r_hdr								= ri.Cvar_Get("r_hdr",								"1",						CVAR_ARCHIVE | CVAR_LATCH, "");
 	r_mapGreyScale						= ri.Cvar_Get("r_mapGreyScale",						"0",						CVAR_ARCHIVE_ND | CVAR_LATCH, "");
 	ri.Cvar_CheckRange(r_mapGreyScale, -1, 1, qfalse);
@@ -1018,10 +1087,42 @@ Ghoul2 Insert End
 R_Init
 ===============
 */
+#include "qcommon/game_version.h"
 extern void R_InitWorldEffects( void ); //tr_WorldEffects.cpp
 void R_Init( void ) {
 	int i;
 	byte *ptr;
+
+	ri.Cvar_Get("newjkrendererversion", NEWJK_VERSION, CVAR_ROM, "");
+	ri.Cvar_Set("newjkrendererversion", NEWJK_VERSION);
+
+	// check executable/renderer mismatch
+	{
+		char version[MAX_STRING_CHARS];
+		ri.Cvar_VariableStringBuffer("version", version, sizeof(version));
+		if (version[0] && !Q_stricmpn(version, "NewJK (", 7) && strlen(version) > 7 && isdigit(*(version + 7))) {
+			// trim the beginning and ending parts
+			memmove(version, version + 7, strlen(version));
+			char *p = version;
+			int numPeriods = 0;
+			while (*p) {
+				if (isdigit(*p)) {
+					p++;
+				}
+				else if (*p == '.' && numPeriods < 2) {
+					numPeriods++;
+					p++;
+				}
+				else {
+					*p = 0;
+					break;
+				}
+			}
+
+			if (Q_stricmp(version, NEWJK_VERSION))
+				Com_Error(ERR_FATAL, "Your NewJK version (%s) and NewJK renderer version (%s) are not the same. Please reinstall NewJK.", version, NEWJK_VERSION);
+		}
+	}
 
 	vk_debug("----- R_Init -----\n" );
 	ri.Printf(PRINT_ALL, "----- R_Init -----\n");
@@ -1082,6 +1183,7 @@ void R_Init( void ) {
 	R_InitFogTable();
 	R_ImageLoader_Init();
 	R_NoiseInit();
+
 	R_Register();
 
 	max_polys = Q_min( r_maxpolys->integer, DEFAULT_MAX_POLYS );
@@ -1235,7 +1337,12 @@ static void SetRefractionProperties( float distortionAlpha, float distortionStre
 	//tr_distortionNegate = distortionNegate;
 }
 
-static float GetDistanceCull( void ) { return tr.distanceCull; }
+// newjk: honor the override when it reaches further than the map value
+static float GetDistanceCull( void ) {
+	if (tr.distanceCull < r_cullDistanceOverride->value)
+		return r_cullDistanceOverride->value;
+	return tr.distanceCull;
+}
 
 static void GetRealRes( int *w, int *h ) {
 	*w = glConfig.vidWidth;
@@ -1291,6 +1398,54 @@ static const vec_t* RE_GetViewPosition(void)
 }
 
 /*
+===============
+RE_DeviceLost
+
+Reports whether the Vulkan device has been lost. The client polls this between frames and errors
+out; nothing here tries to recover.
+
+Deliberately does NOT clear the flag on read: it is the same flag the frame guards test, so clearing
+it here would let the renderer resume submitting work to a dead device in the window before the
+client acts on it. Only vk_initialize() clears it, which means it stays true for exactly as long as
+it is true.
+===============
+*/
+static qboolean RE_DeviceLost( void )
+{
+	return vk.deviceLost;
+}
+
+/*
+===============
+R_ApplySafeVideoStartup
+
+The client sets r_safeVideoStartup when the previous launch died before it ever drew a frame. It
+cannot pick the values itself - r_ext_supersample and r_renderScale are ours alone - so it just
+raises the flag and we decide what to drop.
+
+Runs from R_Register, where these cvars are about to be read for the first time, so the safe values
+are the ones that actually get used rather than being latched for the next restart.
+===============
+*/
+static void R_ApplySafeVideoStartup( void )
+{
+	if ( !ri.Cvar_VariableIntegerValue( "r_safeVideoStartup" ) )
+		return;
+
+	// consume it, so a later vid_restart in this session honours whatever the user chooses next
+	ri.Cvar_Set( "r_safeVideoStartup", "0" );
+
+	ri.Printf( PRINT_ALL, "Starting with safe video settings:\n"
+		"  r_ext_supersample 0\n"
+		"  r_renderScale 0\n"
+		"  r_ext_multisample 0\n" );
+
+	ri.Cvar_Set( "r_ext_supersample", "0" );
+	ri.Cvar_Set( "r_renderScale", "0" );
+	ri.Cvar_Set( "r_ext_multisample", "0" );
+}
+
+/*
 @@@@@@@@@@@@@@@@@@@@@
 GetRefAPI
 
@@ -1326,6 +1481,8 @@ Q_EXPORT refexport_t* QDECL GetRefAPI( int apiVersion, refimport_t *rimp ) {
 	re.EndRegistration						= RE_EndRegistration;
 	re.BeginFrame							= RE_BeginFrame;
 	re.EndFrame								= RE_EndFrame;
+	// newjk: the client polls this between frames and errors out on a lost device
+	re.DeviceLost							= RE_DeviceLost;
 	re.MarkFragments						= R_MarkFragments;
 	re.LerpTag								= R_LerpTag;
 	re.ModelBounds							= R_ModelBounds;
@@ -1334,6 +1491,8 @@ Q_EXPORT refexport_t* QDECL GetRefAPI( int apiVersion, refimport_t *rimp ) {
 	re.ClearScene							= RE_ClearScene;
 	re.ClearDecals							= RE_ClearDecals;
 	re.AddRefEntityToScene					= RE_AddRefEntityToScene;
+	// newjk: accepted for signature parity; only rd-rend2 acts on it
+	re.SetNextEntityNum						= RE_SetNextEntityNum;
 	re.AddMiniRefEntityToScene				= RE_AddMiniRefEntityToScene;
 	re.AddPolyToScene						= RE_AddPolyToScene;
 	re.AddDecalToScene						= RE_AddDecalToScene;
@@ -1352,6 +1511,8 @@ Q_EXPORT refexport_t* QDECL GetRefAPI( int apiVersion, refimport_t *rimp ) {
 	re.Font_StrLenChars						= RE_Font_StrLenChars;
 	re.Font_HeightPixels					= RE_Font_HeightPixels;
 	re.Font_DrawString						= RE_Font_DrawString;
+	// newjk: float-precision variant, for unsnapped text positions
+	re.Font_DrawString_Float				= RE_Font_DrawString_Float;
 	re.Language_IsAsian						= Language_IsAsian;
 	re.Language_UsesSpaces					= Language_UsesSpaces;
 	re.AnyLanguage_ReadCharFromString		= AnyLanguage_ReadCharFromString;

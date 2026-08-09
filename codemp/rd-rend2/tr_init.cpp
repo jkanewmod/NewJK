@@ -73,6 +73,10 @@ cvar_t	*r_measureOverdraw;
 
 cvar_t	*r_inGameVideo;
 cvar_t	*r_fastsky;
+// newjk: solid-color sky components used when r_fastsky is on
+cvar_t	*r_fastSkyR;
+cvar_t	*r_fastSkyG;
+cvar_t	*r_fastSkyB;
 cvar_t	*r_drawSun;
 cvar_t	*r_dynamiclight;
 
@@ -184,6 +188,25 @@ cvar_t	*r_texturebits;
 cvar_t	*r_drawBuffer;
 cvar_t	*r_lightmap;
 cvar_t	*r_distanceCull;
+// newjk: raises the world cull distance above whatever the map asks for
+cvar_t	*r_cullDistanceOverride;
+
+// newjk: per-weapon-model fullbright colors, keyed by three-letter weapon code
+cvar_t	*r_fullbrightcolor_weapon_sab;
+cvar_t	*r_fullbrightcolor_weapon_pis;
+cvar_t	*r_fullbrightcolor_weapon_bla;
+cvar_t	*r_fullbrightcolor_weapon_dis;
+cvar_t	*r_fullbrightcolor_weapon_bow;
+cvar_t	*r_fullbrightcolor_weapon_rep;
+cvar_t	*r_fullbrightcolor_weapon_dem;
+cvar_t	*r_fullbrightcolor_weapon_gol;
+cvar_t	*r_fullbrightcolor_weapon_roc;
+cvar_t	*r_fullbrightcolor_weapon_con;
+cvar_t	*r_fullbrightcolor_weapon_the;
+cvar_t	*r_fullbrightcolor_weapon_min;
+cvar_t	*r_fullbrightcolor_weapon_dpk;
+cvar_t	*r_fullbrightcolor_weapon_stu;
+
 cvar_t	*r_vertexLight;
 cvar_t	*r_uiFullScreen;
 cvar_t	*r_shadows;
@@ -226,6 +249,8 @@ cvar_t	*r_showImages;
 cvar_t	*r_ambientScale;
 cvar_t	*r_directedScale;
 cvar_t	*r_debugLight;
+// newjk: set once cgame is running, so the renderer can tell menu from in-game
+cvar_t	*r_cgameStarted;
 cvar_t	*r_debugSort;
 cvar_t	*r_printShaders;
 cvar_t	*r_saveFontData;
@@ -303,9 +328,16 @@ static void R_Splash()
 
 	GL_Cull(CT_TWO_SIDED);
 
-	image_t *pImage = R_FindImageFile( "menu/splash", IMGTYPE_COLORALPHA, IMGFLAG_NONE);
-    if (cl_ratioFix->integer && ratio <= 0.76f)
-        pImage = R_FindImageFile("menu/splash_16_9", IMGTYPE_COLORALPHA, IMGFLAG_NONE);
+	image_t *pImage = NULL;
+	// newjk: Matches rd-vanilla's R_Splash() exactly: purely a function of the actual
+	// aspect ratio, not gated behind cl_ratioFix (which only affects UI/font
+	// stretching, not which splash asset to pick) - a user with cl_ratioFix 0
+	// (rd-vanilla's own default) should still get the 16:9 splash on a 16:9
+	// display.
+	if (ratio >= 0.74f && ratio <= 0.76f)
+		pImage = R_FindImageFile("menu/splash_16_9", IMGTYPE_COLORALPHA, IMGFLAG_NONE);
+	if (!pImage)
+		pImage = R_FindImageFile( "menu/splash", IMGTYPE_COLORALPHA, IMGFLAG_NONE);
 	if (pImage )
 		GL_Bind( pImage );
 
@@ -812,8 +844,10 @@ void R_SaveScreenshot(screenshotReadback_t *screenshotReadback)
 		Com_Memcpy(pixels, pixelBuffer, pixelBufferSize);
 		qglUnmapBuffer(GL_PIXEL_PACK_BUFFER);
 
-		if (glConfig.deviceSupportsGamma)
-			R_GammaCorrect(pixels, pixelBufferSize);
+		// newjk: Gamma is always applied by the forced final gamma pass now, so the
+		// captured backbuffer is already gamma-corrected - don't double it up.
+		//if (glConfig.deviceSupportsGamma)
+		//	R_GammaCorrect(pixels, pixelBufferSize);
 
 		switch (screenshotReadback->format)
 		{
@@ -977,17 +1011,20 @@ static void R_LevelShot( void ) {
 		}
 	}
 
-	// gamma correct
-	if ( ( tr.overbrightBits > 0 ) && glConfig.deviceSupportsGamma ) {
-		R_GammaCorrect( buffer + 18, LEVELSHOTSIZE * LEVELSHOTSIZE * 3 );
-	}
+	// newjk: Gamma is always applied by the forced final gamma pass now, so the
+	// captured backbuffer is already gamma-corrected - don't double it up.
+	//if ( ( tr.overbrightBits > 0 ) && glConfig.deviceSupportsGamma ) {
+	//	R_GammaCorrect( buffer + 18, LEVELSHOTSIZE * LEVELSHOTSIZE * 3 );
+	//}
 
 	ri.FS_WriteFile( checkname, buffer, LEVELSHOTSIZE * LEVELSHOTSIZE*3 + 18 );
 
 	ri.Hunk_FreeTempMemory( buffer );
 	ri.Hunk_FreeTempMemory( allsource );
 
-	ri.Printf( PRINT_ALL, "Wrote %s\n", checkname );
+	// newjk: [skipnotify] so the confirmation doesn't burn itself into the next screenshot,
+	// matching the other three paths here and all four in rd-vanilla
+	ri.Printf( PRINT_ALL, "[skipnotify]Wrote %s\n", checkname );
 }
 
 /*
@@ -1014,24 +1051,31 @@ void R_ScreenShotTGA_f (void) {
 	if ( !strcmp( ri.Cmd_Argv(1), "silent" ) )
 		silent = qtrue;
 
-	if ( ri.Cmd_Argc() == 2 && !silent ) {
+	// newjk: >= 2 so multi-word (spaced) screenshot names are accepted
+	if ( ri.Cmd_Argc() >= 2 && !silent ) {
 		// explicit filename
-		Com_sprintf( checkname, sizeof( checkname ), "screenshots/%s.tga", ri.Cmd_Argv( 1 ) );
+		// newjk: take the whole argument string, so screenshot names may contain spaces
+		char args[MAX_OSPATH] = { 0 };
+		ri.Cmd_ArgsBuffer(args, sizeof(args));
+		Com_sprintf( checkname, sizeof( checkname ), "screenshots/%s.tga", args );
 	}
 	else {
 		// timestamp the file
 		R_ScreenshotFilename( checkname, sizeof( checkname ), ".tga" );
 
-		if ( ri.FS_FileExists( checkname ) ) {
-			Com_Printf( "ScreenShot: Couldn't create a file\n");
-			return;
+		// newjk: append " (N)" rather than refusing when the name is already taken
+		int num = 1;
+		while ( ri.FS_FileExists( checkname ) ) {
+			num++;
+			R_ScreenshotFilename( checkname, sizeof( checkname ), va( " (%i).tga", num ) );
  		}
 	}
 
 	R_TakeScreenshot( 0, 0, glConfig.vidWidth, glConfig.vidHeight, checkname, SSF_TGA );
 
 	if ( !silent )
-		ri.Printf (PRINT_ALL, "Wrote %s\n", checkname);
+		// newjk: [skipnotify] keeps this out of the notify area, and so out of the next shot
+		ri.Printf (PRINT_ALL, "[skipnotify]Wrote %s\n", checkname);
 }
 
 void R_ScreenShotPNG_f (void) {
@@ -1046,24 +1090,31 @@ void R_ScreenShotPNG_f (void) {
 	if ( !strcmp( ri.Cmd_Argv(1), "silent" ) )
 		silent = qtrue;
 
-	if ( ri.Cmd_Argc() == 2 && !silent ) {
+	// newjk: >= 2 so multi-word (spaced) screenshot names are accepted
+	if ( ri.Cmd_Argc() >= 2 && !silent ) {
 		// explicit filename
-		Com_sprintf( checkname, sizeof( checkname ), "screenshots/%s.png", ri.Cmd_Argv( 1 ) );
+		// newjk: take the whole argument string, so screenshot names may contain spaces
+		char args[MAX_OSPATH] = { 0 };
+		ri.Cmd_ArgsBuffer(args, sizeof(args));
+		Com_sprintf( checkname, sizeof( checkname ), "screenshots/%s.png", args );
 	}
 	else {
 		// timestamp the file
 		R_ScreenshotFilename( checkname, sizeof( checkname ), ".png" );
 
-		if ( ri.FS_FileExists( checkname ) ) {
-			Com_Printf( "ScreenShot: Couldn't create a file\n");
-			return;
+		// newjk: append " (N)" rather than refusing when the name is already taken
+		int num = 1;
+		while ( ri.FS_FileExists( checkname ) ) {
+			num++;
+			R_ScreenshotFilename( checkname, sizeof( checkname ), va( " (%i).png", num ) );
  		}
 	}
 
 	R_TakeScreenshot( 0, 0, glConfig.vidWidth, glConfig.vidHeight, checkname, SSF_PNG );
 
 	if ( !silent )
-		ri.Printf (PRINT_ALL, "Wrote %s\n", checkname);
+		// newjk: [skipnotify] keeps this out of the notify area, and so out of the next shot
+		ri.Printf (PRINT_ALL, "[skipnotify]Wrote %s\n", checkname);
 }
 
 void R_ScreenShotJPEG_f (void) {
@@ -1078,24 +1129,31 @@ void R_ScreenShotJPEG_f (void) {
 	if ( !strcmp( ri.Cmd_Argv(1), "silent" ) )
 		silent = qtrue;
 
-	if ( ri.Cmd_Argc() == 2 && !silent ) {
+	// newjk: >= 2 so multi-word (spaced) screenshot names are accepted
+	if ( ri.Cmd_Argc() >= 2 && !silent ) {
 		// explicit filename
-		Com_sprintf( checkname, sizeof( checkname ), "screenshots/%s.jpg", ri.Cmd_Argv( 1 ) );
+		// newjk: take the whole argument string, so screenshot names may contain spaces
+		char args[MAX_OSPATH] = { 0 };
+		ri.Cmd_ArgsBuffer(args, sizeof(args));
+		Com_sprintf( checkname, sizeof( checkname ), "screenshots/%s.jpg", args );
 	}
 	else {
 		// timestamp the file
 		R_ScreenshotFilename( checkname, sizeof( checkname ), ".jpg" );
 
-		if ( ri.FS_FileExists( checkname ) ) {
-			Com_Printf( "ScreenShot: Couldn't create a file\n");
-			return;
+		// newjk: append " (N)" rather than refusing when the name is already taken
+		int num = 1;
+		while ( ri.FS_FileExists( checkname ) ) {
+			num++;
+			R_ScreenshotFilename( checkname, sizeof( checkname ), va( " (%i).jpg", num ) );
  		}
 	}
 
 	R_TakeScreenshot( 0, 0, glConfig.vidWidth, glConfig.vidHeight, checkname, SSF_JPEG );
 
 	if ( !silent )
-		ri.Printf (PRINT_ALL, "Wrote %s\n", checkname);
+		// newjk: [skipnotify] keeps this out of the notify area, and so out of the next shot
+		ri.Printf (PRINT_ALL, "[skipnotify]Wrote %s\n", checkname);
 }
 
 //============================================================================
@@ -1137,9 +1195,10 @@ const void *RB_TakeVideoFrameCmd( const void *data )
 
 	memcount = padwidth * cmd->height;
 
-	// gamma correct
-	if(glConfig.deviceSupportsGamma)
-		R_GammaCorrect(cBuf, memcount);
+	// newjk: Gamma is always applied by the forced final gamma pass now, so the
+	// captured backbuffer is already gamma-corrected - don't double it up.
+	//if(glConfig.deviceSupportsGamma)
+	//	R_GammaCorrect(cBuf, memcount);
 
 	if(cmd->motionJpeg)
 	{
@@ -1273,6 +1332,10 @@ GfxInfo_f
 */
 static void GfxInfo_f( void )
 {
+	// newjk: gfxinfo is noisy; only print it when the player asked for info output
+	if (!ri.Cvar_VariableIntegerValue("com_printInfo"))
+		return;
+
 	const char *enablestrings[] =
 	{
 		"disabled",
@@ -1529,7 +1592,8 @@ void R_Register( void )
 	r_vertexLight = ri.Cvar_Get( "r_vertexLight", "0", CVAR_ARCHIVE | CVAR_LATCH, "" );
 	r_uiFullScreen = ri.Cvar_Get( "r_uifullscreen", "0", 0, "");
 	r_subdivisions = ri.Cvar_Get ("r_subdivisions", "4", CVAR_ARCHIVE | CVAR_LATCH, "");
-	ri.Cvar_CheckRange( r_subdivisions, 4, 80, qfalse );
+	// newjk: allow 0 (no subdivision) as rd-vanilla does
+	ri.Cvar_CheckRange( r_subdivisions, 0, 80, qfalse );
 	r_stereo = ri.Cvar_Get( "r_stereo", "0", CVAR_ARCHIVE | CVAR_LATCH, "");
 	r_greyscale = ri.Cvar_Get("r_greyscale", "0", CVAR_ARCHIVE | CVAR_LATCH, "");
 	ri.Cvar_CheckRange(r_greyscale, 0, 1, qfalse);
@@ -1617,6 +1681,13 @@ void R_Register( void )
 	r_stereoSeparation = ri.Cvar_Get( "r_stereoSeparation", "64", CVAR_ARCHIVE, "" );
 	r_ignoreGLErrors = ri.Cvar_Get( "r_ignoreGLErrors", "1", CVAR_ARCHIVE, "" );
 	r_fastsky = ri.Cvar_Get( "r_fastsky", "0", CVAR_ARCHIVE, "" );
+	// newjk: r_fastsky clear color, matching rd-vanilla
+	r_fastSkyR = ri.Cvar_Get( "r_fastSkyR", "0.0", CVAR_ARCHIVE|CVAR_INTERNAL, "" );
+	ri.Cvar_CheckRange(r_fastSkyR, 0.0f, 1.0f, qfalse);
+	r_fastSkyG = ri.Cvar_Get( "r_fastSkyG", "0.0", CVAR_ARCHIVE|CVAR_INTERNAL, "" );
+	ri.Cvar_CheckRange(r_fastSkyG, 0.0f, 1.0f, qfalse);
+	r_fastSkyB = ri.Cvar_Get( "r_fastSkyB", "0.0", CVAR_ARCHIVE|CVAR_INTERNAL, "" );
+	ri.Cvar_CheckRange(r_fastSkyB, 0.0f, 1.0f, qfalse);
 	r_inGameVideo = ri.Cvar_Get( "r_inGameVideo", "1", CVAR_ARCHIVE, "" );
 	r_drawSun = ri.Cvar_Get( "r_drawSun", "0", CVAR_ARCHIVE, "" );
 	r_dynamiclight = ri.Cvar_Get( "r_dynamiclight", "1", CVAR_ARCHIVE, "" );
@@ -1628,8 +1699,9 @@ void R_Register( void )
 
 	r_parallaxMapping = ri.Cvar_Get("r_parallaxMapping", "0", CVAR_ARCHIVE, "Disable/enable parallax mapping");
 
-	r_ambientScale = ri.Cvar_Get( "r_ambientScale", "0.6", CVAR_NONE, "" );
-	r_directedScale = ri.Cvar_Get( "r_directedScale", "1", CVAR_NONE, "" );
+	// newjk: cheat-protected - these scale world lighting
+	r_ambientScale = ri.Cvar_Get( "r_ambientScale", "0.6", CVAR_CHEAT, "" );
+	r_directedScale = ri.Cvar_Get( "r_directedScale", "1", CVAR_CHEAT, "" );
 
 	r_anaglyphMode = ri.Cvar_Get("r_anaglyphMode", "0", CVAR_ARCHIVE, "");
 	r_mergeMultidraws = ri.Cvar_Get("r_mergeMultidraws", "1", CVAR_ARCHIVE, "");
@@ -1641,6 +1713,8 @@ void R_Register( void )
 	r_showImages = ri.Cvar_Get( "r_showImages", "0", CVAR_TEMP, "" );
 
 	r_debugLight = ri.Cvar_Get( "r_debuglight", "0", CVAR_TEMP, "" );
+	// newjk: ROM flag the client sets when cgame comes up
+	r_cgameStarted = ri.Cvar_Get( "r_cgameStarted", "0", CVAR_ROM | CVAR_INTERNAL, "" );
 	r_debugSort = ri.Cvar_Get( "r_debugSort", "0", CVAR_CHEAT, "" );
 	r_printShaders = ri.Cvar_Get( "r_printShaders", "0", 0, "" );
 	r_saveFontData = ri.Cvar_Get( "r_saveFontData", "0", 0, "" );
@@ -1653,6 +1727,24 @@ void R_Register( void )
 	r_drawfog = ri.Cvar_Get("r_drawfog", "2", CVAR_ARCHIVE_ND, "");
 	r_lightmap = ri.Cvar_Get ("r_lightmap", "0", CVAR_ARCHIVE_ND, "" );
     r_distanceCull = ri.Cvar_Get( "r_distanceCull", "0", CVAR_ARCHIVE_ND, "" );
+    // newjk: registered ROM/internal - driven by code, not by the player
+    r_cullDistanceOverride = ri.Cvar_Get( "r_cullDistanceOverride", "0", CVAR_ROM | CVAR_INTERNAL, "" );
+
+    // newjk: one cvar per weapon model type; empty means "not overridden"
+    r_fullbrightcolor_weapon_sab = ri.Cvar_Get("r_fullbrightcolor_weapon_sab", "", CVAR_ROM | CVAR_INTERNAL, "");
+    r_fullbrightcolor_weapon_pis = ri.Cvar_Get("r_fullbrightcolor_weapon_pis", "", CVAR_ROM | CVAR_INTERNAL, "");
+    r_fullbrightcolor_weapon_bla = ri.Cvar_Get("r_fullbrightcolor_weapon_bla", "", CVAR_ROM | CVAR_INTERNAL, "");
+    r_fullbrightcolor_weapon_dis = ri.Cvar_Get("r_fullbrightcolor_weapon_dis", "", CVAR_ROM | CVAR_INTERNAL, "");
+    r_fullbrightcolor_weapon_bow = ri.Cvar_Get("r_fullbrightcolor_weapon_bow", "", CVAR_ROM | CVAR_INTERNAL, "");
+    r_fullbrightcolor_weapon_rep = ri.Cvar_Get("r_fullbrightcolor_weapon_rep", "", CVAR_ROM | CVAR_INTERNAL, "");
+    r_fullbrightcolor_weapon_dem = ri.Cvar_Get("r_fullbrightcolor_weapon_dem", "", CVAR_ROM | CVAR_INTERNAL, "");
+    r_fullbrightcolor_weapon_gol = ri.Cvar_Get("r_fullbrightcolor_weapon_gol", "", CVAR_ROM | CVAR_INTERNAL, "");
+    r_fullbrightcolor_weapon_roc = ri.Cvar_Get("r_fullbrightcolor_weapon_roc", "", CVAR_ROM | CVAR_INTERNAL, "");
+    r_fullbrightcolor_weapon_con = ri.Cvar_Get("r_fullbrightcolor_weapon_con", "", CVAR_ROM | CVAR_INTERNAL, "");
+    r_fullbrightcolor_weapon_the = ri.Cvar_Get("r_fullbrightcolor_weapon_the", "", CVAR_ROM | CVAR_INTERNAL, "");
+    r_fullbrightcolor_weapon_min = ri.Cvar_Get("r_fullbrightcolor_weapon_min", "", CVAR_ROM | CVAR_INTERNAL, "");
+    r_fullbrightcolor_weapon_dpk = ri.Cvar_Get("r_fullbrightcolor_weapon_dpk", "", CVAR_ROM | CVAR_INTERNAL, "");
+    r_fullbrightcolor_weapon_stu = ri.Cvar_Get("r_fullbrightcolor_weapon_stu", "", CVAR_ROM | CVAR_INTERNAL, "");
 
     r_portalOnly = ri.Cvar_Get ("r_portalOnly", "0", CVAR_CHEAT, "" );
 
@@ -1688,12 +1780,12 @@ void R_Register( void )
 
 	r_marksOnTriangleMeshes = ri.Cvar_Get("r_marksOnTriangleMeshes", "0", CVAR_ARCHIVE, "");
 
-	r_aviMotionJpegQuality = ri.Cvar_Get("r_aviMotionJpegQuality", "90", CVAR_ARCHIVE, "");
-	r_screenshotJpegQuality = ri.Cvar_Get("r_screenshotJpegQuality", "90", CVAR_ARCHIVE, "");
+	r_aviMotionJpegQuality = ri.Cvar_Get("r_aviMotionJpegQuality", "100", CVAR_ARCHIVE, "");
+	r_screenshotJpegQuality = ri.Cvar_Get("r_screenshotJpegQuality", "100", CVAR_ARCHIVE, "");
 	r_surfaceSprites = ri.Cvar_Get("r_surfaceSprites", "1", CVAR_ARCHIVE, "");
 
 	r_aspectCorrectFonts = ri.Cvar_Get( "r_aspectCorrectFonts", "0", CVAR_ARCHIVE, "" );
-    cl_ratioFix	= ri.Cvar_Get( "cl_ratioFix", "1", CVAR_ARCHIVE, "" );
+    cl_ratioFix	= ri.Cvar_Get( "cl_ratioFix", "0", CVAR_ARCHIVE, "" );
     r_maxpolys = ri.Cvar_Get( "r_maxpolys", XSTRING( DEFAULT_MAX_POLYS ), 0, "");
 	r_maxpolyverts = ri.Cvar_Get( "r_maxpolyverts", XSTRING( DEFAULT_MAX_POLYVERTS ), 0, "" );
 
@@ -1725,6 +1817,9 @@ Ghoul2 Insert End
 	r_patchStitching = ri.Cvar_Get("r_patchStitching", "1", CVAR_ARCHIVE, "Enable stitching of neighbouring patch surfaces" );
 
 	se_language = ri.Cvar_Get ( "se_language", "english", CVAR_ARCHIVE | CVAR_NORESTART, "" );
+
+	ri.Cvar_CheckRange( r_aviMotionJpegQuality, 10, 100, qtrue );
+	ri.Cvar_CheckRange( r_screenshotJpegQuality, 10, 100, qtrue );
 
 	for ( size_t i = 0; i < numCommands; i++ )
 		ri.Cmd_AddCommand( commands[i].cmd, commands[i].func, "" );
@@ -2045,11 +2140,14 @@ void R_ClearTr(void)
 	{
 		// clear all but GPU shaders in tr
 		Com_Memset(&tr, 0, (byte*)&tr.splashScreenShader - (byte*)&tr);
-		Com_Memset(&tr.staticUbo, 0, sizeof(tr) - ((byte*)&tr.staticUbo - (byte*)&tr));	
+		Com_Memset(&tr.staticUbo, 0, sizeof(tr) - ((byte*)&tr.staticUbo - (byte*)&tr));
 	}
 	else
 		// clear all of tr
 		Com_Memset(&tr, 0, sizeof(tr));
+
+	// Com_Memset above zeroes this to 0, not the ENTITYNUM_NONE sentinel
+	tr.nextEntityNum = ENTITYNUM_NONE;
 }
 
 static bool r_inited = false;
@@ -2058,12 +2156,45 @@ static bool r_inited = false;
 R_Init
 ===============
 */
+// newjk: for NEWJK_VERSION, used by the renderer/executable version lock in R_Init
+#include "qcommon/game_version.h"
 void R_Init( void ) {
 	byte *ptr;
 	int i;
 
 	if (r_inited)
 		return;
+
+	ri.Cvar_Get("newjkrendererversion", NEWJK_VERSION, CVAR_ROM, "");
+	ri.Cvar_Set("newjkrendererversion", NEWJK_VERSION);
+
+	// newjk: check executable/renderer mismatch
+	{
+		char version[MAX_STRING_CHARS];
+		ri.Cvar_VariableStringBuffer("version", version, sizeof(version));
+		if (version[0] && !Q_stricmpn(version, "NewJK (", 7) && strlen(version) > 7 && isdigit(*(version + 7))) {
+			// trim the beginning and ending parts
+			memmove(version, version + 7, strlen(version));
+			char *p = version;
+			int numPeriods = 0;
+			while (*p) {
+				if (isdigit(*p)) {
+					p++;
+				}
+				else if (*p == '.' && numPeriods < 2) {
+					numPeriods++;
+					p++;
+				}
+				else {
+					*p = 0;
+					break;
+				}
+			}
+
+			if (Q_stricmp(version, NEWJK_VERSION))
+				Com_Error(ERR_FATAL, "Your NewJK version (%s) and NewJK renderer version (%s) are not the same. Please reinstall NewJK.", version, NEWJK_VERSION);
+		}
+	}
 
 	ri.Printf( PRINT_ALL, "----- R_Init -----\n" );
 
@@ -2192,19 +2323,25 @@ void RE_Shutdown( qboolean destroyWindow, qboolean restarting ) {
 	for ( size_t i = 0; i < numCommands; i++ )
 		ri.Cmd_RemoveCommand( commands[i].cmd );
 
-	// Flush here to make sure all the fences are processed
-	qglFlush();
-
-	R_IssuePendingRenderCommands();
-
-	R_ShutdownBackEndFrameData();
-
-	R_ShutdownWeatherSystem();
-
-	R_ShutdownFonts();
-	
+	// newjk: R_Init() allocates backEndData and other CPU-side bookkeeping before
+	// InitOpenGL() runs; if InitOpenGL() fails (e.g. no usable GL context),
+	// r_inited never gets set and the qgl* dispatch table is never populated.
+	// Everything below touches GL resources/handles either directly or via
+	// state that's only valid once R_Init() fully completed, so gate all of
+	// it on r_inited to avoid tearing down a renderer that never came up.
 	if (r_inited)
 	{
+		// Flush here to make sure all the fences are processed
+		qglFlush();
+
+		R_IssuePendingRenderCommands();
+
+		R_ShutdownBackEndFrameData();
+
+		R_ShutdownWeatherSystem();
+
+		R_ShutdownFonts();
+
 		R_ShutDownQueries();
 		FBO_Shutdown();
 		R_DeleteTextures();
@@ -2259,7 +2396,12 @@ extern qboolean gG2_GBMUseSPMethod;
 static void G2API_BoltMatrixReconstruction( qboolean reconstruct ) { gG2_GBMNoReconstruct = (qboolean)!reconstruct; }
 static void G2API_BoltMatrixSPMethod( qboolean spMethod ) { gG2_GBMUseSPMethod = spMethod; }
 
-static float GetDistanceCull( void ) { return tr.distanceCull; }
+static float GetDistanceCull( void ) {
+	// newjk: honor the override when it reaches further than the map value
+	if (tr.distanceCull < r_cullDistanceOverride->value)
+		return r_cullDistanceOverride->value;
+	return tr.distanceCull;
+}
 
 extern void R_SVModelInit( void ); //tr_model.cpp
 
@@ -2350,6 +2492,16 @@ int C_GetLevel( void )
 	return tr.currentLevel;
 }
 
+// newjk: Core OpenGL has no equivalent of Vulkan's device-lost state. GL_ARB_robustness can report a GPU
+// reset via glGetGraphicsResetStatus, but this backend never opts into it, so a GPU hang here
+// surfaces as an outright crash or as a context the driver silently restores - never as something
+// we can observe. This exists only so the client can call it without caring which renderer is
+// loaded.
+static qboolean RE_DeviceLost( void )
+{
+	return qfalse;
+}
+
 void C_LevelLoadEnd( void )
 {
 	CModelCache->LevelLoadEnd( qfalse );
@@ -2396,6 +2548,8 @@ Q_EXPORT refexport_t* QDECL GetRefAPI ( int apiVersion, refimport_t *rimp ) {
 
 	re.BeginFrame = RE_BeginFrame;
 	re.EndFrame = RE_EndFrame;
+	// newjk: always qfalse here; only rd-vulkan can lose a device
+	re.DeviceLost = RE_DeviceLost;
 
 	re.MarkFragments = R_MarkFragments;
 	re.LerpTag = R_LerpTag;
@@ -2407,6 +2561,8 @@ Q_EXPORT refexport_t* QDECL GetRefAPI ( int apiVersion, refimport_t *rimp ) {
 	re.ClearScene = RE_ClearScene;
 	re.ClearDecals = RE_ClearDecals;
 	re.AddRefEntityToScene = RE_AddRefEntityToScene;
+	// newjk: tags the next ref-entity so it can be excluded from its own light's shadow
+	re.SetNextEntityNum = RE_SetNextEntityNum;
 	re.AddMiniRefEntityToScene = RE_AddMiniRefEntityToScene;
 	re.AddPolyToScene = RE_AddPolyToScene;
 	re.AddDecalToScene = RE_AddDecalToScene;
@@ -2425,6 +2581,8 @@ Q_EXPORT refexport_t* QDECL GetRefAPI ( int apiVersion, refimport_t *rimp ) {
 	re.Font_StrLenChars = RE_Font_StrLenChars;
 	re.Font_HeightPixels = RE_Font_HeightPixels;
 	re.Font_DrawString = RE_Font_DrawString;
+	// newjk: float-precision variant, for unsnapped text positions
+	re.Font_DrawString_Float = RE_Font_DrawString_Float;
 	re.Language_IsAsian = Language_IsAsian;
 	re.Language_UsesSpaces = Language_UsesSpaces;
 	re.AnyLanguage_ReadCharFromString = AnyLanguage_ReadCharFromString;

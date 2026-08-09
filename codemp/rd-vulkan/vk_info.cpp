@@ -449,6 +449,10 @@ GfxInfo_f
 */
 void GfxInfo_f( void )
 {
+    // newjk: vkinfo is noisy; only print when the player asked for info output
+    if (!ri.Cvar_VariableIntegerValue("com_printInfo"))
+        return;
+
     GfxInfo();
     VarInfo();
 }

@@ -254,6 +254,28 @@ static int			fs_packFiles = 0;		// total number of files in packs
 static int			fs_fakeChkSum;
 static int			fs_checksumFeed;
 
+/*
+	the PBR asset paks are authored for rd-rend2 only: they replace stock diffuse textures
+	with versions that have no alpha channel, moving the transparency into sibling files
+	(_masked/_nh/_rmo) that only rend2 knows to look for by naming convention, and they ship
+	no .shader files to tell anyone else. loading them under rd-vanilla/rd-vulkan silently
+	breaks every alphaFunc surface they override - e.g. textures/imperial/grate02 renders
+	as solid metal instead of a see-through grating. so keep them out unless rend2 is active.
+
+	deliberately a latched flag rather than a live cl_renderer read: FS_Startup runs before
+	the config that sets cl_renderer is exec'd, and runs again on every map load, so reading
+	the cvar here would hand back different answers at different times and silently change
+	the pak set mid-session. CL_InitRef owns this, once the renderer is actually known.
+*/
+#define FS_REND2_ONLY_PAK_PREFIX "assets8_pbr"
+#ifdef DEDICATED
+// the server never renders, and excluding paks here would change the pak set it advertises
+// for sv_pure and what clients are asked to download. leave server behavior untouched.
+static qboolean		fs_allowRend2OnlyPaks = qtrue;
+#else
+static qboolean		fs_allowRend2OnlyPaks = qfalse;	// assume non-rend2 until CL_InitRef says otherwise
+#endif
+
 typedef union qfile_gus {
 	FILE*		o;
 	unzFile		z;
@@ -3040,6 +3062,13 @@ static void FS_AddGameDirectory( const char *path, const char *dir ) {
 	qsort( sorted, numfiles, sizeof(char*), paksort );
 
 	for ( i = 0 ; i < numfiles ; i++ ) {
+		// rend2-only asset paks: skip before opening the zip, so they never reach the
+		// search path, fs_packFiles, or any checksum/referenced-pak list
+		if ( !fs_allowRend2OnlyPaks
+			&& !Q_stricmpn( sorted[i], FS_REND2_ONLY_PAK_PREFIX, strlen( FS_REND2_ONLY_PAK_PREFIX ) ) ) {
+			Com_Printf( "Skipping %s (requires the rend2 renderer)\n", sorted[i] );
+			continue;
+		}
 		pakfile = FS_BuildOSPath( path, dir, sorted[i] );
 		if ( ( pak = FS_LoadZipFile( pakfile, sorted[i] ) ) == 0 )
 			continue;
@@ -3969,6 +3998,29 @@ void FS_InitFilesystem( void ) {
 #endif
 
   // bk001208 - SafeMode see below, FIXME?
+}
+
+/*
+================
+FS_SetRend2OnlyPaksAllowed
+
+Records whether rend2-only asset paks (see FS_REND2_ONLY_PAK_PREFIX) may load. Returns
+qtrue if this changed the answer, meaning the caller should FS_Restart to rebuild the
+search path. Called from CL_InitRef, which is the first point where cl_renderer is both
+registered and canonicalized, and which also re-runs on every vid_restart.
+================
+*/
+qboolean FS_SetRend2OnlyPaksAllowed( qboolean allow ) {
+#ifdef DEDICATED
+	return qfalse;
+#else
+	if ( fs_allowRend2OnlyPaks == allow ) {
+		return qfalse;
+	}
+
+	fs_allowRend2OnlyPaks = allow;
+	return qtrue;
+#endif
 }
 
 /*

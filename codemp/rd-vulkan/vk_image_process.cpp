@@ -82,8 +82,9 @@ void R_SetColorMappings( void)
     if (r_gamma->value < 0.5f) {
         ri.Cvar_Set("r_gamma", "0.5");
     }
-    else if (r_gamma->value > 3.0f) {
-        ri.Cvar_Set("r_gamma", "3.0");
+    // newjk: cap raised to 10 to match rd-vanilla
+    else if (r_gamma->value > 10.0f) {
+        ri.Cvar_Set("r_gamma", "10.0");
     }
 
     g = r_gamma->value;

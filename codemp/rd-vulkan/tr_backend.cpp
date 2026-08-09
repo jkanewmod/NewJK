@@ -196,6 +196,98 @@ static void RB_BeginDrawingView( void ) {
 	backEnd.skyRenderedThisView = qfalse;
 }
 
+// newjk: file-scope fullbright state, set near the top of RB_StageIteratorGeneric and cleared at
+// the very bottom. Any early return between the two leaks the last entity's flat color onto
+// everything drawn afterwards.
+bool forceFullbright = false, forceFullbrightWhiteShader = false;
+vec3_t forceFullbrightColor = { 0, 0, 0 };
+extern std::vector<trRefEntity_t *> forceWhiteEnts;
+
+// newjk: wraps RB_EndSurface so the per-weapon-model fullbright override
+// (r_fullbrightcolor_weapon_*) is applied to the batch before it is drawn. Flushing with a bare
+// RB_EndSurface() anywhere in the draw loop bypasses this and draws that batch uncolored.
+static void DoEndSurface(const char *name, bool canFullbright) {
+	if (!VALIDSTRING(name)) {
+		RB_EndSurface();
+		return;
+	}
+
+	if (!strncmp(name, "models/weapons2/", 16) && *(name + 16)) {
+		const char *weapon = name + 16;
+		const cvar_t *weaponCvar;
+		if (!strncmp(weapon, "sab", 3))
+			weaponCvar = r_fullbrightcolor_weapon_sab;
+		else if (!strncmp(weapon, "blaster_p", 9) || !strncmp(weapon, "bri", 3))
+			weaponCvar = r_fullbrightcolor_weapon_pis;
+		else if (!strncmp(weapon, "blaster_r", 9))
+			weaponCvar = r_fullbrightcolor_weapon_bla;
+		else if (!strncmp(weapon, "disr", 4))
+			weaponCvar = r_fullbrightcolor_weapon_dis;
+		else if (!strncmp(weapon, "bow", 3))
+			weaponCvar = r_fullbrightcolor_weapon_bow;
+		else if (!strncmp(weapon, "hea", 3))
+			weaponCvar = r_fullbrightcolor_weapon_rep;
+		else if (!strncmp(weapon, "dem", 3))
+			weaponCvar = r_fullbrightcolor_weapon_dem;
+		else if (!strncmp(weapon, "gol", 3))
+			weaponCvar = r_fullbrightcolor_weapon_gol;
+		else if (!strncmp(weapon, "mer", 3))
+			weaponCvar = r_fullbrightcolor_weapon_roc;
+		else if (!strncmp(weapon, "con", 3))
+			weaponCvar = r_fullbrightcolor_weapon_con;
+		else if (!strncmp(weapon, "the", 3))
+			weaponCvar = r_fullbrightcolor_weapon_the;
+		else if (!strncmp(weapon, "las", 3))
+			weaponCvar = r_fullbrightcolor_weapon_min;
+		else if (!strncmp(weapon, "det", 3))
+			weaponCvar = r_fullbrightcolor_weapon_dpk;
+		else if (!strncmp(weapon, "stu", 3))
+			weaponCvar = r_fullbrightcolor_weapon_stu;
+		else
+			weaponCvar = nullptr;
+
+		float r, g, b;
+		int usingWhiteTextureInt;
+
+		if (weaponCvar && VALIDSTRING(weaponCvar->string) && canFullbright && sscanf(weaponCvar->string, "%f %f %f %d", &r, &g, &b, &usingWhiteTextureInt) == 4) {
+			float ambientLight[3], directedLight[3], lightDir[3];
+			VectorCopy(backEnd.currentEntity->ambientLight, ambientLight);
+			VectorCopy(backEnd.currentEntity->directedLight, directedLight);
+			VectorCopy(backEnd.currentEntity->lightDir, lightDir);
+
+			forceFullbrightColor[0] = backEnd.currentEntity->ambientLight[0] = backEnd.currentEntity->directedLight[0] = r;
+			forceFullbrightColor[1] = backEnd.currentEntity->ambientLight[1] = backEnd.currentEntity->directedLight[1] = g;
+			forceFullbrightColor[2] = backEnd.currentEntity->ambientLight[2] = backEnd.currentEntity->directedLight[2] = b;
+			r = backEnd.currentEntity->e.shaderRGBA[0] / 255.0f;
+			g = backEnd.currentEntity->e.shaderRGBA[1] / 255.0f;
+			b = backEnd.currentEntity->e.shaderRGBA[2] / 255.0f;
+			int ambientLightInt = backEnd.currentEntity->ambientLightInt;
+			((byte *)&backEnd.currentEntity->ambientLightInt)[0] = Q_ftol(r * backEnd.currentEntity->ambientLight[0]);
+			((byte *)&backEnd.currentEntity->ambientLightInt)[1] = Q_ftol(g * backEnd.currentEntity->ambientLight[1]);
+			((byte *)&backEnd.currentEntity->ambientLightInt)[2] = Q_ftol(b * backEnd.currentEntity->ambientLight[2]);
+			((byte *)&backEnd.currentEntity->ambientLightInt)[3] = backEnd.currentEntity->e.shaderRGBA[3];
+			VectorCopy(tr.sunDirection, backEnd.currentEntity->lightDir);
+
+			forceFullbright = true;
+			if (usingWhiteTextureInt)
+				forceFullbrightWhiteShader = true;
+			RB_EndSurface();
+			forceFullbright = forceFullbrightWhiteShader = false;
+
+			VectorCopy(ambientLight, backEnd.currentEntity->ambientLight);
+			VectorCopy(directedLight, backEnd.currentEntity->directedLight);
+			VectorCopy(lightDir, backEnd.currentEntity->lightDir);
+			backEnd.currentEntity->ambientLightInt = ambientLightInt;
+		}
+		else {
+			RB_EndSurface();
+		}
+	}
+	else {
+		RB_EndSurface();
+	}
+}
+
 /*
 ==================
 RB_RenderDrawSurfList
@@ -264,7 +356,18 @@ void RB_RenderDrawSurfList( drawSurf_t *drawSurfs, int numDrawSurfs ) {
 		{
 			if ( ((CRenderableSurface*)drawSurf->surface)->boneCache != oldBoneCache )
 			{
-				RB_EndSurface();
+				/*
+					this flush has to go through DoEndSurface for the same reason the shader
+					boundary and the final flush do - it is where the per-weapon-model fullbright
+					override is applied. A bone-cache change forces a mid-batch flush, and a bare
+					RB_EndSurface here drew the batch uncolored, after which the boundary's own
+					DoEndSurface found nothing left to draw. Whether a bone-cache change lands
+					inside a weapon's batch depends on draw order, which is why the color came
+					and went with camera position. Only reachable with r_vbo_models 1.
+				*/
+				// newjk: flush through DoEndSurface so the per-weapon fullbright override is applied
+				DoEndSurface( tess.shader ? tess.shader->name : NULL,
+					oldEntityNum >= 0 ? !(backEnd.refdef.entities[oldEntityNum].e.renderfx & RF_ISCORPSE) : true );
 				RB_BeginSurface( shader, fogNum );
 				oldBoneCache = ((CRenderableSurface*)drawSurf->surface)->boneCache;
 				vk.cmd->bones_ubo_offset = RB_GetBoneUboOffset((CRenderableSurface*)drawSurf->surface);
@@ -292,9 +395,8 @@ void RB_RenderDrawSurfList( drawSurf_t *drawSurfs, int numDrawSurfs ) {
 		if ( shader != oldShader || fogNum != oldFogNum || dlighted != oldDlighted
 			|| ( entityNum != oldEntityNum && ( !tess.entityMergable || reType != oldReType ) ) )
 		{
-			//if (oldShader != NULL) {
-				RB_EndSurface();
-			//}
+			// newjk: flush through DoEndSurface so the per-weapon fullbright override is applied
+			DoEndSurface( oldShader ? oldShader->name : NULL, oldShader ? !(backEnd.refdef.entities[oldEntityNum].e.renderfx & RF_ISCORPSE) : true );
 #ifdef USE_PMLIGHT
 #define INSERT_POINT SS_FOG
 			if (backEnd.refdef.numLitSurfs && oldShaderSort < INSERT_POINT && shader->sort >= INSERT_POINT) {
@@ -385,9 +487,18 @@ void RB_RenderDrawSurfList( drawSurf_t *drawSurfs, int numDrawSurfs ) {
 		rb_surfaceTable[*drawSurf->surface](drawSurf->surface);
 	}
 
-	// draw the contents of the last shader batch
+	/*
+		draw the contents of the last shader batch - through DoEndSurface like every other batch
+		in the loop above, not bare RB_EndSurface. DoEndSurface is where the per-weapon-model
+		fullbright override (cg_fullbrightWeapons) is applied, so flushing the final batch
+		without it means whichever surface happens to sort last never gets its override color.
+		Sort order shifts with view angle and distance, which is why a world weapon pickup
+		flickered between its override color and its normal skin as the camera moved, and why a
+		held weapon could end up wearing its owner's entity tint instead of its own override.
+	*/
 	if (oldShader != NULL) {
-		RB_EndSurface();
+		// newjk: flush through DoEndSurface so the per-weapon fullbright override is applied
+		DoEndSurface( oldShader->name, oldEntityNum >= 0 ? !(backEnd.refdef.entities[oldEntityNum].e.renderfx & RF_ISCORPSE) : true );
 	}
 
 	backEnd.refdef.floatTime = originalTime;
@@ -1174,19 +1285,22 @@ const void	*RB_SwapBuffers( const void *data ) {
 		if (backEnd.screenshotMask & SCREENSHOT_TGA && backEnd.screenshotTGA[0]) {
 			R_TakeScreenshot(0, 0, gls.captureWidth, gls.captureHeight, backEnd.screenshotTGA);
 			if (!backEnd.screenShotTGAsilent) {
-				ri.Printf(PRINT_ALL, "Wrote %s\n", backEnd.screenshotTGA);
+				// newjk: [skipnotify] keeps this out of the notify area, and so out of the next shot
+				ri.Printf(PRINT_ALL, "[skipnotify]Wrote %s\n", backEnd.screenshotTGA);
 			}
 		}
 		if (backEnd.screenshotMask & SCREENSHOT_JPG && backEnd.screenshotJPG[0]) {
 			R_TakeScreenshotJPEG(0, 0, gls.captureWidth, gls.captureHeight, backEnd.screenshotJPG);
 			if (!backEnd.screenShotJPGsilent) {
-				ri.Printf(PRINT_ALL, "Wrote %s\n", backEnd.screenshotJPG);
+				// newjk: [skipnotify] keeps this out of the notify area, and so out of the next shot
+				ri.Printf(PRINT_ALL, "[skipnotify]Wrote %s\n", backEnd.screenshotJPG);
 			}
 		}
 		if (backEnd.screenshotMask & SCREENSHOT_PNG && backEnd.screenshotPNG[0]) {
 			R_TakeScreenshotPNG(0, 0, gls.captureWidth, gls.captureHeight, backEnd.screenshotPNG);
 			if (!backEnd.screenShotPNGsilent) {
-				ri.Printf(PRINT_ALL, "Wrote %s\n", backEnd.screenshotPNG);
+				// newjk: [skipnotify] keeps this out of the notify area, and so out of the next shot
+				ri.Printf(PRINT_ALL, "[skipnotify]Wrote %s\n", backEnd.screenshotPNG);
 			}
 		}
 		if (backEnd.screenshotMask & SCREENSHOT_AVI) {
@@ -1256,6 +1370,12 @@ RB_ExecuteRenderCommands
 extern const void *R_DrawWireframeAutomap( const void *data ); //tr_world.cpp
 void RB_ExecuteRenderCommands( const void *data ) {
 	int		t1, t2;
+
+	// Once the device is lost there is no command buffer to record into - vk_begin_frame bails out
+	// before beginning one - so recording anything here would be issuing commands against a buffer
+	// that was never started. Drop the whole command list; the client is about to end the session.
+	if ( vk.deviceLost )
+		return;
 
 	t1 = ri.Milliseconds()*ri.Cvar_VariableValue( "timescale" );
 

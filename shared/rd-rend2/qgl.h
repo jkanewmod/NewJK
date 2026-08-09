@@ -34,6 +34,8 @@
 #define qglBindTexture glBindTexture
 #define qglBitmap glBitmap
 #define qglBlendFunc glBlendFunc
+// newjk: constant blend color, for the entity-alpha blend
+#define qglBlendColor glBlendColor
 #define qglCallList glCallList
 #define qglCallLists glCallLists
 #define qglClear glClear

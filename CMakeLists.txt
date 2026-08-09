@@ -37,8 +37,20 @@ option(BuildPortableVersion "Build portable version (does not read or write file
 
 option(BuildMPEngine "Whether to create projects for the MP client (openjk.exe)" ON)
 option(BuildMPRdVanilla "Whether to create projects for the MP default renderer (rd-vanilla_x86.dll)" ON)
+# both new backends build by default; which one actually loads is chosen at runtime by cl_renderer
+option(BuildMPRdVulkan "Whether to create projects for the MP vulkan renderer (rd-vulkan_x86.dll)" ON)
+option(BuildMPRend2 "Whether to create projects for the EXPERIMENTAL MP rend2 renderer (rd-rend2_x86.dll)" ON)
 option(BuildMPDed "Whether to create projects for the MP dedicated server (openjkded.exe)" OFF)
-option(BuildMPGame "Whether to create projects for the MP server-side gamecode (jampgamex86.dll)" OFF)
+if(WIN32)
+	# Windows installs typically already have a jampgamex86.dll from the vanilla
+	# retail install sitting in base/, so this has historically been left opt-in.
+	option(BuildMPGame "Whether to create projects for the MP server-side gamecode (jampgamex86.dll)" OFF)
+else()
+	# Unlike Windows, there's no vanilla retail install to fall back on for a
+	# game module here, so without this a local server (devmap/map) has no
+	# game module to load at all.
+	option(BuildMPGame "Whether to create projects for the MP server-side gamecode (jampgame.so)" ON)
+endif()
 option(BuildMPCGame "Whether to create projects for the MP clientside gamecode (cgamex86.dll)" OFF)
 option(BuildMPUI "Whether to create projects for the MP UI code (uix86.dll)" OFF)
 option(BuildSPEngine "Whether to create projects for the SP engine (openjk_sp.exe)" OFF)
@@ -155,6 +167,9 @@ set(SPGame "jagame${Architecture}")
 set(SPRDVanillaRenderer "rdsp-vanilla_${Architecture}")
 set(MPEngine "newjk.${Architecture}")
 set(MPVanillaRenderer "rd-vanilla_${Architecture}")
+# library names the client dlopen()s based on cl_renderer
+set(MPVulkanRenderer "rd-vulkan_${Architecture}")
+set(MPRend2Renderer "rd-rend2_${Architecture}")
 set(MPDed "newjkded.${Architecture}")
 set(MPGame "jampgame${Architecture}")
 set(MPCGame "cgame${Architecture}")

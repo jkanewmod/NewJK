@@ -1598,6 +1598,7 @@ static vec4_t	GLFogOverrideColors[GLFOGOVERRIDE_MAX] =
 
 static const float logtestExp2 = (sqrt( -log( 1.0 / 255.0 ) ));
 extern bool tr_stencilled; //tr_backend.cpp
+
 static void RB_IterateStagesGeneric( shaderCommands_t *input )
 {
 	int stage;
@@ -1781,15 +1782,32 @@ static void RB_IterateStagesGeneric( shaderCommands_t *input )
 			}
 			else if (backEnd.currentEntity && (backEnd.currentEntity->e.renderfx & RF_FORCE_ENT_ALPHA))
 			{
-				ForceAlpha((unsigned char *) tess.svars.colors, backEnd.currentEntity->e.shaderRGBA[3]);
-				if (backEnd.currentEntity->e.renderfx & RF_ALPHA_DEPTH)
-				{ //depth write, so faces through the model will be stomped over by nearer ones. this works because
-					//we draw RF_FORCE_ENT_ALPHA stuff after everything else, including standard alpha surfs.
-					GL_State(GLS_SRCBLEND_SRC_ALPHA | GLS_DSTBLEND_ONE_MINUS_SRC_ALPHA | GLS_DEPTHMASK_TRUE);
+				const int entAlpha = backEnd.currentEntity->e.shaderRGBA[3];
+
+				if ( !( pStage->stateBits & (GLS_SRCBLEND_BITS | GLS_DSTBLEND_BITS) ) )
+				{
+					/* An opaque stage never consulted alpha at all, so fading it with SRC_ALPHA would
+					suddenly make it obey its texture's alpha channel. On a multi-stage skin that erases
+					the stage wherever that channel is transparent - which is exactly where a tinted base
+					layer shows through an untinted detail layer, so the entity tint disappears entirely.
+					Fade it by the entity alpha alone instead. */
+					qglBlendColor( 0.0f, 0.0f, 0.0f, entAlpha * (1.0f/255.0f) );
+					GL_State( GLS_SRCBLEND_CONST_ALPHA | GLS_DSTBLEND_ONE_MINUS_CONST_ALPHA
+						| ( pStage->stateBits & GLS_DEPTHMASK_TRUE )
+						| ( (backEnd.currentEntity->e.renderfx & RF_ALPHA_DEPTH) ? GLS_DEPTHMASK_TRUE : 0 ) );
 				}
 				else
 				{
-					GL_State(GLS_SRCBLEND_SRC_ALPHA | GLS_DSTBLEND_ONE_MINUS_SRC_ALPHA);
+					/* A stage that already blends is left exactly as it was before this fix.
+					The tint loss came solely from the opaque stage above, so there is no reason
+					to touch these - and doing so visibly changes long-standing effects, e.g. the
+					additive spawn/invulnerability shells stop being forced to alpha blend and
+					render noticeably denser. */
+					ForceAlpha( (unsigned char *) tess.svars.colors, entAlpha );
+					if ( backEnd.currentEntity->e.renderfx & RF_ALPHA_DEPTH )
+						GL_State( GLS_SRCBLEND_SRC_ALPHA | GLS_DSTBLEND_ONE_MINUS_SRC_ALPHA | GLS_DEPTHMASK_TRUE );
+					else
+						GL_State( GLS_SRCBLEND_SRC_ALPHA | GLS_DSTBLEND_ONE_MINUS_SRC_ALPHA );
 				}
 			}
 			else

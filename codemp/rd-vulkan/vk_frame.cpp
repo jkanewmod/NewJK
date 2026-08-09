@@ -1146,10 +1146,44 @@ void vk_begin_post_refraction_extract_render_pass( void )
     vk_begin_render_pass( vk.render_pass.refraction.extract, frameBuffer, qfalse, vk.renderWidth, vk.renderHeight );
 }
 
+/*
+==================
+vk_set_device_lost
+
+Records that the Vulkan device has been lost. A lost device never recovers on its own - every
+subsequent Vulkan call returns VK_ERROR_DEVICE_LOST as well - so all we can do is stop submitting
+work and leave it to the client to shut the game down (RE_DeviceLost -> CL_Frame).
+
+Erroring out from here instead would unwind through state the current render call is still walking,
+so setting the flag is all this does. Do not be tempted to "just retry": that is what produced
+silent multi-minute freezes.
+
+This print is the only record of which Vulkan call noticed - the client's error message names the
+device but not the call - and it reaches the crash log written on the way out. Keep it informative.
+==================
+*/
+void vk_set_device_lost( const char *funcname )
+{
+	// newjk: stop submitting the moment the device is gone
+	if ( vk.deviceLost )
+		return;	// already reported, don't spam the log with one line per attempted frame
+
+	vk.deviceLost = qtrue;
+
+	ri.Printf( PRINT_ALL, S_COLOR_RED "********************\n"
+		"The GPU stopped responding (device lost, reported by %s).\n"
+		"Rendering has been halted.\n"
+		"********************\n", funcname );
+}
+
 void vk_begin_frame( void )
 {
 	VkCommandBufferBeginInfo begin_info;
 	VkResult res;
+
+	// newjk: stop submitting the moment the device is gone
+	if ( vk.deviceLost )
+		return;
 
 	if ( vk.frame_count++ ) // might happen during stereo rendering
 		return;
@@ -1165,8 +1199,11 @@ void vk_begin_frame( void )
 		res = qvkWaitForFences( vk.device, 1, &vk.cmd->rendering_finished_fence, VK_FALSE, 1e10 );
 		if ( res != VK_SUCCESS ) {
 			if ( res == VK_ERROR_DEVICE_LOST ) {
-				// silently discard previous command buffer
-				ri.Printf( PRINT_WARNING, "Vulkan: %s returned %s", "vkWaitForFences", vk_result_string( res ) );
+				// The device is gone for good - retrying here would spin forever, because every
+				// call from now on returns the same error. Flag it and stop; the client polls
+				// RE_DeviceLost() and errors out from a safe point outside this stack.
+				vk_set_device_lost( "vkWaitForFences" );
+				return;
 			}
 			else {
 				ri.Error( ERR_FATAL, "Vulkan: %s returned %s", "vkWaitForFences", vk_result_string( res ) );
@@ -1187,6 +1224,11 @@ _retry:
 				retry = qtrue;
 				vk_restart_swapchain( __func__ );
 				goto _retry;
+			} else if ( res == VK_ERROR_DEVICE_LOST ) {
+				// flag it rather than ri.Error-ing from inside the frame, so the client reports it
+				// from between frames like every other device loss
+				vk_set_device_lost( "vkAcquireNextImageKHR" );
+				return;
 			} else {
 				ri.Error( ERR_FATAL, "vkAcquireNextImageKHR returned %s", vk_result_string( res ) );
 			}
@@ -1397,6 +1439,10 @@ void vk_release_resources( void ) {
 
 void vk_end_frame( void )
 {
+	// newjk: stop submitting the moment the device is gone
+	if ( vk.deviceLost )
+		return;
+
  #ifdef USE_UPLOAD_QUEUE
 	VkSemaphore waits[2], signals[2];
 	const VkPipelineStageFlags wait_dst_stage_mask[2] = {VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT};
@@ -1516,7 +1562,21 @@ void vk_end_frame( void )
         submit_info.pSignalSemaphores = NULL;
     }
 
-    VK_CHECK( qvkQueueSubmit( vk.queue, 1, &submit_info, vk.cmd->rendering_finished_fence ) );
+    {
+        // not VK_CHECK: that only writes to the debug log and carries on, and a GPU fault usually
+        // surfaces here first - submitting into a dead device forever is exactly the silent freeze
+        // this whole path exists to prevent
+        VkResult submitRes = qvkQueueSubmit( vk.queue, 1, &submit_info, vk.cmd->rendering_finished_fence );
+
+        if ( submitRes == VK_ERROR_DEVICE_LOST ) {
+            vk_set_device_lost( "vkQueueSubmit" );
+            return;
+        }
+
+        if ( submitRes < 0 )
+            vk_debug( "Vulkan: error %s returned by qvkQueueSubmit \n", vk_result_string( submitRes ) );
+    }
+
     vk.cmd->waitForFence = qtrue;
 
     // presentation may take undefined time to complete, we can't measure it in a reliable way
@@ -1529,6 +1589,10 @@ void vk_present_frame( void )
 {
 	VkPresentInfoKHR present_info;
 	VkResult res;
+
+	// newjk: stop submitting the moment the device is gone
+	if ( vk.deviceLost )
+		return;
 
 	if ( ri.VK_IsMinimized() || !vk.cmd->swapchain_image_acquired )
 		return;
@@ -1559,9 +1623,10 @@ void vk_present_frame( void )
 			vk_restart_swapchain( __func__ );
 			break;
 		case VK_ERROR_DEVICE_LOST:
-			// we can ignore that
-			ri.Printf( PRINT_DEVELOPER, "vkQueuePresentKHR: device lost\n" );
-			break;
+			// previously logged at PRINT_DEVELOPER and ignored, which made this invisible at
+			// default verbosity while the renderer spun on a dead device
+			vk_set_device_lost( "vkQueuePresentKHR" );
+			return;
 		default:
 			// or we don't
 			ri.Error( ERR_FATAL, "vkQueuePresentKHR returned %s", vk_result_string( res ) );

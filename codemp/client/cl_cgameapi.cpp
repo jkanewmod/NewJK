@@ -32,6 +32,7 @@ along with this program; if not, see <http://www.gnu.org/licenses/>.
 
 extern IHeapAllocator *G2VertSpaceClient;
 extern botlib_export_t *botlib_export;
+extern cvar_t *cl_renderer;
 
 // cgame interface
 static cgameExport_t *cge; // cgame export table
@@ -844,6 +845,15 @@ static void CGVM_Cmd_RemoveCommand( const char *cmd_name ) {
 
 extern void CL_SetWindowTitle(const char *s);
 
+// rend2-only - see cg_public.h's R_SetNextEntityNum comment. Gated engine-side, using the
+// same cl_renderer->string comparison as the "Rend2 Renderer" console label, because this is
+// where the active renderer is known at dispatch time.
+static void CL_SetNextEntityNum( int entityNum ) {
+	if ( re && !Q_stricmp( cl_renderer->string, "rd-rend2" ) ) {
+		re->SetNextEntityNum( entityNum );
+	}
+}
+
 int keycatchLockTime = 0;
 static void KeycatchLock(int force) {
 	if (Key_GetCatcher() & KEYCATCH_UI) {
@@ -1192,7 +1202,11 @@ intptr_t CL_CgameSystemCalls( intptr_t *args ) {
 		return re->LightForPoint( (float *)VMA(1), (float *)VMA(2), (float *)VMA(3), (float *)VMA(4) );
 
 	case CG_R_ADDLIGHTTOSCENE:
-		re->AddLightToScene( (const float *)VMA(1), VMF(2), VMF(3), VMF(4), VMF(5) );
+		re->AddLightToScene( (const float *)VMA(1), VMF(2), VMF(3), VMF(4), VMF(5), (int)args[6] );
+		return 0;
+
+	case CG_R_SETNEXTENTITYNUM:
+		CL_SetNextEntityNum( (int)args[1] );
 		return 0;
 
 	case CG_R_ADDADDITIVELIGHTTOSCENE:
@@ -1818,6 +1832,8 @@ void CL_BindCGame( void ) {
 		cgi.R_AddLightToScene					= re->AddLightToScene;
 		cgi.R_AddPolysToScene					= re->AddPolyToScene;
 		cgi.R_AddRefEntityToScene				= re->AddRefEntityToScene;
+		// routed through the wrapper above so it only reaches rd-rend2
+		cgi.R_SetNextEntityNum					= CL_SetNextEntityNum;
 		cgi.R_AnyLanguage_ReadCharFromString	= re->AnyLanguage_ReadCharFromString;
 		cgi.R_AutomapElevationAdjustment		= re->AutomapElevationAdjustment;
 		cgi.R_ClearDecals						= re->ClearDecals;

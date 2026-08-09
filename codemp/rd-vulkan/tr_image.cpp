@@ -34,6 +34,16 @@ along with this program; if not, see <http://www.gnu.org/licenses/>.
 void R_GammaCorrect( byte *buffer, int bufSize ) {
 	int i;
 
+	/*
+		newjk fix: this is the single authority on whether read-back pixels still need gamma, so
+		callers just call it. vk_read_pixels() normally sources the off-screen colour image, which
+		is what the gamma pass reads from rather than writes to - so those pixels are pre-gamma and
+		do need correcting here. s_gammatable is built to match gamma.frag exactly (both are
+		pow(c, 1/r_gamma) scaled by overbright), so the file ends up matching the screen.
+
+		the exception is the SSAA capture image: it only exists when r_ext_supersample is set, and
+		vk_end_frame() fills it through the gamma pipeline, so correcting again would double up.
+	*/
 	if ( vk.capture.image != VK_NULL_HANDLE )
 		return;
 

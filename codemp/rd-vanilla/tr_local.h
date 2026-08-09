@@ -1279,7 +1279,13 @@ struct FullbrightEnt {
 
 		if (runQuickLighting) {
 			vec3_t lightOrigin;
-			int pos[3], frac[3], gridStep[3];
+			// frac must be float - it holds the sub-cell position in [0,1) used as the
+			// trilinear blend weight. As an int it truncates to 0, collapsing the 8-corner
+			// interpolation to nearest-lower-corner point sampling (silently, since
+			// totalFactor still lands on exactly 1.0). R_SetupEntityLightingGrid in
+			// tr_light.cpp declares it correctly; this copy did not.
+			int pos[3], gridStep[3];
+			float frac[3];
 			unsigned short *startGridPos;
 			float totalFactor;
 			if (ent->e.renderfx & RF_LIGHTING_ORIGIN) {
@@ -1422,7 +1428,11 @@ struct FullbrightEnt {
 
 			for (int i = 0; i < tr.refdef.num_dlights; i++) {
 				dlight_t *dl = &tr.refdef.dlights[i];
-				vec3_t lightOrigin, dir;
+				// do NOT redeclare lightOrigin here - the outer one holds this entity's real
+				// position and is what the distance is meant to be measured from. A local of
+				// the same name shadowed it and was used uninitialized, so both the falloff
+				// distance and the light direction were computed from stack garbage.
+				vec3_t dir;
 				VectorSubtract(dl->origin, lightOrigin, dir);
 				d = VectorNormalize(dir);
 
@@ -1520,6 +1530,8 @@ void	GL_Cull( int cullType );
 #define GLS_SRCBLEND_DST_ALPHA					0x00000007
 #define GLS_SRCBLEND_ONE_MINUS_DST_ALPHA		0x00000008
 #define GLS_SRCBLEND_ALPHA_SATURATE				0x00000009
+// constant-alpha blend factors, for the entity-alpha fade
+#define GLS_SRCBLEND_CONST_ALPHA				0x0000000a
 #define		GLS_SRCBLEND_BITS					0x0000000f
 
 #define GLS_DSTBLEND_ZERO						0x00000010
@@ -1530,6 +1542,8 @@ void	GL_Cull( int cullType );
 #define GLS_DSTBLEND_ONE_MINUS_SRC_ALPHA		0x00000060
 #define GLS_DSTBLEND_DST_ALPHA					0x00000070
 #define GLS_DSTBLEND_ONE_MINUS_DST_ALPHA		0x00000080
+// destination half of the constant-alpha blend above
+#define GLS_DSTBLEND_ONE_MINUS_CONST_ALPHA		0x000000a0
 #define		GLS_DSTBLEND_BITS					0x000000f0
 
 #define GLS_DEPTHMASK_TRUE						0x00000100
@@ -1830,9 +1844,12 @@ void R_InitNextFrame( void );
 
 void RE_ClearScene( void );
 void RE_AddRefEntityToScene( const refEntity_t *ent );
+// no-op in this backend; declared so the refexport_t table is filled identically everywhere
+void RE_SetNextEntityNum( int entityNum );
 void RE_AddMiniRefEntityToScene( const miniRefEntity_t *ent );
 void RE_AddPolyToScene( qhandle_t hShader , int numVerts, const polyVert_t *verts, int num );
-void RE_AddLightToScene( const vec3_t org, float intensity, float r, float g, float b );
+// noShadowFromEntity is accepted for signature parity and ignored in this backend
+void RE_AddLightToScene( const vec3_t org, float intensity, float r, float g, float b, int noShadowFromEntity );
 void RE_AddAdditiveLightToScene( const vec3_t org, float intensity, float r, float g, float b );
 void RE_RenderScene( const refdef_t *fd );
 
@@ -2100,6 +2117,8 @@ void R_AddDecals( void );
 // tr_surfacesprites
 void RB_DrawSurfaceSprites( shaderStage_t *stage, shaderCommands_t *input);
 
-extern refimport_t *ri;
+// a value rather than a pointer, so the shared rd-common sources compile identically
+// against all three backends
+extern refimport_t ri;
 
 qboolean ShaderHashTableExists(void);

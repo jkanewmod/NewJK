@@ -2026,6 +2026,15 @@ static void SetRefractionProperties( float distortionAlpha, float distortionStre
 	tr_distortionNegate = distortionNegate;
 }
 
+// Core OpenGL has no equivalent of Vulkan's device-lost state. GL_ARB_robustness can report a GPU
+// reset via glGetGraphicsResetStatus, but this backend never opts into it, so a GPU hang here
+// surfaces as an outright crash or as a context the driver silently restores - never as something
+// we can observe. This exists only so the client can call it without caring which renderer is
+// loaded.
+static qboolean RE_DeviceLost( void ) {
+	return qfalse;
+}
+
 static float GetDistanceCull( void ) {
 	if (tr.distanceCull < r_cullDistanceOverride->value)
 		return r_cullDistanceOverride->value;
@@ -2054,7 +2063,8 @@ Q_EXPORT refexport_t* QDECL GetRefAPI( int apiVersion, refimport_t *rimp ) {
 	static refexport_t re;
 
 	assert( rimp );
-	ri = rimp;
+	// copy by value: ri is a struct here, not a pointer (see tr_main.cpp)
+	ri = *rimp;
 
 	memset( &re, 0, sizeof( re ) );
 
@@ -2079,6 +2089,8 @@ Q_EXPORT refexport_t* QDECL GetRefAPI( int apiVersion, refimport_t *rimp ) {
 	re.EndRegistration						= RE_EndRegistration;
 	re.BeginFrame							= RE_BeginFrame;
 	re.EndFrame								= RE_EndFrame;
+	// always qfalse here; only rd-vulkan can lose a device
+	re.DeviceLost							= RE_DeviceLost;
 	re.MarkFragments						= R_MarkFragments;
 	re.LerpTag								= R_LerpTag;
 	re.ModelBounds							= R_ModelBounds;
@@ -2087,6 +2099,8 @@ Q_EXPORT refexport_t* QDECL GetRefAPI( int apiVersion, refimport_t *rimp ) {
 	re.ClearScene							= RE_ClearScene;
 	re.ClearDecals							= RE_ClearDecals;
 	re.AddRefEntityToScene					= RE_AddRefEntityToScene;
+	// no-op here; only rd-rend2 acts on it
+	re.SetNextEntityNum						= RE_SetNextEntityNum;
 	re.AddMiniRefEntityToScene				= RE_AddMiniRefEntityToScene;
 	re.AddPolyToScene						= RE_AddPolyToScene;
 	re.AddDecalToScene						= RE_AddDecalToScene;

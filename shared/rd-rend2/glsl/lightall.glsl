@@ -414,6 +414,28 @@ layout(std140) uniform Lights
 uniform int u_LightMask;
 uniform sampler2D u_DiffuseMap;
 
+// NewJK/Newmod weapon & player fullbright override (cg_fullbrightWeapons /
+// held-weapon-of-a-fullbright-player exemption) - see DoEndSurface()/
+// RB_StageIteratorGeneric() in rd-vanilla/rd-vulkan for the CPU-baked
+// equivalent this replicates per-surface, since rend2's entity lighting is a
+// per-entity UBO and can't express a per-surface override on its own.
+// rgb = forced flat color (0-1 normalized), a = active flag (0 or 1).
+uniform vec4 u_FullbrightOverride;
+// When active, also force the diffuse texture sample itself to white (the
+// "!" / forceWhiteTexture case), instead of just tinting the real texture.
+uniform float u_FullbrightOverrideWhite;
+
+// NewJK/Newmod held-weapon-of-a-fullbright-player exemption (RF_OTHER7 /
+// fullbrightPlayers in tr_light.cpp+tr_shade.cpp) - a weapon surface whose
+// holder inherited RF_FULLBRIGHT from that player (cgame copies renderfx
+// wholesale onto the held-weapon ref-entity) should render with the
+// player's real, non-fullbright light instead of the flat override color
+// it would otherwise also qualify for. rgb = real ambient/directed light
+// (0-1 normalized), a (on the ambient one) = active flag. Same per-surface
+// UBO limitation as u_FullbrightOverride above, same fix shape.
+uniform vec4 u_LightOverrideAmbient;
+uniform vec3 u_LightOverrideDirected;
+
 #if defined(USE_LIGHTMAP)
 uniform sampler2D u_LightMap;
 #endif
@@ -1108,6 +1130,14 @@ void main()
 	}
 #endif
 
+	if (u_FullbrightOverride.a > 0.5)
+	{
+		vec3 overrideDiffuse = mix(diffuse.rgb, vec3(1.0), u_FullbrightOverrideWhite);
+		out_Color = vec4(overrideDiffuse * u_FullbrightOverride.rgb, diffuse.a);
+		out_Glow = vec4(0.0, 0.0, 0.0, diffuse.a);
+		return;
+	}
+
 #if defined(PER_PIXEL_LIGHTING)
 	viewDir = var_ViewDir.xyz;
 	E = normalize(viewDir);
@@ -1130,8 +1160,16 @@ void main()
 	ambientColor = vec3 (0.0);
 	attenuation = 1.0;
   #elif defined(USE_LIGHT_VECTOR)
-	lightColor	= u_DirectedLight * var_Color.rgb;
-	ambientColor = u_AmbientLight * var_Color.rgb;
+	if (u_LightOverrideAmbient.a > 0.5)
+	{
+		lightColor	= u_LightOverrideDirected * var_Color.rgb;
+		ambientColor = u_LightOverrideAmbient.rgb * var_Color.rgb;
+	}
+	else
+	{
+		lightColor	= u_DirectedLight * var_Color.rgb;
+		ambientColor = u_AmbientLight * var_Color.rgb;
+	}
 	attenuation = 1.0;
   #elif defined(USE_LIGHT_VERTEX)
 	lightColor	= var_Color.rgb;

@@ -36,7 +36,9 @@ static float	s_flipMatrix[16] = {
 	0, 0, 0, 1
 };
 
-refimport_t	*ri = NULL;
+// a value rather than a pointer, so the shared rd-common sources compile identically
+// against all three backends
+refimport_t	ri;
 
 // entities that will have procedurally generated surfaces will just
 // point at this for their sorting surface

@@ -196,7 +196,8 @@ int R_ComputeLOD( trRefEntity_t *ent ) {
 	mdrFrame_t *mdrframe;
 	int lod;
 
-	if ( tr.currentModel->numLods < 2  || (ent->e.renderfx & RF_NOLOD) )
+	// newjk: RF_NOLOD no longer forces LOD 0 here; r_lodbias applies uniformly below
+	if ( tr.currentModel->numLods < 2 )
 	{
 		// model has only 1 LOD level, skip computations and bias
 		lod = 0;
@@ -250,8 +251,8 @@ int R_ComputeLOD( trRefEntity_t *ent ) {
 			lod = tr.currentModel->numLods - 1;
 		}
 	}
-    if ( !( ent->e.renderfx & RF_NOLOD ) )
-        lod += r_lodbias->integer;
+    // newjk: applied unconditionally, matching rd-vanilla
+    lod += r_lodbias->integer;
 
 	if ( lod >= tr.currentModel->numLods )
 		lod = tr.currentModel->numLods - 1;

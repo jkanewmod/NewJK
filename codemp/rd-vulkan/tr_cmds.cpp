@@ -100,14 +100,16 @@ void R_IssueRenderCommands( qboolean runPerformanceCounters ) {
 
 	if (backEnd.screenshotMask == 0) {
 		if (ri.VK_IsMinimized())
-			return; // skip backend when minimized
+			// newjk: jump to the cleanup below rather than returning - the fullbright entity
+			// lighting swapped in this frame must be restored on every exit path
+			goto cleanup; // skip backend when minimized
 		//if (backEnd.throttle)
-		//	return; // or throttled on demand
+		//	goto cleanup; // or throttled on demand
 	}
 	else {
 		if (ri.VK_IsMinimized() && !R_CanMinimize()) {
 			backEnd.screenshotMask = 0;
-			return;
+			goto cleanup;
 		}
 	}
 
@@ -122,6 +124,24 @@ void R_IssueRenderCommands( qboolean runPerformanceCounters ) {
 	if ( runPerformanceCounters ) {
 		R_PerformanceCounters();
 	}
+
+cleanup:
+	for (auto &x : fullbrightEnts) {
+		VectorCopy(x.ambientLight, x.ent->ambientLight);
+		VectorCopy(x.directedLight, x.ent->directedLight);
+		VectorCopy(x.lightDir, x.ent->lightDir);
+		x.ent->ambientLightInt = x.ambientLightInt;
+	}
+	fullbrightEnts.clear();
+
+	forceWhiteEnts.clear();
+	fullbrightPlayers.clear();
+
+	// these are normally cleared at the end of RB_StageIteratorGeneric/DoEndSurface, but an
+	// ERR_DROP unwinding out of the middle of either longjmps past that clear and leaves them
+	// latched true across subsequent frames - every surface drawn after would inherit the last
+	// fullbright entity's flat color and a white texture. Cheap to make that unrepresentable.
+	forceFullbright = forceFullbrightWhiteShader = false;
 }
 
 /*

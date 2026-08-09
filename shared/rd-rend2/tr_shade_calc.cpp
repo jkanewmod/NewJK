@@ -812,10 +812,20 @@ void RB_CalcRotateTexMatrix( float degsPerSecond, float *matrix )
 	float sinValue, cosValue;
 
 	degs = -degsPerSecond * timeScale;
-	index = degs * ( FUNCTABLE_SIZE / 360.0f );
 
-	sinValue = tr.sinTable[ index & FUNCTABLE_MASK ];
-	cosValue = tr.sinTable[ ( index + FUNCTABLE_SIZE / 4 ) & FUNCTABLE_MASK ];
+	if (r_cgameStarted->integer)
+	{
+		index = degs * ( FUNCTABLE_SIZE / 360.0f );
+
+		sinValue = tr.sinTable[ index & FUNCTABLE_MASK ];
+		cosValue = tr.sinTable[ ( index + FUNCTABLE_SIZE / 4 ) & FUNCTABLE_MASK ];
+	}
+	else
+	{
+		float radians = degs * ((float)M_PI / 180.0f);
+		sinValue = sin(radians);
+		cosValue = cos(radians);
+	}
 
 	matrix[0] = cosValue; matrix[2] = -sinValue; matrix[4] = 0.5 - 0.5 * cosValue + 0.5 * sinValue;
 	matrix[1] = sinValue; matrix[3] = cosValue;  matrix[5] = 0.5 - 0.5 * sinValue - 0.5 * cosValue;

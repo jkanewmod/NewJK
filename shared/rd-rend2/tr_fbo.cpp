@@ -471,6 +471,18 @@ void FBO_Init(void)
 	qglClearColor( 0.f, 0.f, 0.f, 1 );
 	qglClear( GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT );
 
+	// Always-present LDR target that every final-composite path writes into
+	// instead of the real screen, so the forced gamma pass (RB_ApplyGamma) can
+	// composite it to the screen as the last step of every frame, regardless
+	// of r_hdr/r_toneMap/r_smaa/exposure settings.
+	tr.gammaFbo = FBO_Create(
+		"_gamma", tr.gammaImage->width,
+		tr.gammaImage->height);
+	FBO_Bind(tr.gammaFbo);
+	FBO_AttachTextureImage(tr.gammaImage, 0);
+	FBO_SetupDrawBuffers();
+	R_CheckFBO(tr.gammaFbo);
+
 	// glow buffers
 	{
 		for ( size_t i = 0; i < ARRAY_LEN(tr.glowImageScaled); i++ )

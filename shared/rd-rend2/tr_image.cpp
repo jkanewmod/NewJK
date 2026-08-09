@@ -1254,51 +1254,26 @@ lighting range
 */
 void R_LightScaleTexture (byte *in, int inwidth, int inheight, qboolean only_gamma )
 {
+	// Gamma is always applied by the forced final gamma pass (RB_ApplyGamma)
+	// now, never baked into texture data here - CPU-baked gamma would only
+	// ever reflect r_gamma's value at texture-load time (not CVAR_LATCH, so
+	// it's meant to be live-adjustable) and would double up with the shader
+	// pass wherever WIN_SetGamma does still work.
 	if ( only_gamma )
+		return;
+
+	int		i, c;
+	byte	*p;
+
+	p = in;
+
+	c = inwidth*inheight;
+
+	for (i=0 ; i<c ; i++, p+=4)
 	{
-		if ( !glConfig.deviceSupportsGamma )
-		{
-			int		i, c;
-			byte	*p;
-
-			p = in;
-
-			c = inwidth*inheight;
-			for (i=0 ; i<c ; i++, p+=4)
-			{
-				p[0] = s_gammatable[p[0]];
-				p[1] = s_gammatable[p[1]];
-				p[2] = s_gammatable[p[2]];
-			}
-		}
-	}
-	else
-	{
-		int		i, c;
-		byte	*p;
-
-		p = in;
-
-		c = inwidth*inheight;
-
-		if ( glConfig.deviceSupportsGamma )
-		{
-			for (i=0 ; i<c ; i++, p+=4)
-			{
-				p[0] = s_intensitytable[p[0]];
-				p[1] = s_intensitytable[p[1]];
-				p[2] = s_intensitytable[p[2]];
-			}
-		}
-		else
-		{
-			for (i=0 ; i<c ; i++, p+=4)
-			{
-				p[0] = s_gammatable[s_intensitytable[p[0]]];
-				p[1] = s_gammatable[s_intensitytable[p[1]]];
-				p[2] = s_gammatable[s_intensitytable[p[2]]];
-			}
-		}
+		p[0] = s_intensitytable[p[0]];
+		p[1] = s_intensitytable[p[1]];
+		p[2] = s_intensitytable[p[2]];
 	}
 }
 
@@ -3478,6 +3453,11 @@ void R_CreateBuiltinImages( void ) {
 		"*render", NULL, width, height, IMGTYPE_COLORALPHA,
 		IMGFLAG_NO_COMPRESSION | IMGFLAG_CLAMPTOEDGE, hdrFormat);
 
+	// LDR (never HDR format) target for the final, always-on gamma pass
+	tr.gammaImage = R_CreateImage(
+		"*gamma", NULL, width, height, IMGTYPE_COLORALPHA,
+		IMGFLAG_NO_COMPRESSION | IMGFLAG_CLAMPTOEDGE, rgbFormat);
+
 	tr.glowImage = R_CreateImage(
 		"*glow", NULL, width, height, IMGTYPE_COLORALPHA,
 		IMGFLAG_NO_COMPRESSION | IMGFLAG_CLAMPTOEDGE, hdrFormat);
@@ -3680,8 +3660,9 @@ void R_SetColorMappings( void ) {
 
 	if ( r_gamma->value < 0.5f ) {
 		ri.Cvar_Set( "r_gamma", "0.5" );
-	} else if ( r_gamma->value > 3.0f ) {
-		ri.Cvar_Set( "r_gamma", "3.0" );
+	// newjk: cap raised to 10 to match rd-vanilla
+	} else if ( r_gamma->value > 10.0f ) {
+		ri.Cvar_Set( "r_gamma", "10.0" );
 	}
 
 	g = r_gamma->value;
@@ -3712,7 +3693,18 @@ void R_SetColorMappings( void ) {
 
 	if ( glConfig.deviceSupportsGamma )
 	{
-		ri.WIN_SetGamma( &glConfig, s_gammatable, s_gammatable, s_gammatable );
+		// Gamma is always applied by the forced final gamma pass
+		// (RB_ApplyGamma) now; set an identity ramp here instead of
+		// s_gammatable so hardware that does support gamma ramps doesn't
+		// double-apply gamma on top of the shader pass.
+		static unsigned char s_gammatable_identity[256];
+		static qboolean initialized = qfalse;
+		if ( !initialized ) {
+			for ( i = 0; i < 256; i++ )
+				s_gammatable_identity[i] = i;
+			initialized = qtrue;
+		}
+		ri.WIN_SetGamma( &glConfig, s_gammatable_identity, s_gammatable_identity, s_gammatable_identity );
 	}
 }
 

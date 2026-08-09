@@ -351,6 +351,13 @@ typedef struct clientStatic_s {
 
 	// rendering info
 	glconfig_t	glconfig;
+	// Physical window resolution, as reported by the renderer via CL_SetRealResolution().
+	// May differ from glconfig.vidWidth/vidHeight, which a renderer can repoint at an
+	// internal render-scaled target (e.g. rd-vulkan's r_renderScale/r_ext_supersample).
+	// 0 until a renderer actually reports it, meaning "same as glconfig" -- see
+	// CL_RealVidWidth()/CL_RealVidHeight() below.
+	int			realVidWidth;
+	int			realVidHeight;
 	qhandle_t	consoleFonts[2][2][2];
 	qhandle_t	whiteShader;
 	qhandle_t	consoleShader;
@@ -389,6 +396,14 @@ typedef struct console_s {
 } console_t;
 
 extern	clientStatic_t		cls;
+
+// The console/notify-area font size (cl_consoleFontSize/cl_topLeftFontSize) is expressed in
+// real on-screen pixels, so it must be measured against the true window size, not
+// cls.glconfig.vidWidth/vidHeight -- those can be repointed at an internal render-scaled
+// target by the active renderer (see CL_SetRealResolution). Falls back to glconfig when no
+// renderer has reported a real size (e.g. rd-vanilla/rd-rend2, which don't decouple the two).
+static inline int CL_RealVidWidth( void )  { return cls.realVidWidth  ? cls.realVidWidth  : cls.glconfig.vidWidth; }
+static inline int CL_RealVidHeight( void ) { return cls.realVidHeight ? cls.realVidHeight : cls.glconfig.vidHeight; }
 
 extern	refexport_t		*re;		// interface to refresh .dll
 

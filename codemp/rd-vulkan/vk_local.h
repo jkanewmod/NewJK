@@ -166,6 +166,8 @@ along with this program; if not, see <http://www.gnu.org/licenses/>.
 #define GLS_SRCBLEND_DST_ALPHA					0x00000007
 #define GLS_SRCBLEND_ONE_MINUS_DST_ALPHA		0x00000008
 #define GLS_SRCBLEND_ALPHA_SATURATE				0x00000009
+// newjk: constant-alpha blend factors, for the entity-alpha fade
+#define GLS_SRCBLEND_CONST_ALPHA				0x0000000a
 #define	GLS_SRCBLEND_BITS		    			0x0000000f
 
 #define GLS_DSTBLEND_ZERO						0x00000010
@@ -176,6 +178,8 @@ along with this program; if not, see <http://www.gnu.org/licenses/>.
 #define GLS_DSTBLEND_ONE_MINUS_SRC_ALPHA		0x00000060
 #define GLS_DSTBLEND_DST_ALPHA					0x00000070
 #define GLS_DSTBLEND_ONE_MINUS_DST_ALPHA		0x00000080
+// newjk: destination half of the constant-alpha blend above
+#define GLS_DSTBLEND_ONE_MINUS_CONST_ALPHA		0x000000a0
 #define	GLS_DSTBLEND_BITS					    0x000000f0
 
 #define GLS_BLEND_BITS							( GLS_SRCBLEND_BITS | GLS_DSTBLEND_BITS )
@@ -352,6 +356,8 @@ extern PFN_vkCmdDrawIndexed						    	qvkCmdDrawIndexed;
 extern PFN_vkCmdEndRenderPass							qvkCmdEndRenderPass;
 extern PFN_vkCmdPipelineBarrier					    	qvkCmdPipelineBarrier;
 extern PFN_vkCmdPushConstants							qvkCmdPushConstants;
+// newjk: sets the constant used by the GLS_*_CONST_ALPHA factors above
+extern PFN_vkCmdSetBlendConstants					qvkCmdSetBlendConstants;
 extern PFN_vkCmdSetDepthBias							qvkCmdSetDepthBias;
 extern PFN_vkCmdSetScissor								qvkCmdSetScissor;
 extern PFN_vkCmdSetViewport						    	qvkCmdSetViewport;
@@ -624,7 +630,12 @@ struct Image_Upload_Data  {
 };
 
 extern int vkSamples;
+// NOTE: vkMaxSamples is a VkSampleCountFlags *bitmask* of every supported count (e.g. 15 == 1|2|4|8),
+// not a sample count. Only use it to clamp with. vkMaxSampleCount is the highest usable count as an
+// actual number - use that for display and arithmetic.
 extern int vkMaxSamples;
+// newjk: see the note above - a real count, unlike the vkMaxSamples bitmask
+extern int vkMaxSampleCount;
 
 extern unsigned char s_intensitytable[256];
 extern unsigned char s_gammatable[256];
@@ -1018,6 +1029,13 @@ typedef struct {
 	VkImageLayout initSwapchainLayout;
 
 	qboolean active;
+
+	// set when any Vulkan call reports VK_ERROR_DEVICE_LOST. A lost device is unrecoverable -
+	// every subsequent call returns the same error - so once this is set we stop submitting work
+	// entirely and let the client end the session (see RE_DeviceLost / CL_Frame). Never swallow
+	// device loss and keep rendering: that spins forever on a dead device.
+	qboolean deviceLost;
+
 	qboolean msaaActive;
 	qboolean bloomActive;
 	qboolean dglowActive;
@@ -1124,6 +1142,8 @@ void		vk_create_swapchain( VkPhysicalDevice physical_device, VkDevice device,
 void		vk_begin_frame( void );
 void		vk_end_frame( void );
 void		vk_present_frame( void );
+// newjk: records device loss and halts submission; the client reports and exits
+void		vk_set_device_lost( const char *funcname );
 void		vk_create_framebuffers( void );
 void		vk_destroy_framebuffers( void );
 void		vk_create_sync_primitives( void );

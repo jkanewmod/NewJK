@@ -88,6 +88,8 @@ PFN_vkCmdDrawIndexed							qvkCmdDrawIndexed;
 PFN_vkCmdEndRenderPass							qvkCmdEndRenderPass;
 PFN_vkCmdPipelineBarrier						qvkCmdPipelineBarrier;
 PFN_vkCmdPushConstants							qvkCmdPushConstants;
+// newjk: sets the constant used by the GLS_*_CONST_ALPHA blend factors
+PFN_vkCmdSetBlendConstants					qvkCmdSetBlendConstants;
 PFN_vkCmdSetDepthBias							qvkCmdSetDepthBias;
 PFN_vkCmdSetScissor								qvkCmdSetScissor;
 PFN_vkCmdSetViewport							qvkCmdSetViewport;
@@ -354,6 +356,15 @@ static void vk_create_instance( void )
 
     free((void*)extension_names);
     free(extension_properties);
+
+    if ( result != VK_SUCCESS ) {
+        // Was previously left as a silent vk_debug() (a no-op outside _DEBUG builds), so a
+        // failed vkCreateInstance fell through into later calls using an invalid vk.instance.
+        // WIN_VK_ProbeSupport() in sdl_window.cpp should already catch an incompatible
+        // system before rd-vulkan is even loaded, so this is a deterministic-fatal backstop
+        // for the rest of the way here, not the primary defense.
+        ri.Error( ERR_FATAL, "Vulkan: failed to create instance (%s)", vk_result_string( result ) );
+    }
 }
 
 static VkFormat get_hdr_format( VkFormat base_format )
@@ -1001,6 +1012,8 @@ __initStart:
 	//INIT_DEVICE_FUNCTION(vkCmdNextSubpass)
 	INIT_DEVICE_FUNCTION(vkCmdPipelineBarrier)
 	INIT_DEVICE_FUNCTION(vkCmdPushConstants)
+	// newjk: needed by the constant-alpha blend factors
+	INIT_DEVICE_FUNCTION(vkCmdSetBlendConstants)
 	INIT_DEVICE_FUNCTION(vkCmdSetDepthBias)
 	INIT_DEVICE_FUNCTION(vkCmdSetScissor)
 	INIT_DEVICE_FUNCTION(vkCmdSetViewport)
@@ -1133,6 +1146,8 @@ void vk_deinit_library( void )
 	//qvkCmdNextSubpass = NULL;
 	qvkCmdPipelineBarrier = NULL;
 	qvkCmdPushConstants = NULL;
+	// newjk: cleared with the rest of the device function pointers
+	qvkCmdSetBlendConstants = NULL;
 	qvkCmdSetDepthBias = NULL;
 	qvkCmdSetScissor = NULL;
 	qvkCmdSetViewport = NULL;

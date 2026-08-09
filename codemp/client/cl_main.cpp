@@ -1335,6 +1335,137 @@ void CL_ResetPureClientAtServer( void ) {
 
 /*
 =================
+CL_CheckDeviceLost
+
+Polled once per frame from CL_Frame, between frames, so the renderer is never torn down from inside
+one of its own calls - doing that would free state the current call stack is still walking. Only
+Vulkan can report device loss; the other backends always return qfalse.
+
+A lost graphics device cannot be revived in place, and in practice it means the video settings are
+more than the hardware can actually sustain, so we do not try to recover: say what happened and
+quit. Com_Error( ERR_FATAL ) reaches Sys_Error, which puts the message in a dialog box and writes
+the console log - including the renderer's own line naming the Vulkan call that reported the loss -
+out to a crash log before exiting.
+=================
+*/
+#define DEFAULT_RENDER_LIBRARY "rd-vanilla"
+#define VULKAN_RENDER_LIBRARY "rd-vulkan"
+#define REND2_RENDER_LIBRARY "rd-rend2"
+
+/*
+=================
+Video startup marker
+
+Guards the one failure the user cannot talk their way out of: video settings are latched, so they
+only take effect on startup, and if applying them kills the graphics device the game never reaches
+a console to change them back from.
+
+The marker is set to '1' before the renderer is first brought up and back to '0' once the client has
+rendered for a while. Finding '1' at startup means the previous launch never got that far, so we ask
+the renderer to fall back to safe values.
+
+This lives in the client rather than the renderer for a specific reason: CL_ShutdownRef calls
+Sys_UnloadDll, so the renderer library is genuinely unloaded and reloaded on every vid_restart, and
+any "have I done this yet" state kept in renderer statics silently resets with it. The client is
+never unloaded.
+
+MSEC_BEFORE_CLEAR only needs to be past the point where a doomed configuration would already have
+died, while staying short enough that an early quit does not look like a failure.
+=================
+*/
+#define VIDEO_STARTUP_MARKER	"videostartup.dat"
+#define MSEC_BEFORE_CLEAR		(5000)
+
+static qboolean cl_videoMarkerArmed = qfalse;
+static qboolean cl_videoMarkerCleared = qfalse;
+
+static void CL_WriteVideoStartupMarker( char value ) {
+	fileHandle_t f = FS_FOpenFileWrite( VIDEO_STARTUP_MARKER );
+
+	if ( !f )
+		return;
+
+	FS_Write( &value, 1, f );
+	FS_FCloseFile( f );
+}
+
+// Called once, before the renderer is first loaded. Must run before the renderer registers its
+// cvars, so that r_safeVideoStartup is already set when it does.
+void CL_ArmVideoStartupMarker( void ) {
+	void	*buffer = NULL;
+	long	len;
+
+	if ( cl_videoMarkerArmed )
+		return;
+
+	cl_videoMarkerArmed = qtrue;
+
+	len = FS_ReadFile( VIDEO_STARTUP_MARKER, &buffer );
+
+	if ( len > 0 && buffer ) {
+		if ( *(const char *)buffer == '1' ) {
+			Com_Printf( S_COLOR_YELLOW "\nThe previous startup never finished drawing - the video "
+				"settings most likely stopped the\ngraphics device from starting. Falling back to "
+				"safe values for this launch.\n\n" );
+
+			// the renderer owns which of its cvars are the demanding ones, so it applies them
+			Cvar_Set( "r_safeVideoStartup", "1" );
+		}
+		FS_FreeFile( buffer );
+	}
+
+	CL_WriteVideoStartupMarker( '1' );
+}
+
+static void CL_CheckVideoStartupMarker( void ) {
+	static int rendererUpSince = 0;
+
+	if ( cl_videoMarkerCleared || !cls.rendererStarted )
+		return;
+
+	if ( !rendererUpSince ) {
+		rendererUpSince = Sys_Milliseconds();
+		return;
+	}
+
+	// Elapsed time, not a frame count: frames stall while the window is unfocused or minimized, and
+	// a user who launched minimized and quit would otherwise look like a failed startup and get
+	// their settings reset for no reason.
+	if ( Sys_Milliseconds() - rendererUpSince < MSEC_BEFORE_CLEAR )
+		return;
+
+	cl_videoMarkerCleared = qtrue;
+	CL_WriteVideoStartupMarker( '0' );
+}
+
+static void CL_CheckDeviceLost( void ) {
+	const char	*gpu;
+	char		named[256];
+
+	if ( !re || !re->DeviceLost || !re->DeviceLost() )
+		return;
+
+	// Cached in glconfig when the renderer started, so naming the device asks nothing of a device
+	// that has already stopped answering. Empty if the renderer died before ever reporting it, in
+	// which case the sentence just reads without it.
+	gpu = cls.glconfig.renderer_string;
+
+	if ( gpu && *gpu )
+		Com_sprintf( named, sizeof( named ), " (%s)", gpu );
+	else
+		named[0] = '\0';
+
+	// Settings are named the way the player sees them in the video menu, not by cvar - the
+	// demanding ones are not even the same cvars from one backend to the next.
+	Com_Error( ERR_FATAL, "The graphics device stopped responding%s.\n\n"
+		"This is often caused by video settings (such as resolution, antialiasing, and\n"
+		"supersampling) that are more than the hardware can handle. Consider reducing your\n"
+		"settings if this happens repeatedly.\n\n"
+		"Start Jedi Academy with  +safe  to start from default settings.", named );
+}
+
+/*
+=================
 CL_Vid_Restart_f
 
 Restart the video subsystem
@@ -2411,6 +2542,13 @@ void CL_Frame ( int msec ) {
 	// decide on the serverTime to render
 	CL_SetCGameTime();
 
+	// rebuild the renderer if the graphics device died last frame. Must happen here, outside any
+	// renderer call, and before we ask it to draw anything else.
+	CL_CheckDeviceLost();
+
+	// once we have been rendering for a while, this launch is proven survivable
+	CL_CheckVideoStartupMarker();
+
 	// update the screen
 	SCR_UpdateScreen();
 
@@ -2605,7 +2743,51 @@ static IHeapAllocator *GetG2VertSpaceServer( void ) {
 	return G2VertSpaceServer;
 }
 
-#define DEFAULT_RENDER_LIBRARY "rd-vanilla"
+// Accepts shorthand/legacy values for cl_renderer and resolves them to a canonical
+// renderer library name. Returns NULL if the value isn't recognized at all.
+static const char *CL_NormalizeRendererName( const char *value ) {
+	struct { const char *alias; const char *canonical; } aliases[] = {
+		{ "0",                    DEFAULT_RENDER_LIBRARY },
+		{ "vanilla",              DEFAULT_RENDER_LIBRARY },
+		{ "default",              DEFAULT_RENDER_LIBRARY },
+		{ "",                     DEFAULT_RENDER_LIBRARY },
+		{ DEFAULT_RENDER_LIBRARY, DEFAULT_RENDER_LIBRARY },
+		{ "1",                    VULKAN_RENDER_LIBRARY },
+		{ "vulkan",               VULKAN_RENDER_LIBRARY },
+		{ VULKAN_RENDER_LIBRARY,  VULKAN_RENDER_LIBRARY },
+		{ "2",                    REND2_RENDER_LIBRARY },
+		{ "rend2",                REND2_RENDER_LIBRARY },
+		{ REND2_RENDER_LIBRARY,   REND2_RENDER_LIBRARY },
+	};
+
+	for ( size_t i = 0; i < ARRAY_LEN( aliases ); i++ ) {
+		if ( !Q_stricmp( value, aliases[i].alias ) )
+			return aliases[i].canonical;
+	}
+
+	/*
+		last-resort substring match, so near-misses ("Vulkan ", "rd_rend2", "vanila") still land
+		somewhere sensible instead of falling back to the default renderer with a warning.
+		Checked in this order because the canonical names are unambiguous under it - only
+		rd-rend2 contains "re", only rd-vulkan contains "vu", only rd-vanilla contains "va".
+		A pathological value containing several of them resolves to the first match rather than
+		erroring, which is the point: this is a leniency pass, not a validator.
+	*/
+	if ( Q_stristr( value, "re" ) )
+		return REND2_RENDER_LIBRARY;
+	if ( Q_stristr( value, "vu" ) )
+		return VULKAN_RENDER_LIBRARY;
+	if ( Q_stristr( value, "va" ) )
+		return DEFAULT_RENDER_LIBRARY;
+
+	return NULL;
+}
+
+// See CL_SetRealResolution's declaration in refimport_t (tr_public.h) for why this exists.
+static void CL_SetRealResolution( int width, int height ) {
+	cls.realVidWidth = width;
+	cls.realVidHeight = height;
+}
 
 void CL_InitRef( void ) {
 	static refimport_t ri;
@@ -2615,7 +2797,51 @@ void CL_InitRef( void ) {
 
 	Com_Printf( "----- Initializing Renderer ----\n" );
 
+	// Self-guarding, so this only does anything on the first renderer load of the process. Must
+	// precede the load, so r_safeVideoStartup is already set when the renderer registers its cvars.
+	CL_ArmVideoStartupMarker();
+
+	// Reset so a stale value from a previously loaded renderer (e.g. rd-vulkan with
+	// r_renderScale active) can't leak into one that never calls CL_SetRealResolution
+	// (e.g. rd-vanilla/rd-rend2, which don't decouple real vs. internal resolution).
+	cls.realVidWidth = cls.realVidHeight = 0;
+
 	cl_renderer = Cvar_Get( "cl_renderer", DEFAULT_RENDER_LIBRARY, CVAR_ARCHIVE|CVAR_LATCH|CVAR_PROTECTED, "Which renderer library to use" );
+
+	// Resolve shorthand (0/1) and casing/alias variants to the canonical DLL name,
+	// and write the canonical name back so archived configs stay human-readable.
+	// Cvar_Set forces the write immediately (bypassing CVAR_LATCH), so cl_renderer->string
+	// is already canonical below.
+	{
+		const char *canonical = CL_NormalizeRendererName( cl_renderer->string );
+		if ( !canonical ) {
+			Com_Printf( S_COLOR_YELLOW "WARNING: unknown cl_renderer value \"%s\", falling back to \"%s\"\n", cl_renderer->string, DEFAULT_RENDER_LIBRARY );
+			canonical = DEFAULT_RENDER_LIBRARY;
+		}
+		if ( strcmp( canonical, cl_renderer->string ) )
+			Cvar_Set( "cl_renderer", canonical );
+	}
+
+	// rd-vulkan's own init doesn't fail cleanly on old/unsupported hardware (a failed
+	// vkCreateInstance is logged and ignored rather than checked, so execution carries on
+	// with an invalid VkInstance -- see vk_create_instance() in vk_instance.cpp). Catch that
+	// here instead, with a cheap headless probe, before the renderer library is even loaded --
+	// this is what turns "crashes on an old GPU" into "silently uses the default renderer".
+	// Only runs when Vulkan was actually requested, so it costs nothing otherwise.
+	if ( !strcmp( cl_renderer->string, VULKAN_RENDER_LIBRARY ) && !WIN_VK_ProbeSupport() ) {
+		Com_Printf( S_COLOR_YELLOW "Vulkan is not supported on this system, falling back to \"%s\"\n", DEFAULT_RENDER_LIBRARY );
+		Cvar_ForceReset( "cl_renderer" );
+	}
+
+	// Some asset paks are authored for rend2 only and break other renderers (see
+	// FS_REND2_ONLY_PAK_PREFIX in files.cpp). This is the first point where cl_renderer is
+	// both registered and canonical - FS_Startup runs long before the config that sets it -
+	// so tell the filesystem now, and rebuild the search path if the answer changed. Runs on
+	// vid_restart too, so switching renderers picks the paks up or drops them without a
+	// full game restart.
+	if ( FS_SetRend2OnlyPaksAllowed( (qboolean)!Q_stricmp( cl_renderer->string, REND2_RENDER_LIBRARY ) ) ) {
+		FS_Restart( clc.checksumFeed );
+	}
 
 	Com_sprintf( dllName, sizeof( dllName ), "%s_" ARCH_STRING DLL_EXT, cl_renderer->string );
 
@@ -2710,6 +2936,13 @@ void CL_InitRef( void ) {
     ri.WIN_Present = WIN_Present;
 	ri.GL_GetProcAddress = WIN_GL_GetProcAddress;
 	ri.GL_ExtensionSupported = WIN_GL_ExtensionSupported;
+	ri.CL_SetRealResolution = CL_SetRealResolution;
+
+	// Vulkan
+	ri.VK_IsMinimized = WIN_VK_IsMinimized;
+	ri.VK_GetInstanceProcAddress = WIN_VK_GetInstanceProcAddress;
+	ri.VK_createSurfaceImpl = WIN_VK_createSurfaceImpl;
+	ri.VK_destroyWindow = WIN_VK_destroyWindow;
 
 	ri.CM_GetCachedMapDiskImage = CM_GetCachedMapDiskImage;
 	ri.CM_SetCachedMapDiskImage = CM_SetCachedMapDiskImage;

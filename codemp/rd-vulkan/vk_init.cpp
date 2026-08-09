@@ -30,7 +30,8 @@ along with this program; if not, see <http://www.gnu.org/licenses/>.
 #include "ghoul2/g2_local.h"
 
 int vkSamples = VK_SAMPLE_COUNT_1_BIT;
-int vkMaxSamples = VK_SAMPLE_COUNT_1_BIT;
+int vkMaxSamples = VK_SAMPLE_COUNT_1_BIT;		// VkSampleCountFlags bitmask, NOT a count
+int vkMaxSampleCount = VK_SAMPLE_COUNT_1_BIT;	// highest usable count, as an actual number
 
 static void vk_set_render_scale( void )
 {
@@ -179,7 +180,12 @@ static void vk_render_splash( void )
 
 	ratio = ( (float)( SCREEN_WIDTH * glConfig.vidHeight ) / (float)( SCREEN_HEIGHT * glConfig.vidWidth ) );
 
-	if ( cl_ratioFix->integer && ratio <= 0.76f ){
+	// Matches rd-vanilla's R_Splash() exactly: purely a function of the actual
+	// aspect ratio, not gated behind cl_ratioFix (which only affects UI/font
+	// stretching, not which splash asset to pick) - a user with cl_ratioFix 0
+	// (rd-vanilla's own default) should still get the 16:9 splash on a 16:9
+	// display.
+	if ( ratio >= 0.74f && ratio <= 0.76f ){
 		splashImage = R_FindImageFile("menu/splash_16_9", IMGFLAG_CLAMPTOEDGE);
 
 		if ( !splashImage ){
@@ -278,29 +284,42 @@ static void vk_render_splash( void )
 void vk_set_clearcolor( void ) {
 	vec4_t clr = { 0.75, 0.75, 0.75, 1.0 };
 
-	if ( r_fastsky->integer ) 
+	// newjk: r_fastsky picks a preset color, or 13 for the r_fastSkyR/G/B triplet
+	if ( r_fastsky->integer )
 	{
-		vec4_t *out;
+		// r_fastsky 1 (the normal/expected value) uses the configurable
+		// r_fastSkyR/G/B cvars, matching rd-vanilla's behavior. Values 2-14
+		// are a legacy numbered debug palette inherited from this backend's
+		// original import - kept for backward compatibility since rd-vanilla
+		// has no equivalent, but not something a normal NewJK config sets.
+		if ( r_fastsky->integer >= 2 && r_fastsky->integer <= 14 )
+		{
+			vec4_t *out;
 
-		switch( r_fastsky->integer ){
-			case 1: out = &colorBlack; break;
-			case 2: out = &colorRed; break;
-			case 3: out = &colorGreen; break;
-			case 4: out = &colorBlue; break;
-			case 5: out = &colorYellow; break;
-			case 6: out = &colorOrange; break;
-			case 7: out = &colorMagenta; break;
-			case 8: out = &colorCyan; break;
-			case 9: out = &colorWhite; break;
-			case 10: out = &colorLtGrey; break;
-			case 11: out = &colorMdGrey; break;
-			case 12: out = &colorDkGrey; break;
-			case 13: out = &colorLtBlue; break;
-			case 14: out = &colorDkBlue; break;
-			default: out = &colorBlack;
+			switch( r_fastsky->integer ){
+				case 2: out = &colorRed; break;
+				case 3: out = &colorGreen; break;
+				case 4: out = &colorBlue; break;
+				case 5: out = &colorYellow; break;
+				case 6: out = &colorOrange; break;
+				case 7: out = &colorMagenta; break;
+				case 8: out = &colorCyan; break;
+				case 9: out = &colorWhite; break;
+				case 10: out = &colorLtGrey; break;
+				case 11: out = &colorMdGrey; break;
+				case 12: out = &colorDkGrey; break;
+				case 13: out = &colorLtBlue; break;
+				case 14: out = &colorDkBlue; break;
+				default: out = &colorBlack;
+			}
+
+			Com_Memcpy(  tr.clearColor, *out, sizeof( vec4_t ) );
+			return;
 		}
 
-		Com_Memcpy(  tr.clearColor, *out, sizeof( vec4_t ) );
+		// newjk: r_fastsky 13 uses the explicit RGB triplet instead of a preset
+		vec4_t fastSkyColor = { r_fastSkyR->value, r_fastSkyG->value, r_fastSkyB->value, 1.0f };
+		Com_Memcpy( tr.clearColor, fastSkyColor, sizeof( vec4_t ) );
 		return;
 	}
 
@@ -332,7 +351,11 @@ void vk_create_window( void ) {
 		gls.captureWidth = glConfig.vidWidth;
 		gls.captureHeight = glConfig.vidHeight;
 
-		//ri.CL_SetScaling(1.0, glConfig.vidWidth, glConfig.vidHeight);	// consolefont and avi capture
+		// Tell the client our true window size before glConfig.vidWidth/vidHeight potentially
+		// get repointed at an internal render-scaled target below -- the console/notify-area
+		// font size (cl_consoleFontSize/cl_topLeftFontSize) needs this to stay a fixed number
+		// of real on-screen pixels regardless of r_renderScale/r_ext_supersample.
+		ri.CL_SetRealResolution( glConfig.vidWidth, glConfig.vidHeight );
 
 		if (r_fbo->integer)
 		{
@@ -343,14 +366,10 @@ void vk_create_window( void ) {
 
 			gls.captureWidth = glConfig.vidWidth;
 			gls.captureHeight = glConfig.vidHeight;
-		
-			//ri.CL_SetScaling(1.0, gls.captureWidth, gls.captureHeight);	// consolefont and avi capture
 
 			if (r_ext_supersample->integer){
 				glConfig.vidWidth *= 2;
 				glConfig.vidHeight *= 2;
-
-				//ri.CL_SetScaling(2.0, gls.captureWidth, gls.captureHeight);	// consolefont and avi capture
 			}
 		}
 
@@ -395,6 +414,9 @@ void vk_initialize( void )
 	uint32_t i;
 
 	vk_init_library();
+
+	// we are (re)creating the device, so any previous loss is now history
+	vk.deviceLost = qfalse;
 
 	qvkGetDeviceQueue( vk.device, vk.queue_family_index, 0, &vk.queue );
 
@@ -502,8 +524,27 @@ void vk_initialize( void )
 
 	vk_set_render_scale();
 
-	if ( r_fbo->integer )
-		vk.fboActive = qtrue;		
+	// FBO is always on: shader-based gamma correction (below) requires the
+	// off-screen render + composite pass FBO provides, and there's no other
+	// way to apply gamma reliably (hardware gamma ramps are unavailable or
+	// unreliable on several compositors, notably Wayland). r_fbo itself is
+	// now an internal bookkeeping cvar (CVAR_ROM) rather than a user toggle;
+	// see its registration in tr_init.cpp.
+	vk.fboActive = qtrue;
+
+	// Force shader-based gamma correction unconditionally, mirroring
+	// rd-vanilla's GLimp_InitExtensions (which force-enables ARB shader gamma
+	// whenever the hardware extensions are present, ignoring r_gammaShaders).
+	// Vulkan has no hardware-extension-availability concern equivalent to
+	// vanilla's ARB checks, so this is unconditional. This also disables the
+	// hardware gamma ramp path in vk_image_process.cpp (which already checks
+	// vk.fboActive and applies an identity ramp when shader gamma is active).
+	//
+	// note this flag deliberately says nothing about screenshots. vanilla's
+	// shader gamma lands in the buffer glReadPixels reads, so it skips the
+	// software pass; ours runs on the way out to the swapchain, so read-back
+	// is still pre-gamma and R_GammaCorrect() has to do the work regardless.
+	glConfigExt.doGammaCorrectionWithShaders = qtrue;
 
 #ifdef USE_VBO
 	if ( r_vbo->integer )
@@ -520,23 +561,77 @@ void vk_initialize( void )
 		vk.msaaActive = qtrue;
 
 	// MSAA
-	vkMaxSamples = MIN( props.limits.sampledImageColorSampleCounts, props.limits.sampledImageDepthSampleCounts);
+	// Render targets are governed by the *framebuffer* sample limits. This previously used the
+	// sampled-image limits, which describe what can be read back rather than what can be rendered
+	// into; the two masks are permitted to differ, so the wrong one can report support for a
+	// configuration the hardware will refuse.
+	vkMaxSamples = MIN( props.limits.framebufferColorSampleCounts, props.limits.framebufferDepthSampleCounts );
+
+	// vkMaxSamples is a bitmask of every supported count (e.g. 15 == 1|2|4|8), not a count.
+	// Derive the highest usable count once, so nothing downstream mistakes the mask for a number -
+	// that confusion is what printed the nonsensical "MSAA max: 15x".
+	vkMaxSampleCount = VK_SAMPLE_COUNT_1_BIT;
+	while ( ( vkMaxSampleCount << 1 ) & vkMaxSamples )
+		vkMaxSampleCount <<= 1;
 
 	if ( vk.msaaActive ) {
-		VkSampleCountFlags mask = vkMaxSamples;
 		vkSamples = MAX( log2pad( r_ext_multisample->integer, 1 ), VK_SAMPLE_COUNT_2_BIT );
-		while ( vkSamples > mask )
+		// newjk: clamp against the real max count, not the bitmask
+		while ( vkSamples > vkMaxSampleCount )
 			vkSamples >>= 1;
 	}
 	else {
 		vkSamples = VK_SAMPLE_COUNT_1_BIT;
 	}
 
-	ri.Printf( PRINT_ALL, "MSAA max: %dx, using %dx\n", vkMaxSamples, vkSamples );
+	// newjk: report what was actually clamped to
+	ri.Printf( PRINT_ALL, "MSAA max: %dx, using %dx\n", vkMaxSampleCount, vkSamples );
 
 	// Anisotropy
 	ri.Printf( PRINT_ALL, "Anisotropy max: %dx, using %dx\n\n", r_ext_max_anisotropy->integer, r_ext_texture_filter_anisotropic->integer );
-		
+
+	// Clamp the internal render target to what the device will actually accept. r_renderScale and
+	// r_ext_supersample compound - renderScale sets the extent from r_renderWidth/r_renderHeight,
+	// then supersample doubles it - so it is easy to end up asking for something enormous. None of
+	// these limits were consulted before, and exceeding them is undefined behavior rather than a
+	// clean failure.
+	{
+		const uint32_t maxWidth  = MIN( props.limits.maxFramebufferWidth,  props.limits.maxImageDimension2D );
+		const uint32_t maxHeight = MIN( props.limits.maxFramebufferHeight, props.limits.maxImageDimension2D );
+
+		if ( (uint32_t)glConfig.vidWidth > maxWidth || (uint32_t)glConfig.vidHeight > maxHeight ) {
+			ri.Printf( PRINT_WARNING, "Render target %dx%d exceeds the device limit of %ux%u, clamping.\n",
+				glConfig.vidWidth, glConfig.vidHeight, maxWidth, maxHeight );
+
+			if ( (uint32_t)glConfig.vidWidth > maxWidth )
+				glConfig.vidWidth = maxWidth;
+
+			if ( (uint32_t)glConfig.vidHeight > maxHeight )
+				glConfig.vidHeight = maxHeight;
+
+			// keep the resolve target within the render target
+			if ( gls.captureWidth > (uint32_t)glConfig.vidWidth )
+				gls.captureWidth = glConfig.vidWidth;
+
+			if ( gls.captureHeight > (uint32_t)glConfig.vidHeight )
+				gls.captureHeight = glConfig.vidHeight;
+		}
+	}
+
+	// State the configuration we actually ended up with. Previously only the window size was
+	// logged, so an internal target inflated by renderScale/supersample was invisible - working out
+	// what a session had really been rendering meant deriving it by hand from this source file.
+	ri.Printf( PRINT_ALL, "----- Render configuration -----\n" );
+	ri.Printf( PRINT_ALL, "window:            %dx%d\n", gls.windowWidth, gls.windowHeight );
+	ri.Printf( PRINT_ALL, "render target:     %dx%d (%.1f MP)%s\n", glConfig.vidWidth, glConfig.vidHeight,
+		( glConfig.vidWidth * (double)glConfig.vidHeight ) / 1000000.0,
+		( glConfig.vidWidth != gls.windowWidth || glConfig.vidHeight != gls.windowHeight ) ? "" : " (native)" );
+	ri.Printf( PRINT_ALL, "resolve target:    %ux%u\n", gls.captureWidth, gls.captureHeight );
+	ri.Printf( PRINT_ALL, "r_renderScale:     %d\n", r_renderScale->integer );
+	ri.Printf( PRINT_ALL, "r_ext_supersample: %d\n", r_ext_supersample->integer );
+	ri.Printf( PRINT_ALL, "samples/pixel:     %dx MSAA\n", vkSamples );
+	ri.Printf( PRINT_ALL, "--------------------------------\n\n" );
+
 	// Bloom
 	if ( vk.fboActive && r_bloom->integer )
 		vk.bloomActive = qtrue;
@@ -553,7 +648,8 @@ void vk_initialize( void )
 		vk.refractionActive = qtrue;
 
 	// Screenmap
-	vk.screenMapSamples = MIN(vkMaxSamples, VK_SAMPLE_COUNT_4_BIT);
+	// vkMaxSampleCount, not vkMaxSamples: MIN() against a bitmask is meaningless
+	vk.screenMapSamples = MIN(vkMaxSampleCount, VK_SAMPLE_COUNT_4_BIT);
 	vk.screenMapWidth = (float)glConfig.vidWidth / 16.0;
 	vk.screenMapHeight = (float)glConfig.vidHeight / 16.0;	
 

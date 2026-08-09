@@ -203,6 +203,10 @@ RE_AddRefEntityToScene
 
 =====================
 */
+// rend2-only feature, no-op here - see cg_public.h's R_SetNextEntityNum comment.
+void RE_SetNextEntityNum( int entityNum ) {
+}
+
 void RE_AddRefEntityToScene( const refEntity_t *ent ) {
 	if ( !tr.registered ) {
 		return;
@@ -236,7 +240,8 @@ void RE_AddRefEntityToScene( const refEntity_t *ent ) {
 	}
 #endif
 
-	if ( (int)ent->reType < 0 || ent->reType >= RT_MAX_SP_REF_ENTITY_TYPE || ent->reType == RT_MAX_MP_REF_ENTITY_TYPE ) {
+	// newjk: NewJK's refEntityType_t has no separate SP/MP ceiling, so check the one max
+	if ( (int)ent->reType < 0 || ent->reType >= RT_MAX_REF_ENTITY_TYPE ) {
 		Com_Error( ERR_DROP, "RE_AddRefEntityToScene: bad reType %i", ent->reType );
 	}
 
@@ -249,7 +254,8 @@ void RE_AddRefEntityToScene( const refEntity_t *ent ) {
 
 		if (!ghoul2[0].mModel)
 		{
-			ri.Printf( PRINT_ALL, "Your ghoul2 instance has no model!\n");
+			// newjk: developer-only; this fires routinely and is not actionable for players
+			ri.Printf( PRINT_DEVELOPER, "Your ghoul2 instance has no model!\n");
 		}
 	}
 
@@ -297,6 +303,8 @@ RE_AddDynamicLightToScene
 
 =====================
 */
+
+
 static void RE_AddDynamicLightToScene( const vec3_t org, float intensity, float r, float g, float b, int additive ) {
 	dlight_t	*dl;
 
@@ -391,7 +399,8 @@ RE_AddLightToScene
 
 =====================
 */
-void RE_AddLightToScene( const vec3_t org, float intensity, float r, float g, float b ) {
+// newjk: noShadowFromEntity accepted for signature parity; only rd-rend2 acts on it
+void RE_AddLightToScene( const vec3_t org, float intensity, float r, float g, float b, int noShadowFromEntity ) {
 	RE_AddDynamicLightToScene( org, intensity, r, g, b, qfalse );
 }
 

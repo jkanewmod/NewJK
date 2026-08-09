@@ -689,9 +689,13 @@ qboolean Info_Validate( const char *s );
 qboolean Info_NextPair( const char **s, char *key, char *value );
 
 // this is only here so the functions in q_shared.c and bg_*.c can link
+// (extern: storage lives in q_shared.c - a tentative definition here would be a
+// distinct global in every TU that includes this header, which links fine under
+// -fcommon but fails as a multiple-definition error under modern GCC's -fno-common
+// default)
 #if defined( _GAME ) || defined( _CGAME ) || defined( UI_BUILD )
-	NORETURN_PTR void (*Com_Error)( int level, const char *error, ... );
-	void (*Com_Printf)( const char *msg, ... );
+	extern NORETURN_PTR void (*Com_Error)( int level, const char *error, ... );
+	extern void (*Com_Printf)( const char *msg, ... );
 #else
 	void NORETURN QDECL Com_Error( int level, const char *error, ... );
 	void QDECL Com_Printf( const char *msg, ... );
@@ -729,6 +733,8 @@ Many variables can be used for cheating purposes, so when cheats is zero,
 #define CVAR_SERVER_CREATED	(0x00002000u)	// cvar was created by a server the client connected to.
 #define CVAR_VM_CREATED		(0x00004000u)	// cvar was created exclusively in one of the VMs.
 #define CVAR_PROTECTED		(0x00008000u)	// prevent modifying this var from VMs or the server
+#define CVAR_NODEFAULT		(0x00010000u)	// do not write to config if matching with default value
+#define CVAR_ARCHIVE_ND		(CVAR_ARCHIVE | CVAR_NODEFAULT)
 // These flags are only returned by the Cvar_Flags() function
 #define CVAR_MODIFIED		(0x40000000u)	// Cvar was modified
 #define CVAR_NONEXISTENT	(0x80000000u)	// Cvar doesn't exist.

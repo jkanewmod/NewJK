@@ -200,11 +200,24 @@ void GL_State( uint32_t stateBits )
 	//
 	// check blend bits
 	//
-	if ( diff & ( GLS_SRCBLEND_BITS | GLS_DSTBLEND_BITS ) )
+	// newjk: the const-alpha bit also has to re-trigger blend state setup
+	if ( diff & ( GLS_SRCBLEND_BITS | GLS_DSTBLEND_BITS | GLS_BLEND_CONST_ALPHA ) )
 	{
 		GLenum srcFactor = GL_ONE, dstFactor = GL_ONE;
 
-		if ( stateBits & ( GLS_SRCBLEND_BITS | GLS_DSTBLEND_BITS ) )
+		if ( stateBits & GLS_BLEND_CONST_ALPHA )
+		{
+			// glState.blend must be kept in sync here: the "no blend bits" branch below only
+			// issues qglDisable when it thinks blending is on, so enabling GL_BLEND behind its
+			// back leaves blending stuck on for every subsequent opaque draw.
+			if ( !glState.blend )
+			{
+				qglEnable( GL_BLEND );
+				glState.blend = true;
+			}
+			qglBlendFunc( GL_CONSTANT_ALPHA, GL_ONE_MINUS_CONSTANT_ALPHA );
+		}
+		else if ( stateBits & ( GLS_SRCBLEND_BITS | GLS_DSTBLEND_BITS ) )
 		{
 			switch ( stateBits & GLS_SRCBLEND_BITS )
 			{
@@ -597,19 +610,21 @@ void RB_BeginDrawingView (void) {
 	if ( r_fastsky->integer && !( backEnd.refdef.rdflags & RDF_NOWORLDMODEL ) )
 	{
 		clearBits |= GL_COLOR_BUFFER_BIT;	// FIXME: only if sky shaders have been used
-#ifdef _DEBUG
-		qglClearColor( 0.8f, 0.7f, 0.4f, 1.0f );	// FIXME: get color of sky
-#else
-        if (r_fastsky->integer >= 2 && r_fastsky->integer <= 9) {
-            qglClearColor(g_color_table[r_fastsky->integer][0], g_color_table[r_fastsky->integer][1], g_color_table[r_fastsky->integer][2], 1.0f);
-        }
-        else if (r_fastsky->integer == 10) { //10=red special case
-            qglClearColor(1.0f, 0.0f, 0.0f, 1.0f);
-        }
-        else {
-            qglClearColor(0.0f, 0.0f, 0.0f, 1.0f);	// FIXME: get color of sky
-        }
-#endif
+		// note: deliberately no _DEBUG-only branch here - this used to hardcode a
+		// placeholder qglClearColor(0.8f, 0.7f, 0.4f, 1.0f) in debug builds only,
+		// silently ignoring r_fastsky's value and r_fastSkyR/G/B in any build with
+		// _DEBUG defined (e.g. this project's default jkdev build config). Neither
+		// rd-vanilla nor rd-vulkan has a debug-only bypass for this, so this should
+		// always run the real logic below regardless of build config.
+		if (r_fastsky->integer >= 2 && r_fastsky->integer <= 9) {
+			qglClearColor(g_color_table[r_fastsky->integer][0], g_color_table[r_fastsky->integer][1], g_color_table[r_fastsky->integer][2], 1.0f);
+		}
+		else if (r_fastsky->integer == 10) { //10=red special case
+			qglClearColor(1.0f, 0.0f, 0.0f, 1.0f);
+		}
+		else {
+			qglClearColor(r_fastSkyR->value, r_fastSkyG->value, r_fastSkyB->value, 1.0f);
+		}
 	}
 
 	if (
@@ -1078,6 +1093,10 @@ static void RB_BindUniformBlocks(
 static void RB_SetRenderState(const RenderState& renderState)
 {
 	GL_Cull(renderState.cullType);
+	// the constant blend factor carries the per-entity fade for GLS_BLEND_CONST_ALPHA
+	// stages (cg_thirdPersonAlpha); it must be uploaded before GL_State selects it.
+	if ( renderState.stateBits & GLS_BLEND_CONST_ALPHA )
+		qglBlendColor( 0.0f, 0.0f, 0.0f, renderState.blendConstAlpha );
 	GL_State(renderState.stateBits);
 	GL_DepthRange(
 		renderState.depthRange.minDepth,
@@ -3048,6 +3067,25 @@ static const void	*RB_SwapBuffers( const void *data ) {
 			ri.FS_FCloseFile(tr.debugFile);
 			tr.debugFile = 0;
 		}
+	}
+
+	/* Forced shader gamma. rend2 upstream has no gamma mechanism of its own, and
+	hardware gamma ramps are unreliable (ignored on several compositors, notably
+	Wayland). Every path that used to blit its final result straight to the screen
+	writes into tr.gammaFbo instead, and this pass composites it to the screen as
+	the last step of the frame - so gamma works regardless of r_hdr/r_toneMap/
+	exposure settings.
+
+	At r_gamma 1 the curve is the identity function, so skip the whole pass (a
+	full-resolution framebuffer copy plus a full-screen shader pass) rather than
+	paying for a no-op every frame. r_gamma isn't CVAR_LATCH, so this is re-checked
+	live every frame - no vid_restart needed to pick up a change away from 1. */
+	if ( fabsf( r_gamma->value - 1.0f ) > 0.001f )
+	{
+		vec4i_t gammaBox;
+		VectorSet4(gammaBox, 0, 0, glConfig.vidWidth, glConfig.vidHeight);
+		FBO_FastBlit(NULL, gammaBox, tr.gammaFbo, gammaBox, GL_COLOR_BUFFER_BIT, GL_NEAREST);
+		RB_ApplyGamma(tr.gammaFbo, gammaBox, gammaBox);
 	}
 
 	R_NewFrameSync();

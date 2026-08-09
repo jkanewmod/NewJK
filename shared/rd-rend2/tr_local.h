@@ -113,6 +113,10 @@ extern cvar_t	*r_measureOverdraw;
 
 extern cvar_t	*r_inGameVideo;
 extern cvar_t	*r_fastsky;
+// newjk: parity cvars carried over from rd-vanilla
+extern cvar_t	*r_fastSkyR;
+extern cvar_t	*r_fastSkyG;
+extern cvar_t	*r_fastSkyB;
 extern cvar_t	*r_drawSun;
 extern cvar_t	*r_dynamiclight;
 
@@ -260,6 +264,7 @@ extern cvar_t	*r_showImages;
 extern cvar_t	*r_ambientScale;
 extern cvar_t	*r_directedScale;
 extern cvar_t	*r_debugLight;
+extern cvar_t	*r_cgameStarted;
 extern cvar_t	*r_debugSort;
 extern cvar_t	*r_printShaders;
 extern cvar_t	*r_saveFontData;
@@ -427,6 +432,7 @@ typedef struct dlight_s {
 
 	vec3_t	transformed;		// origin in local coordinate system
 	int		additive;			// texture detail is lost tho when the lightmap is dark
+	int		noShadowFromEntity;	// RE_AddLightToScene's noShadowFromEntity arg - a game entity number to exclude as a caster into this light's own shadow, or ENTITYNUM_NONE
 } dlight_t;
 
 // a trRefEntity_t has all the information passed in by
@@ -444,7 +450,28 @@ typedef struct trRefEntity_s {
 	vec3_t		ambientLight;	// color normalized to 0-255
 	int			ambientLightInt;	// 32 bit rgba packed
 	vec3_t		directedLight;
+
+	int			entityNum;		// game entity number, or ENTITYNUM_NONE - set via RE_SetNextEntityNum() just before this ref-entity was added. Renderer-internal only, never crosses the VM boundary (unlike refEntity_t, this struct has no ABI/size sensitivity).
 } trRefEntity_t;
+
+// Newmod/NewJK fullbright: cache of this frame's RF_FULLBRIGHT+RF_OTHER7
+// ("isPlayer") entities' real (non-fullbright) lighting, keyed by entity
+// pointer, so a held weapon surface (same G2 ref-entity, matched by name
+// prefix "models/weapons2/") can be rendered with normal lighting instead of
+// inheriting the rest of the model's forced flat fullbright color. Mirrors
+// rd-vanilla/rd-vulkan's FullbrightEnt/fullbrightPlayers.
+struct FullbrightPlayerEnt {
+	trRefEntity_t *ent;
+	vec3_t ambientLight, directedLight, lightDir;
+};
+extern std::vector<FullbrightPlayerEnt> fullbrightPlayers;
+
+// Entities whose fullbright color (r_fullbrightcolor<N>) had its 4th
+// "useWhiteTexture" field set (Newmod's "!" super-color prefix, e.g.
+// cg_fullbrightmodels self=!red) - these need their diffuse texture forced to
+// pure white so the flat fullbright color shows as-is instead of tinting the
+// real skin/texture. Mirrors rd-vanilla/rd-vulkan's forceWhiteEnts.
+extern std::vector<trRefEntity_t *> forceWhiteEnts;
 
 
 typedef struct {
@@ -1175,6 +1202,11 @@ enum
 
 	GLS_DEPTH_CLAMP						= (1 << 30),
 
+	/* fade by a constant alpha instead of the source alpha. lets an opaque stage be faded
+	without it suddenly obeying its texture's alpha channel - see the RF_FORCE_ENT_ALPHA
+	handling in tr_shade.cpp. supplies both factors, so no src/dst bits are needed. */
+	GLS_BLEND_CONST_ALPHA				= (1u << 31),
+
 	GLS_DEFAULT							= GLS_DEPTHMASK_TRUE
 };
 
@@ -1517,6 +1549,15 @@ typedef enum
 
 	UNIFORM_BLOOMSTRENGTH,
 
+	// newjk: uniforms for the gamma pass and the fullbright/light overrides
+	UNIFORM_INVGAMMA,
+
+	UNIFORM_FULLBRIGHTOVERRIDE,
+	UNIFORM_FULLBRIGHTOVERRIDEWHITE,
+
+	UNIFORM_LIGHTOVERRIDEAMBIENT,
+	UNIFORM_LIGHTOVERRIDEDIRECTED,
+
 	UNIFORM_COUNT
 } uniform_t;
 
@@ -1642,6 +1683,7 @@ enum viewParmFlag_t {
 	VPF_POINTSHADOW		= 0x80,// Rendering pointlight shadow
 	VPF_SHADOWCASCADES	= 0x100,// Rendering sun shadow cascades
 	VPF_NOCLEAR			= 0x200,
+	VPF_EXCLUDESHADOWCASTER = 0x400, // skip viewParms_t::excludeShadowCasterEntity as a shadow caster
 };
 using viewParmFlags_t = uint32_t;
 
@@ -1678,6 +1720,7 @@ typedef struct {
 	stereoFrame_t	stereoFrame;
 	int				currentViewParm;
 	viewParmType_t	viewParmType;
+	int				excludeShadowCasterEntity;	// valid only when flags & VPF_EXCLUDESHADOWCASTER
 } viewParms_t;
 
 
@@ -2522,6 +2565,8 @@ typedef struct trGlobals_s {
 
 	int						frameSceneNum;	// zeroed at RE_BeginFrame
 
+	int						nextEntityNum;	// RE_SetNextEntityNum()'s pending value, consumed (and reset to ENTITYNUM_NONE) by the next RE_AddRefEntityToScene() call
+
 	GLuint					globalVao;
 
 	qboolean				worldMapLoaded;
@@ -2545,6 +2590,7 @@ typedef struct trGlobals_s {
 	image_t					*identityLightImage;	// full of tr.identityLightByte
 
 	image_t					*renderImage;
+	image_t					*gammaImage;	// pre-display LDR composite target for the forced gamma pass
 	image_t					*glowImage;
 	image_t					*velocityImage;
 	image_t					*temporalResolveImage;
@@ -2574,6 +2620,7 @@ typedef struct trGlobals_s {
 	image_t					*smaaResolveImage;
 
 	FBO_t					*renderFbo;
+	FBO_t					*gammaFbo;
 	FBO_t					*depthVelocityFbo;
 	FBO_t					*glowFboScaled[6];
 	FBO_t					*msaaResolveFbo;
@@ -2643,6 +2690,8 @@ typedef struct trGlobals_s {
 	shaderProgram_t down4xShader;
 	shaderProgram_t bokehShader;
 	shaderProgram_t tonemapShader[2];
+	// newjk: program for the forced final gamma composite pass
+	shaderProgram_t gammaShader;
 	shaderProgram_t calclevels4xShader[2];
 	shaderProgram_t ssaoShader;
 	shaderProgram_t highpassShader;
@@ -2854,6 +2903,23 @@ extern	cvar_t	*r_offsetUnits;
 extern	cvar_t	*r_fullbright;					// avoid lightmap pass
 extern	cvar_t	*r_lightmap;					// render lightmaps only
 extern	cvar_t	*r_distanceCull;				// distancecull
+extern	cvar_t	*r_cullDistanceOverride;		// forces a minimum distance cull, set externally
+
+extern	cvar_t	*r_fullbrightcolor_weapon_sab;
+extern	cvar_t	*r_fullbrightcolor_weapon_pis;
+extern	cvar_t	*r_fullbrightcolor_weapon_bla;
+extern	cvar_t	*r_fullbrightcolor_weapon_dis;
+extern	cvar_t	*r_fullbrightcolor_weapon_bow;
+extern	cvar_t	*r_fullbrightcolor_weapon_rep;
+extern	cvar_t	*r_fullbrightcolor_weapon_dem;
+extern	cvar_t	*r_fullbrightcolor_weapon_gol;
+extern	cvar_t	*r_fullbrightcolor_weapon_roc;
+extern	cvar_t	*r_fullbrightcolor_weapon_con;
+extern	cvar_t	*r_fullbrightcolor_weapon_the;
+extern	cvar_t	*r_fullbrightcolor_weapon_min;
+extern	cvar_t	*r_fullbrightcolor_weapon_dpk;
+extern	cvar_t	*r_fullbrightcolor_weapon_stu;
+
 extern	cvar_t	*r_vertexLight;					// vertex lighting mode for better performance
 extern	cvar_t	*r_uiFullScreen;				// ui is running fullscreen
 
@@ -3449,9 +3515,11 @@ void R_InitNextFrame( void );
 
 void RE_ClearScene( void );
 void RE_AddRefEntityToScene( const refEntity_t *ent );
+// newjk: tags the next ref-entity so it can be excluded from its own light's shadow
+void RE_SetNextEntityNum( int entityNum );
 void RE_AddMiniRefEntityToScene( const miniRefEntity_t *miniRefEnt );
 void RE_AddPolyToScene(qhandle_t hShader, int numVerts, const polyVert_t *verts, int num = 1);
-void RE_AddLightToScene( const vec3_t org, float intensity, float r, float g, float b );
+void RE_AddLightToScene( const vec3_t org, float intensity, float r, float g, float b, int noShadowFromEntity );
 void RE_AddAdditiveLightToScene( const vec3_t org, float intensity, float r, float g, float b );
 void RE_BeginScene( const refdef_t *fd );
 void RE_RenderScene( const refdef_t *fd );
@@ -4031,6 +4099,8 @@ struct RenderState
 	DepthRange depthRange;
 	uint32_t stateBits;
 	uint32_t cullType; // this is stupid
+
+	float blendConstAlpha;	// only read when stateBits has GLS_BLEND_CONST_ALPHA
 
 	bool transformFeedback;
 };

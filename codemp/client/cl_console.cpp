@@ -29,6 +29,8 @@ along with this program; if not, see <http://www.gnu.org/licenses/>.
 #include "qcommon/stringed_ingame.h"
 #include "qcommon/game_version.h"
 
+extern cvar_t *cl_renderer;
+
 
 int g_console_field_width = 78;
 
@@ -300,7 +302,8 @@ void Con_CheckResize (void)
 	int		i, j, width, oldwidth, oldtotallines, numlines, numchars;
 
 //	width = (SCREEN_WIDTH / SMALLCHAR_WIDTH) - 2;
-	width = (cls.glconfig.vidWidth / SMALLCHAR_WIDTH) - 2;
+	// real window width, not the render-scaled target: console text is measured in on-screen pixels
+	width = (CL_RealVidWidth() / SMALLCHAR_WIDTH) - 2;
 
 	if (width == con.linewidth)
 		return;
@@ -325,8 +328,10 @@ void Con_CheckResize (void)
 			return; // idk buy a fucking new computer bro this is like a 20 year old game
 
 		// on wide screens, we will center the text
-		con.xadjust = 640.0f / cls.glconfig.vidWidth;
-		con.yadjust = 480.0f / cls.glconfig.vidHeight;
+		// likewise for the 640x480 virtual-coordinate scale factors
+		con.xadjust = 640.0f / CL_RealVidWidth();
+		// real window height, not the render-scaled target
+		con.yadjust = 480.0f / CL_RealVidHeight();
 
 		oldwidth = con.linewidth;
 		con.linewidth = width;
@@ -963,12 +968,15 @@ void Con_DrawSolidConsole( float frac ) {
 //	qhandle_t		conShader;
 	int				currentColor;
 
-	lines = (int) (cls.glconfig.vidHeight * frac);
+	// console drop-down height follows the real window, not the internal render target
+	lines = (int) (CL_RealVidHeight() * frac);
 	if (lines <= 0)
 		return;
 
-	if (lines > cls.glconfig.vidHeight )
-		lines = cls.glconfig.vidHeight;
+	// real window height, not the render-scaled target
+	if (lines > CL_RealVidHeight() )
+		// real window height, not the render-scaled target
+		lines = CL_RealVidHeight();
 
 	// draw the background
 	y = (int) (frac * SCREEN_HEIGHT - 2);
@@ -996,8 +1004,35 @@ void Con_DrawSolidConsole( float frac ) {
 	i = len;
 
 	for (x=0 ; x<i ; x++) {
-		SCR_DrawSmallChar( cls.glconfig.vidWidth - ( i - x + 1 ) * SMALLCHAR_WIDTH,
-			(lines-(SMALLCHAR_HEIGHT+SMALLCHAR_HEIGHT/2)), version[x] );
+		// real window width, not the render-scaled target
+		SCR_DrawSmallChar( CL_RealVidWidth() - ( i - x + 1 ) * SMALLCHAR_WIDTH,
+			(lines-(SMALLCHAR_HEIGHT+SMALLCHAR_HEIGHT/2)) - SMALLCHAR_HEIGHT, version[x] );
+	}
+
+	// second line under the version string, naming the active renderer; built once and cached
+	static char rendererLine[MAX_STRING_CHARS] = { 0 };
+	static int rendererLen = 0;
+	static int rendererLineModCount = -1;
+	if (!rendererLine[0] || rendererLineModCount != cl_renderer->modificationCount) {
+		rendererLineModCount = cl_renderer->modificationCount;
+		const char *rendererLabel;
+		if (!Q_stricmp(cl_renderer->string, "rd-vanilla"))
+			rendererLabel = "Vanilla";
+		else if (!Q_stricmp(cl_renderer->string, "rd-vulkan"))
+			rendererLabel = "Vulkan";
+		else if (!Q_stricmp(cl_renderer->string, "rd-rend2"))
+			rendererLabel = "Rend2";
+		else
+			rendererLabel = cl_renderer->string;
+		Q_strncpyz(rendererLine, va("%s Renderer", rendererLabel), sizeof(rendererLine));
+		rendererLen = strlen(rendererLine);
+	}
+	i = rendererLen;
+
+	for (x=0 ; x<i ; x++) {
+		// real window width, not the render-scaled target
+		SCR_DrawSmallChar( CL_RealVidWidth() - ( i - x + 1 ) * SMALLCHAR_WIDTH,
+			(lines-(SMALLCHAR_HEIGHT+SMALLCHAR_HEIGHT/2)), rendererLine[x] );
 	}
 
 	// draw the input prompt, user text, and cursor if desired

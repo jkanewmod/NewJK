@@ -59,6 +59,7 @@ along with this program; if not, see <http://www.gnu.org/licenses/>.
 #define qglBindTexture glBindTexture
 #define qglBitmap glBitmap
 #define qglBlendFunc glBlendFunc
+#define qglBlendColor glBlendColor	// constant blend color, for the entity-alpha blend in tr_shade.cpp
 #define qglCallList glCallList
 #define qglCallLists glCallLists
 #define qglClear glClear

@@ -1600,6 +1600,63 @@ void CIN_ResampleCinematic(int handle, int *buf2) {
 
 /*
 ==================
+CIN_ShouldForceGamma1
+
+Certain cinematics (currently just Newmod's main menu background,
+"newmainmenu.roq") should always look like r_gamma 1, regardless of the
+user's actual r_gamma - but only that video, not the rest of the main menu
+UI drawn around/after it. That video is a shader `videoMap` stage
+(gfx/newmod/newmainmenu -> videoMap video/newmainmenu), decoded here and
+uploaded as an ordinary texture via CIN_UploadCinematic/re->UploadCinematic,
+then sampled through the normal material/shading pipeline like any other
+stage - so by the time it reaches the screen it's already gone through
+whichever renderer's single frame-wide gamma pass along with everything
+else. There's no per-stage opt-out on the renderer side, so instead we
+pre-compensate this cinematic's decoded pixels here, before they're ever
+uploaded, by applying the exact inverse of the gamma curve about to be
+applied. The final frame-wide gamma pass then cancels back out to the
+video's original decoded colors, while everything else in the same frame
+still gets gamma applied normally once. This is engine/client code, called
+identically by all three renderers through the same ri.CIN_UploadCinematic
+import hook, so it covers all three without touching any renderer code.
+==================
+*/
+static qboolean CIN_ShouldForceGamma1( int handle ) {
+	return (qboolean)(Q_stristr( cinTable[handle].fileName, "newmainmenu.roq" ) != NULL);
+}
+
+/*
+==================
+CIN_ApplyInverseGammaRGBA
+
+Rebuilds a cached 256-entry LUT only when r_gamma has actually changed, then
+maps it over every pixel's R/G/B bytes in place (alpha is not a color
+channel and is left untouched). See CIN_ShouldForceGamma1 for why.
+==================
+*/
+static void CIN_ApplyInverseGammaRGBA( byte *data, int numPixels ) {
+	static float lastGamma = -1.0f;
+	static byte lut[256];
+
+	float gamma = Cvar_VariableValue( "r_gamma" );
+	if ( gamma != lastGamma ) {
+		lastGamma = gamma;
+		for ( int i = 0; i < 256; i++ ) {
+			int inf = (gamma == 1.0f) ? i : (int)( 255.0f * pow( i / 255.0f, gamma ) + 0.5f );
+			lut[i] = (byte)Com_Clampi( 0, 255, inf );
+		}
+	}
+
+	for ( int i = 0; i < numPixels; i++ ) {
+		byte *p = data + i * 4;
+		p[0] = lut[p[0]];
+		p[1] = lut[p[1]];
+		p[2] = lut[p[2]];
+	}
+}
+
+/*
+==================
 CIN_DrawCinematic
 ==================
 */
@@ -1708,6 +1765,9 @@ void CIN_UploadCinematic(int handle) {
 			}
 		}
 
+		// pre-compensate this frame so the renderer's frame-wide gamma pass cancels back out
+		qboolean forceGamma1 = (qboolean)(cinTable[handle].dirty && CIN_ShouldForceGamma1( handle ));
+
 		// Resample the video if needed
 		if (cinTable[handle].dirty && (cinTable[handle].CIN_WIDTH != cinTable[handle].drawX || cinTable[handle].CIN_HEIGHT != cinTable[handle].drawY))  {
 			int *buf2;
@@ -1716,9 +1776,26 @@ void CIN_UploadCinematic(int handle) {
 
 			CIN_ResampleCinematic(handle, buf2);
 
+			if ( forceGamma1 )
+				CIN_ApplyInverseGammaRGBA( (byte *)buf2, 256*256 );
+
 			re->UploadCinematic( 256, 256, (byte *)buf2, handle, qtrue);
 			cinTable[handle].dirty = qfalse;
 			Hunk_FreeTempMemory(buf2);
+		} else if ( forceGamma1 ) {
+			// Upload video at normal resolution, gamma-precompensated. Use a
+			// scratch copy rather than mutating cinTable[handle].buf in place -
+			// RoQ frames are inter-predicted from the previous decoded frame
+			// still sitting in that buffer, so writing precompensated values
+			// into it would corrupt every subsequent frame's decode.
+			int numPixels = cinTable[handle].drawX * cinTable[handle].drawY;
+			byte *scratch = (byte *)Hunk_AllocateTempMemory( numPixels * 4 );
+			Com_Memcpy( scratch, cinTable[handle].buf, numPixels * 4 );
+			CIN_ApplyInverseGammaRGBA( scratch, numPixels );
+			re->UploadCinematic( cinTable[handle].drawX, cinTable[handle].drawY,
+					scratch, handle, qtrue);
+			Hunk_FreeTempMemory( scratch );
+			cinTable[handle].dirty = qfalse;
 		} else {
 			// Upload video at normal resolution
 			re->UploadCinematic( cinTable[handle].drawX, cinTable[handle].drawY,

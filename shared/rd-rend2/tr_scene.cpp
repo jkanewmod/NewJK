@@ -59,6 +59,20 @@ void R_InitNextFrame( void ) {
 	r_firstScenePoly = 0;
 
 	r_numpolyverts = 0;
+
+	// Must survive across every cached-view sub-pass within a single real
+	// frame (shadow cubemap faces, sun cascades, portals, ...) since a
+	// fullbright entity's R_SetupEntityLightingGrid() only actually runs
+	// once per frame (see trRefEntity_t::lightingCalculated) - whichever
+	// view pass touches it first. Clearing these once per cached view
+	// (the old location, inside R_IssueRenderCommands) wiped an entity's
+	// entry before later view passes (e.g. the main view) could consume
+	// it, since lightingCalculated being already true meant it was never
+	// re-populated. R_InitNextFrame() is the one true per-real-frame
+	// boundary, matching lightingCalculated's own reset point in
+	// RE_AddRefEntityToScene.
+	fullbrightPlayers.clear();
+	forceWhiteEnts.clear();
 }
 
 
@@ -217,17 +231,35 @@ void RE_AddRefEntityToScene( const refEntity_t *ent ) {
 		return;
 	}
 
-	if ( (int)ent->reType < 0 || ent->reType >= RT_MAX_SP_REF_ENTITY_TYPE || ent->reType == RT_MAX_MP_REF_ENTITY_TYPE ) {
+	// newjk: NewJK's refEntityType_t has no separate SP/MP ceiling, so check the one max
+	if ( (int)ent->reType < 0 || ent->reType >= RT_MAX_REF_ENTITY_TYPE ) {
 		ri.Error( ERR_DROP, "RE_AddRefEntityToScene: bad reType %i", ent->reType );
 	}
 
 	backEndData->entities[r_numentities].e = *ent;
 	backEndData->entities[r_numentities].lightingCalculated = qfalse;
+	// newjk: consume the tag set by RE_SetNextEntityNum and immediately reset it, so it can
+	// never carry over onto an unrelated entity
+	backEndData->entities[r_numentities].entityNum = tr.nextEntityNum;
+	tr.nextEntityNum = ENTITYNUM_NONE;
 
 	CrossProduct(ent->axis[0], ent->axis[1], cross);
 	backEndData->entities[r_numentities].mirrored = (qboolean)(DotProduct(ent->axis[2], cross) < 0.f);
 
 	r_numentities++;
+}
+
+/*
+=====================
+RE_SetNextEntityNum
+
+Tags whichever ref-entity the *next* RE_AddRefEntityToScene() call adds with
+a game entity number (or ENTITYNUM_NONE), consumed and reset immediately by
+that call so it never leaks onto a later, unrelated ref-entity.
+=====================
+*/
+void RE_SetNextEntityNum( int entityNum ) {
+	tr.nextEntityNum = entityNum;
 }
 
 #ifndef REND2_SP
@@ -256,8 +288,10 @@ RE_AddDynamicLightToScene
 
 =====================
 */
-void RE_AddDynamicLightToScene( const vec3_t org, float intensity, float r, float g, float b, int additive ) {
+// newjk: noShadowFromEntity names an entity that must not cast into this light's own shadow
+void RE_AddDynamicLightToScene( const vec3_t org, float intensity, float r, float g, float b, int additive, int noShadowFromEntity ) {
 	dlight_t	*dl;
+	vec3_t		adjustedOrigin;
 
 	if ( !tr.registered ) {
 		return;
@@ -268,8 +302,24 @@ void RE_AddDynamicLightToScene( const vec3_t org, float intensity, float r, floa
 	if ( intensity <= 0 ) {
 		return;
 	}
+
+	VectorCopy(org, adjustedOrigin);
+	// newjk: entity excluded as a caster into this light's own shadow
+	if (noShadowFromEntity != ENTITYNUM_NONE)
+	{
+		// rend2-only tuning for lights explicitly tied to an entity - today
+		// that's only the CTF flag-carrier glow (the only caller that ever
+		// passes a real noShadowFromEntity). Raise it from the entity's feet
+		// to roughly the vertical center of a standing player's bounding box
+		// (MINS_Z -24, MAXS_Z 40, so center = (40 + -24) / 2 = 8 above
+		// origin) and boost intensity a bit to compensate for sitting higher
+		// off the ground it's meant to help players spot from a distance.
+		adjustedOrigin[2] += 8.0f;
+		intensity *= 1.5f;
+	}
+
 	dl = &backEndData->dlights[r_numdlights++];
-	VectorCopy (org, dl->origin);
+	VectorCopy (adjustedOrigin, dl->origin);
 	dl->radius = intensity;
 	dl->color[0] = r;
 	dl->color[1] = g;
@@ -289,6 +339,8 @@ void RE_AddDynamicLightToScene( const vec3_t org, float intensity, float r, floa
 	}
 
 	dl->additive = additive;
+	// newjk: entity excluded as a caster into this light's own shadow
+	dl->noShadowFromEntity = noShadowFromEntity;
 }
 
 /*
@@ -297,8 +349,10 @@ RE_AddLightToScene
 
 =====================
 */
-void RE_AddLightToScene( const vec3_t org, float intensity, float r, float g, float b ) {
-	RE_AddDynamicLightToScene( org, intensity, r, g, b, qfalse );
+// newjk: entity excluded as a caster into this light's own shadow
+void RE_AddLightToScene( const vec3_t org, float intensity, float r, float g, float b, int noShadowFromEntity ) {
+	// newjk: entity excluded as a caster into this light's own shadow
+	RE_AddDynamicLightToScene( org, intensity, r, g, b, qfalse, noShadowFromEntity );
 }
 
 /*
@@ -308,7 +362,7 @@ RE_AddAdditiveLightToScene
 =====================
 */
 void RE_AddAdditiveLightToScene( const vec3_t org, float intensity, float r, float g, float b ) {
-	RE_AddDynamicLightToScene( org, intensity, r, g, b, qtrue );
+	RE_AddDynamicLightToScene( org, intensity, r, g, b, qtrue, ENTITYNUM_NONE );
 }
 
 void RE_BeginScene(const refdef_t *fd)

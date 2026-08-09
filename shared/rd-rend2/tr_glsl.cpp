@@ -135,6 +135,12 @@ static uniformInfo_t uniformsInfo[] =
 	{ "u_RandomOffset",			GLSL_VEC4, 1 },
 	{ "u_ChunkParticles",		GLSL_INT, 1 },
 	{ "u_BloomStrength",		GLSL_FLOAT, 1 },
+	// newjk: uniforms backing the forced gamma pass and the fullbright/light overrides
+	{ "u_InvGamma",				GLSL_FLOAT, 1 },
+	{ "u_FullbrightOverride",		GLSL_VEC4, 1 },
+	{ "u_FullbrightOverrideWhite",	GLSL_FLOAT, 1 },
+	{ "u_LightOverrideAmbient",		GLSL_VEC4, 1 },
+	{ "u_LightOverrideDirected",	GLSL_VEC3, 1 },
 };
 
 static void GLSL_PrintProgramInfoLog(GLuint object, qboolean developerOnly)
@@ -2228,6 +2234,31 @@ static int GLSL_LoadGPUProgramTonemap(
 	return 2;
 }
 
+// newjk: builds the shader for the final gamma composite pass; rend2 had no gamma mechanism
+static int GLSL_LoadGPUProgramGamma(
+	ShaderProgramBuilder& builder,
+	Allocator& scratchAlloc )
+{
+	Allocator allocator(scratchAlloc.Base(), scratchAlloc.GetSize());
+	const GPUProgramDesc *programDesc =
+		LoadProgramSource("gamma", allocator, fallback_gammaProgram);
+	const uint32_t attribs = ATTR_POSITION | ATTR_TEXCOORD0;
+
+	if (!GLSL_LoadGPUShader(builder, &tr.gammaShader, "gamma", attribs, NO_XFB_VARS,
+		"", *programDesc))
+	{
+		ri.Error(ERR_FATAL, "Could not load gamma shader!");
+	}
+
+	GLSL_InitUniforms(&tr.gammaShader);
+	qglUseProgram(tr.gammaShader.program);
+	GLSL_SetUniformInt(&tr.gammaShader, UNIFORM_TEXTUREMAP, TB_COLORMAP);
+	qglUseProgram(0);
+	GLSL_FinishGPUShader(&tr.gammaShader);
+
+	return 1;
+}
+
 static int GLSL_LoadGPUProgramCalcLuminanceLevel(
 	ShaderProgramBuilder& builder,
 	Allocator& scratchAlloc )
@@ -2784,6 +2815,8 @@ void GLSL_LoadGPUShaders()
 	numEtcShaders += GLSL_LoadGPUProgramDownscale4x(builder, allocator);
 	numEtcShaders += GLSL_LoadGPUProgramBokeh(builder, allocator);
 	numEtcShaders += GLSL_LoadGPUProgramTonemap(builder, allocator);
+	// newjk: the gamma composite program, built alongside the stock ones
+	numEtcShaders += GLSL_LoadGPUProgramGamma(builder, allocator);
 	numEtcShaders += GLSL_LoadGPUProgramCalcLuminanceLevel(builder, allocator);
 	numEtcShaders += GLSL_LoadGPUProgramHighPass(builder, allocator);
 	numEtcShaders += GLSL_LoadGPUProgramSSAO(builder, allocator);

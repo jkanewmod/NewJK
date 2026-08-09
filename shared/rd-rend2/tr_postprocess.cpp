@@ -104,6 +104,34 @@ void RB_ToneMap(FBO_t *hdrFbo, vec4i_t hdrBox, FBO_t *ldrFbo, vec4i_t ldrBox, in
 }
 
 /*
+=================
+RB_ApplyGamma
+
+Forced, always-on final composite pass: applies r_gamma (a plain pow(color,
+1/gamma) curve, matching rd-vanilla/rd-vulkan's software gamma table) to
+srcFbo and writes the result to the real screen. This exists because rend2
+has no reliable way to rely on hardware gamma ramps (unsupported/unreliable
+on several compositors, notably Wayland) and, unlike rd-vanilla/rd-vulkan,
+had no forced shader-gamma path of its own. Deliberately independent of
+r_hdr/r_toneMap/r_forceToneMap/auto-exposure - every code path that used to
+blit its final result straight to the screen now writes into tr.gammaFbo
+instead, and this pass is always the last thing that touches the screen,
+so gamma keeps working regardless of what those other cvars are set to.
+=================
+*/
+void RB_ApplyGamma(FBO_t *srcFbo, vec4i_t srcBox, vec4i_t dstBox)
+{
+	FBO_Bind(NULL);
+	GL_SetViewportAndScissor(dstBox[0], dstBox[1], dstBox[2], dstBox[3]);
+	GL_Cull(CT_TWO_SIDED);
+	GL_State(GLS_DEPTHTEST_DISABLE);
+	GLSL_BindProgram(&tr.gammaShader);
+	GL_BindToTMU(srcFbo->colorImage[0], TB_COLORMAP);
+	GLSL_SetUniformFloat(&tr.gammaShader, UNIFORM_INVGAMMA, 1.0f / r_gamma->value);
+	RB_InstantTriangle();
+}
+
+/*
 =============
 RB_BokehBlur
 

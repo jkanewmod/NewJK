@@ -442,7 +442,9 @@ typedef enum cgameImportLegacy_e {
 	CG_R_FONT_STRLENPIXELS_FLOAT,
 	CG_S_SOUNDLENGTH,
 	CG_SETWINDOWTITLE,
-	CG_KEYCATCHLOCK
+	CG_KEYCATCHLOCK,
+	// see R_SetNextEntityNum in cgameImport_s below
+	CG_R_SETNEXTENTITYNUM
 } cgameImportLegacy_t;
 
 typedef enum cgameExportLegacy_e {
@@ -560,9 +562,15 @@ typedef struct cgameImport_s {
 	// renderer
 	void			(*R_AddAdditiveLightToScene)			( const vec3_t org, float intensity, float r, float g, float b );
 	void			(*R_AddDecalToScene)					( qhandle_t shader, const vec3_t origin, const vec3_t dir, float orientation, float r, float g, float b, float a, qboolean alphaFade, float radius, qboolean temporary );
-	void			(*R_AddLightToScene)					( const vec3_t org, float intensity, float r, float g, float b );
+	// noShadowFromEntity names an entity that must not cast into this light's own shadow,
+	// or ENTITYNUM_NONE; only rd-rend2 acts on it
+	void			(*R_AddLightToScene)					( const vec3_t org, float intensity, float r, float g, float b, int noShadowFromEntity );
 	void			(*R_AddPolysToScene)					( qhandle_t hShader , int numVerts, const polyVert_t *verts, int num );
 	void			(*R_AddRefEntityToScene)				( const refEntity_t *re );
+	// rend2-only: tags whichever ref-entity the *next* R_AddRefEntityToScene() call adds
+	// with a game entity number, consumed and reset immediately after that one call. A
+	// no-op on rd-vanilla/rd-vulkan. See CG_AddLegsRefEntityToScene() in cg_players.c.
+	void			(*R_SetNextEntityNum)					( int entityNum );
 	unsigned int	(*R_AnyLanguage_ReadCharFromString)		( const char *psText, int *piAdvanceCount, qboolean *pbIsTrailingPunctuation );
 	void			(*R_AutomapElevationAdjustment)			( float newHeight );
 	void			(*R_ClearDecals)						( void );

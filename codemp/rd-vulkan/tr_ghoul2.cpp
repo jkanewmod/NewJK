@@ -1125,7 +1125,14 @@ static int G2_GetBonePoolIndex(const mdxaHeader_t *pMDXAHeader, int iFrame, int 
 	const int iOffsetToIndex	= (iFrame * pMDXAHeader->numBones * 3) + (iBone * 3);
 	mdxaIndex_t *pIndex			= (mdxaIndex_t *)((byte*)pMDXAHeader + pMDXAHeader->ofsFrames + iOffsetToIndex);
 
-	return (pIndex->iIndex[2] << 16) + (pIndex->iIndex[1] << 8) + (pIndex->iIndex[0]);
+	// newjk: the three index bytes are contiguous, so mask rather than reassembling them
+#ifdef Q3_BIG_ENDIAN
+	int tmp = pIndex->iIndex & 0xFFFFFF00;
+	LL(tmp);
+	return tmp;
+#else
+	return pIndex->iIndex & 0x00FFFFFF;
+#endif
 }
 
 
@@ -3679,6 +3686,7 @@ void RB_SurfaceGhoul(CRenderableSurface* surf)
 			int maxIndex = surface->maxIndex;
 			int indexOffset = surface->indexOffset;
 
+	// newjk: tag the batch so the backend can tell ghoul2 surfaces apart
 	tess.surfType = SF_MDX;
 
 #ifdef _G2_GORE
@@ -3898,6 +3906,8 @@ void RB_SurfaceGhoul(CRenderableSurface* surf)
 		return;
 	}
 #endif
+
+	tess.surfType = SF_MDX;
 
 	// grab the pointer to the surface info within the loaded mesh file
 	surface = surf->surfaceData;
@@ -5116,7 +5126,10 @@ qboolean R_LoadMDXA( model_t *mod, void *buffer, const char *mod_name, qboolean 
 		for(j = 0; j < mdxa->numBones; j++){
 			k		= (i * mdxa->numBones * 3) + (j * 3);	// iOffsetToIndex
 			pIndex	= (mdxaIndex_t *) ((byte *)mdxa + mdxa->ofsFrames + k);
-			tmp		= (pIndex->iIndex[2] << 16) + (pIndex->iIndex[1] << 8) + (pIndex->iIndex[0]);
+
+			// 3 byte ints, yeah...
+			tmp		= pIndex->iIndex & 0xFFFFFF00;
+			LL(tmp);
 
 			if(maxBoneIndex < tmp){
 				maxBoneIndex = tmp;

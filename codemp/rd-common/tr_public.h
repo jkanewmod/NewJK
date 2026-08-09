@@ -30,7 +30,9 @@ along with this program; if not, see <http://www.gnu.org/licenses/>.
 #include "../qcommon/qcommon.h"
 #include "../ghoul2/ghoul2_shared.h"
 
-#define	REF_API_VERSION 9
+// 10: added SetNextEntityNum and DeviceLost, and gave AddLightToScene its noShadowFromEntity
+// parameter. All three backends are built from this tree, so they move together.
+#define	REF_API_VERSION 10
 
 //
 // these are the functions exported by the refresh module
@@ -74,11 +76,15 @@ typedef struct refexport_s {
 	void				(*ClearScene)							( void );
 	void				(*ClearDecals)							( void );
 	void				(*AddRefEntityToScene)					( const refEntity_t *re );
+	// rend2-only: see cg_public.h's R_SetNextEntityNum comment.
+	void				(*SetNextEntityNum)					( int entityNum );
 	void				(*AddMiniRefEntityToScene)				( const miniRefEntity_t *re );
 	void				(*AddPolyToScene)						( qhandle_t hShader , int numVerts, const polyVert_t *verts, int num );
 	void				(*AddDecalToScene)						( qhandle_t shader, const vec3_t origin, const vec3_t dir, float orientation, float r, float g, float b, float a, qboolean alphaFade, float radius, qboolean temporary );
 	int					(*LightForPoint)						( vec3_t point, vec3_t ambientLight, vec3_t directedLight, vec3_t lightDir );
-	void				(*AddLightToScene)						( const vec3_t org, float intensity, float r, float g, float b );
+	// noShadowFromEntity names an entity to exclude as a caster into this light's own shadow,
+	// or ENTITYNUM_NONE; only rd-rend2 acts on it
+	void				(*AddLightToScene)						( const vec3_t org, float intensity, float r, float g, float b, int noShadowFromEntity );
 	void				(*AddAdditiveLightToScene)				( const vec3_t org, float intensity, float r, float g, float b );
 
 	void				(*RenderScene)							( const refdef_t *fd );
@@ -97,6 +103,11 @@ typedef struct refexport_s {
 	// if the pointers are not NULL, timing info will be returned
 	void				(*EndFrame)								( int *frontEndMsec, int *backEndMsec );
 
+	// Returns qtrue if the graphics device has been lost (currently only possible under Vulkan; the
+	// other backends always return qfalse). The renderer cannot act on this itself - erroring out
+	// from inside a render call would unwind through state the caller is still using - so the
+	// client polls it between frames. See CL_CheckDeviceLost in cl_main.cpp.
+	qboolean			(*DeviceLost)							( void );
 
 	int					(*MarkFragments)						( int numPoints, const vec3_t *points, const vec3_t projection, int maxPoints, vec3_t pointBuffer, int maxFragments, markFragment_t *fragmentBuffer );
 
@@ -244,6 +255,9 @@ typedef struct refexport_s {
 
 	struct {
 		float				(*Font_StrLenPixels)					( const char *text, const int iFontIndex, const float scale );
+		// exposed so the client can cull without duplicating the renderer's view state
+		const cplane_t*		(*GetFrustum)							();
+		const vec_t*		(*GetViewPosition)						();
 	} ext;
 
 } refexport_t;
@@ -252,6 +266,11 @@ typedef struct refexport_s {
 // these are the functions imported by the refresh module
 //
 typedef struct refimport_s {
+	// Lets renderers that keep a global `refimport_t ri;` value (rather than a
+	// `refimport_t *ri;` pointer) still use `ri->Something(...)` call syntax.
+	// Doesn't add storage or change layout/POD-ness.
+	refimport_s			*operator->()						{ return this; }
+
 	void			(QDECL *Printf)						( int printLevel, const char *fmt, ...) __attribute__ ((format (printf, 2, 3)));
 	void			(QDECL *Error)						( int errorLevel, const char *fmt, ...) NORETURN_PTR __attribute__ ((format (printf, 2, 3)));
 	void			(QDECL *OPrintf)					( const char *fmt, ...) __attribute__ ((format (printf, 1, 2)));
@@ -330,6 +349,13 @@ typedef struct refimport_s {
 	void			(*WIN_Present)						( window_t *window );
 	void            (*WIN_Shutdown)                     ( void );
 
+	// Reports the true physical window resolution, independent of glConfig.vidWidth/vidHeight
+	// -- a renderer may repoint those at an internal render-scaled target (e.g. rd-vulkan's
+	// r_renderScale/r_ext_supersample). Only needs calling by a renderer that actually does
+	// that; harmless to skip otherwise, since the client falls back to glConfig.vidWidth/
+	// vidHeight when this is never called.
+	void			(*CL_SetRealResolution)				( int width, int height );
+
 	// OpenGL-specific
 	void *			(*GL_GetProcAddress)				( const char *name );
 	qboolean		(*GL_ExtensionSupported)			( const char *extension );
@@ -347,6 +373,12 @@ typedef struct refimport_s {
 	// Persistent data store
 	bool			(*PD_Store)							( const char *name, const void *data, size_t size );
 	const void *	(*PD_Load)							( const char *name, size_t *size );
+
+	// Vulkan
+	qboolean		(*VK_IsMinimized)					( void );
+	void			*(*VK_GetInstanceProcAddress)		( void );
+	qboolean		(*VK_createSurfaceImpl)				( VkInstance instance, VkSurfaceKHR *surface );
+	void			(*VK_destroyWindow)					( void );
 } refimport_t;
 
 // this is the only function actually exported at the linker level

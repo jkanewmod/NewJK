@@ -1126,10 +1126,21 @@ void RB_CalcRotateTexCoords( float degsPerSecond, float *src, float *dst )
 	texModInfo_t tmi;
 
 	degs = -degsPerSecond * timeScale;
-	index = degs * (FUNCTABLE_SIZE / 360.0f);
 
-	sinValue = tr.sinTable[index & FUNCTABLE_MASK];
-	cosValue = tr.sinTable[(index + FUNCTABLE_SIZE / 4) & FUNCTABLE_MASK];
+	// newjk: only animate once cgame is up; in the menu this keeps the rotation still
+	if (r_cgameStarted->integer)
+	{
+		index = degs * (FUNCTABLE_SIZE / 360.0f);
+
+		sinValue = tr.sinTable[index & FUNCTABLE_MASK];
+		cosValue = tr.sinTable[(index + FUNCTABLE_SIZE / 4) & FUNCTABLE_MASK];
+	}
+	else
+	{
+		double radians = degs * ((double)M_PI / 180.0);
+		sinValue = (float)sin(radians);
+		cosValue = (float)cos(radians);
+	}
 
 	tmi.matrix[0][0] = cosValue;
 	tmi.matrix[1][0] = -sinValue;

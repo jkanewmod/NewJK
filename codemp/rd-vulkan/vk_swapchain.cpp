@@ -104,6 +104,16 @@ void vk_create_swapchain( VkPhysicalDevice physical_device, VkDevice device,
 	if ( image_extent.width < gls.windowWidth) image_extent.width = gls.windowWidth;
 	if ( image_extent.height < gls.windowHeight) image_extent.height = gls.windowHeight;
 
+	// gls.windowWidth/Height is otherwise only ever set once, from the requested render
+	// resolution (glConfig.vidWidth/vidHeight), and never re-synced from the actual Vulkan
+	// surface size. If the compositor hands back a differently-sized surface (HiDPI/fractional
+	// scaling, etc.), every viewport computed from gls.windowWidth/Height downstream (notably
+	// the FBO->swapchain compositing pass in vk_pipelines.cpp) ends up smaller than the real
+	// swapchain image, leaving the rest of the window undrawn/black. Keep it in sync with
+	// whatever extent we actually end up creating the swapchain at.
+	gls.windowWidth = image_extent.width;
+	gls.windowHeight = image_extent.height;
+
     vk.clearAttachment = qtrue;
 
     if ( !vk.fboActive ) {

@@ -22,6 +22,8 @@ along with this program; if not, see <http://www.gnu.org/licenses/>.
 #pragma once
 
 #include "qcommon/q_shared.h"
+// for the VkInstance/VkSurfaceKHR in the WIN_VK_* prototypes at the bottom of this file
+#include "rd-vulkan/vulkan/vulkan.h"
 
 #define MAXPRINTMSG 4096
 
@@ -160,6 +162,9 @@ typedef enum graphicsApi_e
 
 	// Only OpenGL needs special treatment..
 	GRAPHICS_API_OPENGL,
+
+	// needs its own window flags and surface creation, so it can't ride the generic path
+	GRAPHICS_API_VULKAN,
 } graphicsApi_t;
 
 // Graphics API
@@ -204,3 +209,16 @@ void *		WIN_GL_GetProcAddress( const char *proc );
 qboolean	WIN_GL_ExtensionSupported( const char *extension );
 
 uint8_t ConvertUTF32ToExpectedCharset( uint32_t utf32 );
+
+// Vulkan equivalents of the WIN_GL_* platform hooks above: loader entry point, surface
+// creation against the SDL window, teardown, and the minimized test the renderer uses to
+// skip presenting.
+void		*WIN_VK_GetInstanceProcAddress(void);
+qboolean	WIN_VK_createSurfaceImpl(VkInstance instance, VkSurfaceKHR *surface);
+void		WIN_VK_destroyWindow(void);
+qboolean	WIN_VK_IsMinimized(void);
+
+// Headless pre-flight check: can this system create a Vulkan instance and enumerate
+// at least one physical device? Never creates a window/surface. Safe to call before
+// deciding whether to load the Vulkan renderer at all.
+qboolean	WIN_VK_ProbeSupport(void);

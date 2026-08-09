@@ -23,6 +23,8 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 
 #include "tr_local.h"
 #include "tr_allocator.h"
+// newjk: std::find / std::find_if, used against the fullbright entity lists
+#include <algorithm>
 
 /*
 
@@ -889,7 +891,11 @@ static UniformBlockBinding GetBonesBlockUniformBinding()
 	binding.block = UNIFORM_BLOCK_BONES;
 
 	if (glState.skeletalAnimation)
-		binding.offset = tr.animationBoneUboOffset;
+	{
+		// newjk: -1 is the "no cached bone data" sentinel; bind 0 rather than a negative offset
+		long offset = tr.animationBoneUboOffset;
+		binding.offset = offset == -1 ? 0 : offset;
+	}
 	else
 		binding.offset = 0;
 
@@ -905,7 +911,14 @@ static UniformBlockBinding GetPreviousBonesBlockUniformBinding()
 	binding.block = UNIFORM_BLOCK_PREVIOUS_BONES;
 
 	if (glState.skeletalAnimation)
-		binding.offset = tr.previousAnimationBoneUboOffset;
+	{
+		// -1 means this surface's bone cache has no previous-frame data yet
+		// (e.g. the first frame it's drawn) - bind offset 0 instead of an
+		// invalid negative offset, matching GetEntityBlockUniformBinding's
+		// existing handling of the same -1 sentinel above.
+		long offset = tr.previousAnimationBoneUboOffset;
+		binding.offset = offset == -1 ? 0 : offset;
+	}
 	else
 		binding.offset = 0;
 
@@ -1578,6 +1591,118 @@ static void RB_IterateStagesGeneric( shaderCommands_t *input, const VertexArrays
 	Allocator& frameAllocator = *backEndData->perFrameMemory;
 	cullType_t cullType = RB_GetCullType(&backEnd.viewParms, backEnd.currentEntity, input->shader->cullType);
 
+	// NewJK/Newmod cg_fullbrightWeapons: any "models/weapons2/<code>*" surface
+	// on a non-corpse entity gets forced to r_fullbrightcolor_weapon_<code>'s
+	// flat color (optionally with the diffuse texture itself forced white too,
+	// the "!" prefix case), mirroring rd-vanilla/rd-vulkan's DoEndSurface().
+	// RF_ISCORPSE mirrors vanilla's "canFullbright" exemption so corpses
+	// holding a weapon don't get this treatment.
+	vec4_t fullbrightOverrideColor = { 0.0f, 0.0f, 0.0f, 0.0f };
+	float fullbrightOverrideWhite = 0.0f;
+	if ( !strncmp(input->shader->name, "models/weapons2/", 16) && input->shader->name[16]
+		&& backEnd.currentEntity && !(backEnd.currentEntity->e.renderfx & RF_ISCORPSE) )
+	{
+		const char *weapon = input->shader->name + 16;
+		const cvar_t *weaponCvar = NULL;
+		if (!strncmp(weapon, "sab", 3))
+			weaponCvar = r_fullbrightcolor_weapon_sab;
+		else if (!strncmp(weapon, "blaster_p", 9) || !strncmp(weapon, "bri", 3))
+			weaponCvar = r_fullbrightcolor_weapon_pis;
+		else if (!strncmp(weapon, "blaster_r", 9))
+			weaponCvar = r_fullbrightcolor_weapon_bla;
+		else if (!strncmp(weapon, "disr", 4))
+			weaponCvar = r_fullbrightcolor_weapon_dis;
+		else if (!strncmp(weapon, "bow", 3))
+			weaponCvar = r_fullbrightcolor_weapon_bow;
+		else if (!strncmp(weapon, "hea", 3))
+			weaponCvar = r_fullbrightcolor_weapon_rep;
+		else if (!strncmp(weapon, "dem", 3))
+			weaponCvar = r_fullbrightcolor_weapon_dem;
+		else if (!strncmp(weapon, "gol", 3))
+			weaponCvar = r_fullbrightcolor_weapon_gol;
+		else if (!strncmp(weapon, "mer", 3))
+			weaponCvar = r_fullbrightcolor_weapon_roc;
+		else if (!strncmp(weapon, "con", 3))
+			weaponCvar = r_fullbrightcolor_weapon_con;
+		else if (!strncmp(weapon, "the", 3))
+			weaponCvar = r_fullbrightcolor_weapon_the;
+		else if (!strncmp(weapon, "las", 3))
+			weaponCvar = r_fullbrightcolor_weapon_min;
+		else if (!strncmp(weapon, "det", 3))
+			weaponCvar = r_fullbrightcolor_weapon_dpk;
+		else if (!strncmp(weapon, "stu", 3))
+			weaponCvar = r_fullbrightcolor_weapon_stu;
+
+		float wr, wg, wb;
+		int usingWhiteTextureInt;
+		if (weaponCvar && VALIDSTRING(weaponCvar->string) &&
+			sscanf(weaponCvar->string, "%f %f %f %d", &wr, &wg, &wb, &usingWhiteTextureInt) == 4)
+		{
+			fullbrightOverrideColor[0] = wr / 255.0f;
+			fullbrightOverrideColor[1] = wg / 255.0f;
+			fullbrightOverrideColor[2] = wb / 255.0f;
+			fullbrightOverrideColor[3] = 1.0f;
+			fullbrightOverrideWhite = usingWhiteTextureInt ? 1.0f : 0.0f;
+		}
+	}
+
+	// NewJK/Newmod held-weapon-of-a-fullbright-player exemption: cgame's
+	// CG_AddPlayerWeapon copies the player's entire renderfx - including
+	// RF_FULLBRIGHT and the color-index bits - onto the held weapon's own
+	// ref-entity, so without this the weapon would independently qualify
+	// for the same flat fullbright color as its holder via the (B) block
+	// above. R_SetupEntityLightingGrid already cached that player's real,
+	// non-fullbright light into fullbrightPlayers for exactly this case
+	// (RF_OTHER7, "isPlayer") - restore it here so the weapon surface
+	// renders normally lit instead, mirroring rd-vanilla/rd-vulkan's
+	// RB_StageIteratorGeneric. Doesn't apply if (B) already matched, same
+	// priority as vanilla's "!forceFullbright" guard.
+	vec4_t lightOverrideAmbient = { 0.0f, 0.0f, 0.0f, 0.0f };
+	vec3_t lightOverrideDirected = { 0.0f, 0.0f, 0.0f };
+	if ( fullbrightOverrideColor[3] == 0.0f
+		&& !strncmp(input->shader->name, "models/weapons2/", 16) && input->shader->name[16]
+		&& backEnd.currentEntity )
+	{
+		auto fullbrightPlayer = std::find_if(fullbrightPlayers.begin(), fullbrightPlayers.end(),
+			[&](const FullbrightPlayerEnt &p) { return p.ent == backEnd.currentEntity; });
+		if ( fullbrightPlayer != fullbrightPlayers.end() )
+		{
+			lightOverrideAmbient[0] = fullbrightPlayer->ambientLight[0] / 255.0f;
+			lightOverrideAmbient[1] = fullbrightPlayer->ambientLight[1] / 255.0f;
+			lightOverrideAmbient[2] = fullbrightPlayer->ambientLight[2] / 255.0f;
+			lightOverrideAmbient[3] = 1.0f;
+			lightOverrideDirected[0] = fullbrightPlayer->directedLight[0] / 255.0f;
+			lightOverrideDirected[1] = fullbrightPlayer->directedLight[1] / 255.0f;
+			lightOverrideDirected[2] = fullbrightPlayer->directedLight[2] / 255.0f;
+		}
+	}
+
+	// Newmod's "!" super-color prefix on a per-entity fullbright color
+	// (cg_fullbrightItems/cg_fullbrightModels, e.g. self=!red) - force the
+	// diffuse texture to white so the entity shows as a flat, pure color
+	// instead of a tinted version of its real skin/texture. The entity's
+	// ambientLight was already set to the flat color by
+	// R_SetupEntityLightingGrid; only the texture-forcing part was missing.
+	// Doesn't override an already-matched weapon (B) or held-weapon-tint (C)
+	// case above, mirroring vanilla's "!overridingFullbrightEnt" guard.
+	// the "models/" name gate is load-bearing and mirrors rd-vanilla/rd-vulkan, which wrap
+	// this whole lookup in `if (!Q_stricmpn(shader->name, "models/", 7))`. Without it any
+	// surface on a "!" entity whose shader is not a model shader - effect shaders, saber
+	// blades, custom-named skin shaders - also gets flat-colored, which vanilla never does.
+	if ( fullbrightOverrideColor[3] == 0.0f && lightOverrideAmbient[3] == 0.0f && backEnd.currentEntity
+		&& !Q_stricmpn(input->shader->name, "models/", 7) )
+	{
+		auto forceWhite = std::find(forceWhiteEnts.begin(), forceWhiteEnts.end(), backEnd.currentEntity);
+		if ( forceWhite != forceWhiteEnts.end() )
+		{
+			fullbrightOverrideColor[0] = backEnd.currentEntity->ambientLight[0] / 255.0f;
+			fullbrightOverrideColor[1] = backEnd.currentEntity->ambientLight[1] / 255.0f;
+			fullbrightOverrideColor[2] = backEnd.currentEntity->ambientLight[2] / 255.0f;
+			fullbrightOverrideColor[3] = 1.0f;
+			fullbrightOverrideWhite = 1.0f;
+		}
+	}
+
 	vertexAttribute_t attribs[ATTR_INDEX_MAX] = {};
 	GL_VertexArraysToAttribs(attribs, ARRAY_LEN(attribs), vertexArrays);
 
@@ -1596,9 +1721,27 @@ static void RB_IterateStagesGeneric( shaderCommands_t *input, const VertexArrays
 		int index = 0;
 		bool useAlphaTestGE192 = false;
 		bool forceRefraction = false;
+		float constBlendAlpha = 1.0f;	// used only when GLS_BLEND_CONST_ALPHA ends up set
 		vec4_t disintegrationInfo;
 
 		if ( !pStage )
+		{
+			break;
+		}
+
+		/*
+			"!" fullbright means 100% pure solid color with zero texture detail showing
+			through, so only the base stage may draw - matching the same cut in rd-vulkan's
+			RB_StageIteratorGeneric. The stock pickup shaders stack additive/screen/dst-color
+			overlays on top (models/map_objects/mp/medpac_mp and friends), which can only
+			brighten the flat color and pulse it toward white once per wave period. Cutting
+			the overlays here also sidesteps this renderer's narrower problem that the
+			override uniforms exist in lightall.glsl but not generic.glsl, so an overlay
+			stage that resolves to the generic program would otherwise ignore the override
+			entirely. Plain (non-"!") fullbright still draws every stage, since it tints
+			while deliberately keeping texture detail.
+		*/
+		if ( stage > 0 && fullbrightOverrideWhite != 0.0f )
 		{
 			break;
 		}
@@ -1648,7 +1791,25 @@ static void RB_IterateStagesGeneric( shaderCommands_t *input, const VertexArrays
 
 			if ( backEnd.currentEntity->e.renderfx & RF_FORCE_ENT_ALPHA )
 			{
-				stateBits = GLS_SRCBLEND_SRC_ALPHA | GLS_DSTBLEND_ONE_MINUS_SRC_ALPHA;
+				constBlendAlpha = backEnd.currentEntity->e.shaderRGBA[3] * (1.0f/255.0f);
+
+				if ( !( pStage->stateBits & (GLS_SRCBLEND_BITS | GLS_DSTBLEND_BITS) ) )
+				{
+					/* An opaque stage never consulted alpha, so fading it with SRC_ALPHA would
+					suddenly make it obey its texture's alpha channel. On a multi-stage skin that
+					erases the stage exactly where a tinted base layer shows through an untinted
+					detail layer, so the entity tint vanishes. Fade by the entity alpha alone. */
+					stateBits = GLS_BLEND_CONST_ALPHA;	// match legacy: no depth write unless RF_ALPHA_DEPTH adds it below
+				}
+				else
+				{
+					/* A stage that already blends is left exactly as it was before this fix.
+					The tint loss came solely from the opaque stage above, so there is no reason
+					to touch these - and doing so visibly changes long-standing effects, e.g. the
+					additive spawn/invulnerability shells stop being forced to alpha blend and
+					render noticeably denser. */
+					stateBits = GLS_SRCBLEND_SRC_ALPHA | GLS_DSTBLEND_ONE_MINUS_SRC_ALPHA;
+				}
 #ifndef REND2_SP
 				if ( backEnd.currentEntity->e.renderfx & RF_ALPHA_DEPTH )
 				{
@@ -1751,8 +1912,11 @@ static void RB_IterateStagesGeneric( shaderCommands_t *input, const VertexArrays
 
 			if (backEnd.currentEntity->e.renderfx & RF_FORCE_ENT_ALPHA)
 			{
-				baseColor[3] = backEnd.currentEntity->e.shaderRGBA[3] / 255.0f;
-				vertColor[3] = 0.0f;
+				if ( !( stateBits & GLS_BLEND_CONST_ALPHA ) )
+				{	// unchanged from before the fix; the constant-alpha path carries its own fade
+					baseColor[3] = backEnd.currentEntity->e.shaderRGBA[3] / 255.0f;
+					vertColor[3] = 0.0f;
+				}
 			}
 
 			if (backEnd.currentEntity->e.hModel != NULL_HANDLE)
@@ -1785,6 +1949,11 @@ static void RB_IterateStagesGeneric( shaderCommands_t *input, const VertexArrays
 			uniformDataWriter.SetUniformVec4(UNIFORM_BASECOLOR, baseColor);
 			uniformDataWriter.SetUniformVec4(UNIFORM_VERTCOLOR, vertColor);
 		}
+
+		uniformDataWriter.SetUniformVec4(UNIFORM_FULLBRIGHTOVERRIDE, fullbrightOverrideColor);
+		uniformDataWriter.SetUniformFloat(UNIFORM_FULLBRIGHTOVERRIDEWHITE, fullbrightOverrideWhite);
+		uniformDataWriter.SetUniformVec4(UNIFORM_LIGHTOVERRIDEAMBIENT, lightOverrideAmbient);
+		uniformDataWriter.SetUniformVec3(UNIFORM_LIGHTOVERRIDEDIRECTED, lightOverrideDirected);
 
 #if 0 // TODO: Revisit this, isn't it just a alphaGen?
 		if (pStage->alphaGen == AGEN_PORTAL)
@@ -2084,6 +2253,8 @@ static void RB_IterateStagesGeneric( shaderCommands_t *input, const VertexArrays
 
 		DrawItem item = {};
 		item.renderState.stateBits = stateBits;
+		// newjk: per-draw constant for the const-alpha blend factors
+		item.renderState.blendConstAlpha = constBlendAlpha;
 		item.renderState.cullType = forceRefraction ? CT_TWO_SIDED : cullType;
 		item.renderState.depthRange = RB_GetDepthRange(backEnd.currentEntity, input->shader);
 		item.program = sp;

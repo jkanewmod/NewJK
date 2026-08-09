@@ -292,6 +292,10 @@ Ghoul2 Insert Start
 // skins allow models to be retextured without modifying the model file
 //this is a mock copy, renderers may have their own implementation.
 // try not to break the ghoul2 code which is very implicit :/
+// Renderers that bring their own model_t/skin_t (e.g. imported from a fork with a
+// different internal model representation) can define RENDERER_HAS_OWN_MODEL_T
+// to skip this shared "mock" definition entirely, rather than colliding with it.
+#ifndef RENDERER_HAS_OWN_MODEL_T
 typedef struct _skinSurface_s {
 	char		name[MAX_QPATH];
 	void	*shader;
@@ -339,6 +343,7 @@ Ghoul2 Insert End
 	int			 numLods;
 	qboolean	bspInstance;
 } model_t;
+#endif // RENDERER_HAS_OWN_MODEL_T
 
 #define	MAX_RENDER_STRINGS			8
 #define	MAX_RENDER_STRING_LENGTH	32
@@ -382,7 +387,8 @@ typedef int stereoFrame_t;
 typedef enum { // r_ext_preferred_tc_method
 	TC_NONE,
 	TC_S3TC,
-	TC_S3TC_DXT
+	TC_S3TC_DXT,
+	TC_S3TC_ARB		// ARB-flavored S3TC, the form the imported backends detect
 } textureCompression_t;
 
 typedef struct glconfig_s {

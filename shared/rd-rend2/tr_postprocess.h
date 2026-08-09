@@ -27,6 +27,7 @@ typedef struct FBO_s FBO_t;
 typedef struct image_s image_t;
 
 void RB_ToneMap(FBO_t *hdrFbo, vec4i_t hdrBox, FBO_t *ldrFbo, vec4i_t ldrBox, int autoExposure);
+void RB_ApplyGamma(FBO_t *srcFbo, vec4i_t srcBox, vec4i_t dstBox);
 void RB_BokehBlur(FBO_t *src, vec4i_t srcBox, FBO_t *dst, vec4i_t dstBox, float blur);
 void RB_SunRays(FBO_t *srcFbo, vec4i_t srcBox, FBO_t *dstFbo, vec4i_t dstBox);
 void RB_GaussianBlur(FBO_t *srcFbo, FBO_t *intermediateFbo, FBO_t *dstFbo, float spread);

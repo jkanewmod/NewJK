@@ -202,6 +202,7 @@ typedef struct trRefEntity_s {
 } trRefEntity_t;
 
 
+
 typedef struct orientationr_s {
 	vec3_t		origin;			// in world coordinates
 	matrix3_t	axis;		// orientation in world
@@ -1772,6 +1773,245 @@ struct glconfigExt_t
 
 extern backEndState_t	backEnd;
 extern trGlobals_t		tr;
+// Weapon/entity fullbright: a non-fullbright weapon held by a fullbright player inherits
+// the player's precomputed lighting instead of using default weapon lighting.
+struct FullbrightEnt {
+	trRefEntity_t *ent;
+	vec3_t ambientLight, directedLight, lightDir;
+	int ambientLightInt;
+	FullbrightEnt() {};
+	FullbrightEnt(const FullbrightEnt &f) {
+		ent = f.ent;
+		VectorCopy(f.ambientLight, ambientLight);
+		VectorCopy(f.directedLight, directedLight);
+		VectorCopy(f.lightDir, lightDir);
+		ambientLightInt = f.ambientLightInt;
+	}
+	FullbrightEnt(trRefEntity_t *e, bool runQuickLighting = false) {
+		ent = e;
+
+		VectorCopy(ent->ambientLight, ambientLight);
+		VectorCopy(ent->directedLight, directedLight);
+		VectorCopy(ent->lightDir, lightDir);
+		((byte *)&ambientLightInt)[0] = Q_ftol(ent->ambientLight[0]);
+		((byte *)&ambientLightInt)[1] = Q_ftol(ent->ambientLight[1]);
+		((byte *)&ambientLightInt)[2] = Q_ftol(ent->ambientLight[2]);
+		((byte *)&ambientLightInt)[3] = 0xff;
+
+		if (runQuickLighting) {
+			vec3_t lightOrigin;
+			// frac must be float - it holds the sub-cell position in [0,1) used as the
+			// trilinear blend weight. As an int it truncates to 0, collapsing the 8-corner
+			// interpolation to nearest-lower-corner point sampling (silently, since
+			// totalFactor still lands on exactly 1.0). Matches R_SetupEntityLightingGrid
+			// in tr_light.cpp, which declares it correctly.
+			int pos[3], gridStep[3];
+			float frac[3];
+			unsigned short *startGridPos;
+			float totalFactor;
+			if (ent->e.renderfx & RF_LIGHTING_ORIGIN) {
+				// seperate lightOrigins are needed so an object that is
+				// sinking into the ground can still be lit, and so
+				// multi-part models can be lit identically
+				VectorCopy(ent->e.lightingOrigin, lightOrigin);
+			}
+			else {
+				VectorCopy(ent->e.origin, lightOrigin);
+			}
+
+			VectorSubtract(lightOrigin, tr.world->lightGridOrigin, lightOrigin);
+			for (int i = 0; i < 3; i++) {
+				float	v;
+
+				v = lightOrigin[i] * tr.world->lightGridInverseSize[i];
+				pos[i] = floor(v);
+				frac[i] = v - pos[i];
+				if (pos[i] < 0) {
+					pos[i] = 0;
+				}
+				else if (pos[i] >= tr.world->lightGridBounds[i] - 1) {
+					pos[i] = tr.world->lightGridBounds[i] - 1;
+				}
+			}
+
+			VectorClear(ambientLight);
+			VectorClear(directedLight);
+			vec3_t direction;
+			VectorClear(direction);
+
+			// trilerp the light value
+			gridStep[0] = 1;
+			gridStep[1] = tr.world->lightGridBounds[0];
+			gridStep[2] = tr.world->lightGridBounds[0] * tr.world->lightGridBounds[1];
+			startGridPos = tr.world->lightGridArray + (pos[0] * gridStep[0] + pos[1] * gridStep[1] + pos[2] * gridStep[2]);
+
+			totalFactor = 0;
+			for (int i = 0; i < 8; i++) {
+				float			factor;
+				mgrid_t *data;
+				unsigned short *gridPos;
+				int				lat, lng;
+				vec3_t			normal;
+
+				factor = 1.0;
+				gridPos = startGridPos;
+				for (int j = 0; j < 3; j++) {
+					if (i & (1 << j)) {
+						factor *= frac[j];
+						gridPos += gridStep[j];
+					}
+					else {
+						factor *= (1.0 - frac[j]);
+					}
+				}
+
+				if (gridPos >= tr.world->lightGridArray + tr.world->numGridArrayElements)
+				{//we've gone off the array somehow
+					continue;
+				}
+				data = tr.world->lightGridData + *gridPos;
+
+				if (data->styles[0] == LS_LSNONE)
+				{
+					continue;	// ignore samples in walls
+				}
+
+				totalFactor += factor;
+
+				for (int j = 0; j < MAXLIGHTMAPS; j++)
+				{
+					if (data->styles[j] != LS_LSNONE)
+					{
+						const byte	style = data->styles[j];
+						extern color4ub_t styleColors[MAX_LIGHT_STYLES];
+						ambientLight[0] += factor * data->ambientLight[j][0] * styleColors[style][0] / 255.0f;
+						ambientLight[1] += factor * data->ambientLight[j][1] * styleColors[style][1] / 255.0f;
+						ambientLight[2] += factor * data->ambientLight[j][2] * styleColors[style][2] / 255.0f;
+
+						directedLight[0] += factor * data->directLight[j][0] * styleColors[style][0] / 255.0f;
+						directedLight[1] += factor * data->directLight[j][1] * styleColors[style][1] / 255.0f;
+						directedLight[2] += factor * data->directLight[j][2] * styleColors[style][2] / 255.0f;
+					}
+					else
+					{
+						break;
+					}
+				}
+
+				lat = data->latLong[1];
+				lng = data->latLong[0];
+				lat *= (FUNCTABLE_SIZE / 256);
+				lng *= (FUNCTABLE_SIZE / 256);
+
+				// decode X as cos( lat ) * sin( long )
+				// decode Y as sin( lat ) * sin( long )
+				// decode Z as cos( long )
+
+				normal[0] = tr.sinTable[(lat + (FUNCTABLE_SIZE / 4)) & FUNCTABLE_MASK] * tr.sinTable[lng];
+				normal[1] = tr.sinTable[lat] * tr.sinTable[lng];
+				normal[2] = tr.sinTable[(lng + (FUNCTABLE_SIZE / 4)) & FUNCTABLE_MASK];
+
+				VectorMA(direction, factor, normal, direction);
+			}
+
+			if (totalFactor > 0 && totalFactor < 0.99)
+			{
+				totalFactor = 1.0 / totalFactor;
+				VectorScale(ambientLight, totalFactor, ambientLight);
+				VectorScale(directedLight, totalFactor, directedLight);
+			}
+
+			extern cvar_t *r_ambientScale, *r_directedScale;
+			VectorScale(ambientLight, r_ambientScale->value, ambientLight);
+			VectorScale(directedLight, r_directedScale->value, directedLight);
+
+			VectorNormalize2(direction, lightDir);
+
+			ambientLight[0] += tr.identityLight * 32;
+			ambientLight[1] += tr.identityLight * 32;
+			ambientLight[2] += tr.identityLight * 32;
+
+			if (ent->e.renderfx & RF_MINLIGHT) {
+				if (ent->e.shaderRGBA[0] == 255 && ent->e.shaderRGBA[1] == 255 && ent->e.shaderRGBA[2] == 0) {
+					ambientLight[0] += tr.identityLight * 255;
+					ambientLight[1] += tr.identityLight * 255;
+					ambientLight[2] += tr.identityLight * 0;
+				}
+				else {
+					ambientLight[0] += tr.identityLight * 16;
+					ambientLight[1] += tr.identityLight * 96;
+					ambientLight[2] += tr.identityLight * 150;
+				}
+			}
+
+			/*
+				dynamic light contribution, ported from rd-vanilla to match. This cache exists
+				to reproduce what the weapon would look like if its owner were not fullbright,
+				and a normal entity does pick up dlights (R_SetupEntityLightingGrid), so leaving
+				them out made the restored light incomplete. Vanilla's copy was dead code until
+				now - it measured distance from an uninitialized shadowing local rather than the
+				entity origin - so this is the first time the three renderers can actually agree.
+			*/
+			{
+				float dlD = VectorLength(directedLight);
+				VectorScale(lightDir, dlD, lightDir);
+
+				for (int i = 0; i < tr.refdef.num_dlights; i++) {
+					dlight_t *dl = &tr.refdef.dlights[i];
+					vec3_t dir;
+					VectorSubtract(dl->origin, lightOrigin, dir);
+					dlD = VectorNormalize(dir);
+
+					// literals rather than DLIGHT_AT_RADIUS/DLIGHT_MINIMUM_RADIUS - both are 16
+					// and both are defined in tr_light.cpp, not visible from this header
+					float power = 16 * (dl->radius * dl->radius);
+					if (dlD < 16)
+						dlD = 16;
+					dlD = power / (dlD * dlD);
+
+					VectorMA(directedLight, dlD, dl->color, directedLight);
+					VectorMA(lightDir, dlD, dir, lightDir);
+				}
+
+				VectorNormalize(lightDir);
+			}
+
+			for (int i = 0; i < 3; i++) {
+				if (ambientLight[i] > tr.identityLightByte) {
+					ambientLight[i] = tr.identityLightByte;
+				}
+			}
+
+			((byte *)&ambientLightInt)[0] = Q_ftol(ambientLight[0]);
+			((byte *)&ambientLightInt)[1] = Q_ftol(ambientLight[1]);
+			((byte *)&ambientLightInt)[2] = Q_ftol(ambientLight[2]);
+			((byte *)&ambientLightInt)[3] = 0xff;
+		}
+	}
+};
+
+extern std::vector<trRefEntity_t *> forceWhiteEnts;
+extern std::vector<FullbrightEnt> fullbrightPlayers;
+extern std::vector<FullbrightEnt> fullbrightEnts;
+
+extern bool forceFullbright, forceFullbrightWhiteShader;
+extern vec3_t forceFullbrightColor;
+
+extern cvar_t *r_fullbrightcolor_weapon_sab;
+extern cvar_t *r_fullbrightcolor_weapon_pis;
+extern cvar_t *r_fullbrightcolor_weapon_bla;
+extern cvar_t *r_fullbrightcolor_weapon_dis;
+extern cvar_t *r_fullbrightcolor_weapon_bow;
+extern cvar_t *r_fullbrightcolor_weapon_rep;
+extern cvar_t *r_fullbrightcolor_weapon_dem;
+extern cvar_t *r_fullbrightcolor_weapon_gol;
+extern cvar_t *r_fullbrightcolor_weapon_roc;
+extern cvar_t *r_fullbrightcolor_weapon_con;
+extern cvar_t *r_fullbrightcolor_weapon_the;
+extern cvar_t *r_fullbrightcolor_weapon_min;
+extern cvar_t *r_fullbrightcolor_weapon_dpk;
+extern cvar_t *r_fullbrightcolor_weapon_stu;
+
 extern glconfig_t		glConfig;		// outside of TR since it shouldn't be cleared during ref re-init
 extern glconfigExt_t	glConfigExt;
 extern glstate_t		glState;		// outside of TR since it shouldn't be cleared during ref re-init
@@ -1816,6 +2056,9 @@ extern cvar_t	*r_primitives;			// "0" = based on compiled vertex array existance
 
 extern cvar_t	*r_inGameVideo;				// controls whether in game video should be draw
 extern cvar_t	*r_fastsky;				// controls whether sky should be cleared or drawn
+extern cvar_t	*r_fastSkyR;
+extern cvar_t	*r_fastSkyG;
+extern cvar_t	*r_fastSkyB;
 extern cvar_t	*r_drawSun;				// controls drawing of sun quad
 extern cvar_t	*r_dynamiclight;		// dynamic lights enabled/disabled
 // rjr - removed for hacking
@@ -1897,8 +2140,10 @@ extern	cvar_t	*r_offsetFactor;
 extern	cvar_t	*r_offsetUnits;
 
 extern	cvar_t	*r_fullbright;			// avoid lightmap pass
+extern	cvar_t	*r_cgameStarted;
 extern	cvar_t	*r_lightmap;			// render lightmaps only
 extern	cvar_t	*r_distanceCull;		// render lightmaps only
+extern	cvar_t	*r_cullDistanceOverride;
 extern	cvar_t	*r_vertexLight;			// vertex lighting mode for better performance
 extern	cvar_t	*r_uiFullScreen;		// ui is running fullscreen
 
@@ -2284,9 +2529,12 @@ void R_InitNextFrame( void );
 
 void RE_ClearScene( void );
 void RE_AddRefEntityToScene( const refEntity_t *ent );
+// newjk: no-op here; declared so refexport_t is filled identically across backends
+void RE_SetNextEntityNum( int entityNum );
 void RE_AddMiniRefEntityToScene( const miniRefEntity_t *ent );
 void RE_AddPolyToScene( qhandle_t hShader , int numVerts, const polyVert_t *verts, int num );
-void RE_AddLightToScene( const vec3_t org, float intensity, float r, float g, float b );
+// newjk: noShadowFromEntity accepted for parity and ignored in this backend
+void RE_AddLightToScene( const vec3_t org, float intensity, float r, float g, float b, int noShadowFromEntity );
 void RE_AddAdditiveLightToScene( const vec3_t org, float intensity, float r, float g, float b );
 void RE_RenderScene( const refdef_t *fd );
 

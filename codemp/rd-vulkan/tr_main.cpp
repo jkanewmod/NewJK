@@ -516,7 +516,12 @@ static void R_SetFarClip( void )
 	// Bring in the zFar to the distanceCull distance
 	// The sky renders at zFar so need to move it out a little
 	// ...and make sure there is a minimum zfar to prevent problems
-	tr.viewParms.zFar = Com_Clamp(2048.0f, tr.distanceCull * (1.732), sqrtf(farthestCornerDistance));
+	float cullDist;
+	if (tr.distanceCull < r_cullDistanceOverride->value)
+		cullDist = r_cullDistanceOverride->value;
+	else
+		cullDist = tr.distanceCull;
+	tr.viewParms.zFar = Com_Clamp(2048.0f, cullDist * (1.732), sqrtf(farthestCornerDistance));
 }
 
 /*
@@ -1394,6 +1399,20 @@ void R_DecomposeSort( unsigned sort, int *entityNum, shader_t **shader,
 R_SortDrawSurfs
 =================
 */
+/*
+	must this entity be drawn after everything else? matches rd-vanilla's post-render queue and
+	rd-rend2's R_IsPostRenderEntity, minus RF_DISTORTION - vulkan already defers distortion via
+	its own refraction pass (backEnd.refractionFill / RENDER_PASS_REFRACTION), so listing it here
+	would double-handle it.
+*/
+static qboolean R_IsPostRenderEntity( int entityNum ) {
+	if ( entityNum == REFENTITYNUM_WORLD || entityNum >= tr.refdef.num_entities ) {
+		return qfalse;
+	}
+
+	return (qboolean)( ( tr.refdef.entities[entityNum].e.renderfx & ( RF_FORCE_ENT_ALPHA | RF_FORCEPOST ) ) != 0 );
+}
+
 void R_SortDrawSurfs( drawSurf_t *drawSurfs, int numDrawSurfs ) {
 	shader_t		*shader; 
 	int				fogNum;
@@ -1410,6 +1429,45 @@ void R_SortDrawSurfs( drawSurf_t *drawSurfs, int numDrawSurfs ) {
 
 	// sort the drawsurfs by sort type, then orientation, then shader
 	R_RadixSort(drawSurfs, numDrawSurfs);
+
+	/*
+		newjk fix: some entities only look right if nothing draws over them afterwards, and the
+		radix sort above orders by shader registration order, which says nothing about that.
+		RF_FORCE_ENT_ALPHA blends without writing depth (see RB_StageIteratorGeneric), so ordinary
+		opaque geometry sorted after it paints straight over it and it vanishes entirely
+		(cg_thirdPersonAlpha < 1 on some siege maps). RF_FORCEPOST is the saber blade glow under
+		cg_saberTrail 2 asking to land on top of the trail cap. stable-partition both to the end
+		so the ordering the backend already assumes actually holds.
+
+		this only reorders - blend/depth state is untouched and the depth test stays enabled, so
+		these surfaces are still occluded by anything genuinely in front of them.
+	*/
+	{
+		int numDeferred = 0;
+		int j;
+
+		for ( i = 0; i < numDrawSurfs; i++ ) {
+			if ( R_IsPostRenderEntity( ( drawSurfs[i].sort >> QSORT_REFENTITYNUM_SHIFT ) & REFENTITYNUM_MASK ) ) {
+				numDeferred++;
+			}
+		}
+
+		if ( numDeferred > 0 && numDeferred < numDrawSurfs ) {
+			drawSurf_t *deferred = (drawSurf_t *)ri.Hunk_AllocateTempMemory( numDeferred * sizeof( drawSurf_t ) );
+
+			for ( i = 0, j = 0, numDeferred = 0; i < numDrawSurfs; i++ ) {
+				if ( R_IsPostRenderEntity( ( drawSurfs[i].sort >> QSORT_REFENTITYNUM_SHIFT ) & REFENTITYNUM_MASK ) ) {
+					deferred[numDeferred++] = drawSurfs[i];
+				} else {
+					drawSurfs[j++] = drawSurfs[i];
+				}
+			}
+
+			Com_Memcpy( drawSurfs + j, deferred, numDeferred * sizeof( drawSurf_t ) );
+
+			ri.Hunk_FreeTempMemory( deferred );
+		}
+	}
 
 	// check for any pass through drawing, which
 	// may cause another view to be rendered first

@@ -78,7 +78,16 @@ R_SetupEntityLightingGrid
 
 =================
 */
-static void R_SetupEntityLightingGrid( trRefEntity_t *ent ) {
+// newjk: per-frame fullbright bookkeeping, consumed by the backend when it decides each
+// surface's color. forceWhiteEnts are entities whose texture must go flat white; the other
+// two record the sampled lighting so a fullbright player's held weapon can be lit normally.
+std::vector<trRefEntity_t *> forceWhiteEnts;
+std::vector<FullbrightEnt> fullbrightPlayers;
+std::vector<FullbrightEnt> fullbrightEnts;
+
+// newjk: returns true when a custom fullbright color was applied, so the caller knows to
+// skip the normal lighting adjustments below it
+static bool R_SetupEntityLightingGrid( trRefEntity_t *ent ) {
 	vec3_t			lightOrigin;
 	int				pos[3];
 	int				i, j;
@@ -88,16 +97,57 @@ static void R_SetupEntityLightingGrid( trRefEntity_t *ent ) {
 	float			totalFactor;
 	unsigned short	*startGridPos;
 
-#ifdef RF_FULLBRIGHT
-	if (r_fullbright->integer || r_ambientScale->integer == -1 || (ent->e.renderfx & RF_FULLBRIGHT))
-#else
 	if (r_fullbright->integer || r_ambientScale->integer == -1)
-#endif
 	{
 		ent->ambientLight[0] = ent->ambientLight[1] = ent->ambientLight[2] = 255.0;
 		ent->directedLight[0] = ent->directedLight[1] = ent->directedLight[2] = 255.0;
 		VectorCopy( tr.sunDirection, ent->lightDir );
-		return;
+		return false;
+	}
+
+	// newjk: RF_OTHER1-6 carry a 6-bit index selecting r_fullbrightcolor<N>; RF_OTHER7 marks
+	// the entity as a player
+	if (ent->e.renderfx & RF_FULLBRIGHT)
+	{
+		int index = 0;
+		if (ent->e.renderfx & RF_OTHER1) index |= 1;
+		if (ent->e.renderfx & RF_OTHER2) index |= 2;
+		if (ent->e.renderfx & RF_OTHER3) index |= 4;
+		if (ent->e.renderfx & RF_OTHER4) index |= 8;
+		if (ent->e.renderfx & RF_OTHER5) index |= 16;
+		if (ent->e.renderfx & RF_OTHER6) index |= 32;
+
+		bool isPlayer = !!(ent->e.renderfx & RF_OTHER7);
+
+		if (isPlayer) { // run lighting calc on fullbright players so that it can be applied to held non-fullbright weapons
+			FullbrightEnt lightCalc(ent, true);
+			fullbrightEnts.emplace_back(lightCalc);
+			fullbrightPlayers.emplace_back(lightCalc);
+		}
+		else {
+			fullbrightEnts.emplace_back(ent);
+		}
+
+		if (index > 0 && index < 64) {
+			const char *s = ri.Cvar_VariableString(va("r_fullbrightcolor%d", index));
+			float r = 255, g = 255, b = 255;
+			int useWhiteTexture = 0;
+			if (VALIDSTRING(s))
+				sscanf(s, "%f %f %f %d", &r, &g, &b, &useWhiteTexture);
+			ent->ambientLight[0] = ent->directedLight[0] = r;
+			ent->ambientLight[1] = ent->directedLight[1] = g;
+			ent->ambientLight[2] = ent->directedLight[2] = b;
+			VectorCopy(tr.sunDirection, ent->lightDir);
+			if (useWhiteTexture)
+				forceWhiteEnts.push_back(ent);
+			return true;
+		}
+		else {
+			ent->ambientLight[0] = ent->ambientLight[1] = ent->ambientLight[2] = 255.0;
+			ent->directedLight[0] = ent->directedLight[1] = ent->directedLight[2] = 255.0;
+			VectorCopy(tr.sunDirection, ent->lightDir);
+			return false;
+		}
 	}
 
 	if ( ent->e.renderfx & RF_LIGHTING_ORIGIN ) {
@@ -212,6 +262,7 @@ static void R_SetupEntityLightingGrid( trRefEntity_t *ent ) {
 	VectorScale( ent->directedLight, r_directedScale->value, ent->directedLight );
 
 	VectorNormalize2( direction, ent->lightDir );
+	return false;
 }
 
 /*
@@ -283,9 +334,12 @@ void R_SetupEntityLighting( const trRefdef_t *refdef, trRefEntity_t *ent ) {
 	}
 
 	// if NOWORLDMODEL, only use dynamic lights (menu system, etc)
+	// newjk: true once a fullbright color has been forced, which the blocks below must not undo
+	bool customFullbright = false;
 	if (!(refdef->rdflags & RDF_NOWORLDMODEL)
 		&& tr.world->lightGridData) {
-		R_SetupEntityLightingGrid(ent);
+			// newjk: remember whether a flat color was forced
+		customFullbright = R_SetupEntityLightingGrid(ent);
 	}
 	else {
 		ent->ambientLight[0] = ent->ambientLight[1] =
@@ -296,14 +350,16 @@ void R_SetupEntityLighting( const trRefdef_t *refdef, trRefEntity_t *ent ) {
 	}
 
 	// bonus items and view weapons have a fixed minimum add
-	if (1 /* ent->e.renderfx & RF_MINLIGHT */) {
+	// newjk: a forced fullbright color must not have a minimum light added on top of it
+	if (!customFullbright /* ent->e.renderfx & RF_MINLIGHT */) {
 		// give everything a minimum light add
 		ent->ambientLight[0] += tr.identityLight * 32;
 		ent->ambientLight[1] += tr.identityLight * 32;
 		ent->ambientLight[2] += tr.identityLight * 32;
 	}
 
-	if (ent->e.renderfx & RF_MINLIGHT)
+	// newjk: likewise for the holo-item minlight path
+	if (!customFullbright && ent->e.renderfx & RF_MINLIGHT)
 	{ //the minlight flag is now for items rotating on their holo thing
 		if (ent->e.shaderRGBA[0] == 255 &&
 			ent->e.shaderRGBA[1] == 255 &&
@@ -324,6 +380,8 @@ void R_SetupEntityLighting( const trRefdef_t *refdef, trRefEntity_t *ent ) {
 	//
 	// modify the light by dynamic lights
 	//
+	// newjk: the whole normalize/clamp block would scale the forced color away
+	if (!customFullbright) {
 	d = VectorLength(ent->directedLight);
 	VectorScale(ent->lightDir, d, lightDir);
 
@@ -366,6 +424,7 @@ void R_SetupEntityLighting( const trRefdef_t *refdef, trRefEntity_t *ent ) {
 			VectorMA(lightDir, d, dir, lightDir);
 		}
 	}
+	}
 
 	// clamp ambient
 	for ( i = 0 ; i < 3 ; i++ ) {
@@ -384,6 +443,8 @@ void R_SetupEntityLighting( const trRefdef_t *refdef, trRefEntity_t *ent ) {
 	((byte *)&ent->ambientLightInt)[2] = Q_ftol( ent->ambientLight[2] );
 	((byte *)&ent->ambientLightInt)[3] = 0xff;
 
+	// newjk: same reason - do not recompute a direction we deliberately forced
+	if (!customFullbright) {
 	// transform the direction to local space
 	VectorNormalize( lightDir );
 	VectorCopy(lightDir, ent->lightDir);
@@ -391,6 +452,11 @@ void R_SetupEntityLighting( const trRefdef_t *refdef, trRefEntity_t *ent ) {
 	ent->modelLightDir[0] = DotProduct( lightDir, ent->e.axis[0] );
 	ent->modelLightDir[1] = DotProduct( lightDir, ent->e.axis[1] );
 	ent->modelLightDir[2] = DotProduct( lightDir, ent->e.axis[2] );
+	} else {
+		// lightDir was already set to a world-space direction (e.g. tr.sunDirection) by
+		// R_SetupEntityLightingGrid; keep modelLightDir consistent instead of leaving it stale.
+		VectorCopy( ent->lightDir, ent->modelLightDir );
+	}
 
 #ifdef USE_PMLIGHT
 	if (r_shadows->integer == 2 && r_dlightMode->integer == 2) {

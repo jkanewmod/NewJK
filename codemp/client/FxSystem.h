@@ -178,7 +178,8 @@ public:
 	}
 	inline	void	AddLightToScene( vec3_t org, float radius, float red, float green, float blue )
 	{
-		re->AddLightToScene(	org, radius, red, green, blue );
+		// effect lights belong to no entity, so nothing is exempt from their shadow
+		re->AddLightToScene(	org, radius, red, green, blue, ENTITYNUM_NONE );
 	}
 
 	inline	int		RegisterShader( const char *shader )

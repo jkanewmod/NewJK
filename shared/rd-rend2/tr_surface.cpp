@@ -2421,12 +2421,6 @@ static void RB_SurfaceEntity( surfaceType_t *surfType ) {
 			}
 		}
 		break;
-	case RT_LATHE:
-		RB_SurfaceLathe();
-		break;
-	case RT_CLOUDS:
-		RB_SurfaceClouds();
-		break;
 	default:
 		RB_SurfaceAxis();
 		break;
