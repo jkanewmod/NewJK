@@ -587,10 +587,6 @@ qboolean	FS_ConditionalRestart( int checksumFeed );
 void	FS_Restart( int checksumFeed );
 // shutdown and restart the filesystem so changes to fs_gamedir can take effect
 
-qboolean	FS_SetRend2OnlyPaksAllowed( qboolean allow );
-// records whether rend2-only asset paks may load; returns qtrue if the answer changed,
-// meaning the caller should FS_Restart to rebuild the search path
-
 char	**FS_ListFiles( const char *directory, const char *extension, int *numfiles );
 // directory should not have either a leading or trailing /
 // if extension is "/", only subdirectories will be returned

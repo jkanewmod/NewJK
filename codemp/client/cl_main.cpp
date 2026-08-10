@@ -124,6 +124,7 @@ cvar_t *cl_discord;
 #endif
 
 cvar_t	*cl_fpsSaver;
+cvar_t	*r_pbrTextures;
 cvar_t	*cl_ratioFix;
 
 cvar_t	*cg_languageFix;
@@ -2833,16 +2834,6 @@ void CL_InitRef( void ) {
 		Cvar_ForceReset( "cl_renderer" );
 	}
 
-	// Some asset paks are authored for rend2 only and break other renderers (see
-	// FS_REND2_ONLY_PAK_PREFIX in files.cpp). This is the first point where cl_renderer is
-	// both registered and canonical - FS_Startup runs long before the config that sets it -
-	// so tell the filesystem now, and rebuild the search path if the answer changed. Runs on
-	// vid_restart too, so switching renderers picks the paks up or drops them without a
-	// full game restart.
-	if ( FS_SetRend2OnlyPaksAllowed( (qboolean)!Q_stricmp( cl_renderer->string, REND2_RENDER_LIBRARY ) ) ) {
-		FS_Restart( clc.checksumFeed );
-	}
-
 	Com_sprintf( dllName, sizeof( dllName ), "%s_" ARCH_STRING DLL_EXT, cl_renderer->string );
 
 	if( !(rendererLib = Sys_LoadDll( dllName, qfalse )) && strcmp( cl_renderer->string, cl_renderer->resetString ) )
@@ -2968,6 +2959,7 @@ void CL_InitRef( void ) {
 	// unpause so the cgame definately gets a snapshot and renders a frame
 	Cvar_Set( "cl_paused", "0" );
 	cl_fpsSaver = Cvar_Get("cl_fpsSaver", "0", CVAR_ARCHIVE | CVAR_LATCH);
+	r_pbrTextures = Cvar_Get( "r_pbrTextures", "1", CVAR_ARCHIVE | CVAR_LATCH );
 }
 
 

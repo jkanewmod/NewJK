@@ -198,6 +198,7 @@ typedef struct fileInPack_s {
 	unsigned long			pos;		// file info position in zip
 	unsigned long			len;		// uncompress file size
 	struct	fileInPack_s*	next;		// next file in the hash
+	qboolean				isPBRAsset;	// computed once at pack-load time, see FS_TagPBRAssets
 } fileInPack_t;
 
 typedef struct pack_s {
@@ -255,25 +256,23 @@ static int			fs_fakeChkSum;
 static int			fs_checksumFeed;
 
 /*
-	the PBR asset paks are authored for rd-rend2 only: they replace stock diffuse textures
-	with versions that have no alpha channel, moving the transparency into sibling files
-	(_masked/_nh/_rmo) that only rend2 knows to look for by naming convention, and they ship
-	no .shader files to tell anyone else. loading them under rd-vanilla/rd-vulkan silently
-	breaks every alphaFunc surface they override - e.g. textures/imperial/grate02 renders
-	as solid metal instead of a see-through grating. so keep them out unless rend2 is active.
-
-	deliberately a latched flag rather than a live cl_renderer read: FS_Startup runs before
-	the config that sets cl_renderer is exec'd, and runs again on every map load, so reading
-	the cvar here would hand back different answers at different times and silently change
-	the pak set mid-session. CL_InitRef owns this, once the renderer is actually known.
+	PBR content packs (rd-rend2 only) replace stock diffuse textures with alpha-stripped
+	versions, moving transparency into sibling maps (_nh/_n/_specGloss/_rmo/_orm - the only
+	suffixes rend2 actually looks for, see CollapseStagesToLightall/R_CreateNormalMap in
+	shared/rd-rend2/). Loading the diffuse under rd-vanilla/rd-vulkan breaks alphaFunc
+	surfaces (e.g. textures/imperial/grate02 renders solid instead of see-through).
+	r_pbrTextures controls whether such a diffuse is allowed to load, per-file via
+	FS_FOpenFileRead rather than by pak name, so it covers PBR content in any pk3.
 */
-#define FS_REND2_ONLY_PAK_PREFIX "assets8_pbr"
-#ifdef DEDICATED
-// the server never renders, and excluding paks here would change the pak set it advertises
-// for sv_pure and what clients are asked to download. leave server behavior untouched.
-static qboolean		fs_allowRend2OnlyPaks = qtrue;
-#else
-static qboolean		fs_allowRend2OnlyPaks = qfalse;	// assume non-rend2 until CL_InitRef says otherwise
+static const char *const FS_PBR_SIBLING_SUFFIXES[] = {
+	"_nh", "_n", "_specGloss", "_rmo", "_orm"
+};
+#define FS_NUM_PBR_SIBLING_SUFFIXES ( sizeof( FS_PBR_SIBLING_SUFFIXES ) / sizeof( FS_PBR_SIBLING_SUFFIXES[0] ) )
+
+#ifndef DEDICATED
+extern cvar_t *cl_renderer;
+extern cvar_t *r_pbrTextures;
+#define FS_REND2_RENDER_LIBRARY "rd-rend2"
 #endif
 
 typedef union qfile_gus {
@@ -1284,6 +1283,176 @@ bool FS_FileCacheable(const char* const filename)
 	return( strchr(filename, '/') != 0 );
 }
 
+// A diffuse and its PBR sibling maps share a base name. Detect either half of that pair the
+// same way: strip a known suffix from 'filename' if present to find the shared base, then
+// check both the diffuse and at least one sibling exist, via 'existsFn' (live per-lookup for
+// directories, or a pack's own file list for pak entries - see FS_TagPBRAssets).
+typedef qboolean (*FS_ExistsCheckFn)( void *ctx, const char *candidate );
+
+static qboolean FS_ClassifyPBRAsset( const char *filename, FS_ExistsCheckFn existsFn, void *ctx ) {
+	static const char *const knownExts[] = { "jpg", "png", "tga" };
+	const size_t numKnownExts = sizeof( knownExts ) / sizeof( knownExts[0] );
+
+	char base[MAX_ZPATH];
+	COM_StripExtension( filename, base, sizeof( base ) );
+
+	size_t baseLen = strlen( base );
+	qboolean isSiblingRequest = qfalse;
+	for ( size_t s = 0; s < FS_NUM_PBR_SIBLING_SUFFIXES; s++ ) {
+		size_t suffixLen = strlen( FS_PBR_SIBLING_SUFFIXES[s] );
+		if ( baseLen > suffixLen && !Q_stricmp( base + baseLen - suffixLen, FS_PBR_SIBLING_SUFFIXES[s] ) ) {
+			base[baseLen - suffixLen] = '\0';
+			isSiblingRequest = qtrue;
+			break;
+		}
+	}
+
+	if ( isSiblingRequest ) {
+		// filename is itself a sibling map (e.g. grate02_nh.tga) - only count it as a PBR
+		// asset if the plain diffuse it belongs to actually exists alongside it.
+		for ( size_t e = 0; e < numKnownExts; e++ ) {
+			char candidate[MAX_ZPATH];
+			Com_sprintf( candidate, sizeof( candidate ), "%s.%s", base, knownExts[e] );
+			if ( existsFn( ctx, candidate ) ) {
+				return qtrue;
+			}
+		}
+		return qfalse;
+	}
+
+	// filename is a plain diffuse-shaped name - it's a PBR asset if at least one sibling
+	// material map exists alongside it.
+	for ( size_t s = 0; s < FS_NUM_PBR_SIBLING_SUFFIXES; s++ ) {
+		for ( size_t e = 0; e < numKnownExts; e++ ) {
+			char candidate[MAX_ZPATH];
+			Com_sprintf( candidate, sizeof( candidate ), "%s%s.%s", base, FS_PBR_SIBLING_SUFFIXES[s], knownExts[e] );
+			if ( existsFn( ctx, candidate ) ) {
+				return qtrue;
+			}
+		}
+	}
+	return qfalse;
+}
+
+// Returns qtrue if 'candidate' exists in 'search' - a pak lookup mirrors the hash-table walk
+// FS_FOpenFileRead already does; a directory lookup is a plain existence check.
+static qboolean FS_ExistsInSource( searchpath_t *search, const char *candidate ) {
+	if ( search->pack ) {
+		long hash = FS_HashFileName( candidate, search->pack->hashSize );
+		fileInPack_t *pakFile = search->pack->hashTable[hash];
+		while ( pakFile ) {
+			if ( !FS_FilenameCompare( pakFile->name, candidate ) ) {
+				return qtrue;
+			}
+			pakFile = pakFile->next;
+		}
+		return qfalse;
+	} else if ( search->dir ) {
+		char *netpath = FS_BuildOSPath( search->dir->path, search->dir->gamedir, candidate );
+		FILE *f = fopen( netpath, "rb" );
+		if ( f ) {
+			fclose( f );
+			return qtrue;
+		}
+	}
+	return qfalse;
+}
+
+static qboolean FS_ExistsInSourceCallback( void *ctx, const char *candidate ) {
+	return FS_ExistsInSource( (searchpath_t *)ctx, candidate );
+}
+
+// Per-lookup classification for loose directories, which have no pack-load-time moment to
+// precompute against. Only called for directory sources - see FS_TagPBRAssets for paks.
+static qboolean FS_IsPBRAssetFile( searchpath_t *search, const char *filename ) {
+	return FS_ClassifyPBRAsset( filename, FS_ExistsInSourceCallback, search );
+}
+
+// Like FS_ExistsInSource's pack branch, but against a pack_t directly - needed mid-FS_LoadZipFile,
+// before a searchpath_t wrapping this pack exists yet.
+static qboolean FS_PackHasFile( pack_t *pack, const char *candidate ) {
+	long hash = FS_HashFileName( candidate, pack->hashSize );
+	fileInPack_t *pakFile = pack->hashTable[hash];
+	while ( pakFile ) {
+		if ( !FS_FilenameCompare( pakFile->name, candidate ) ) {
+			return qtrue;
+		}
+		pakFile = pakFile->next;
+	}
+	return qfalse;
+}
+
+static qboolean FS_PackHasFileCallback( void *ctx, const char *candidate ) {
+	return FS_PackHasFile( (pack_t *)ctx, candidate );
+}
+
+// Only image files can ever have a PBR sibling, so skip FS_ClassifyPBRAsset's lookups
+// entirely for the common case (shaders, sounds, models, configs, ...).
+static qboolean FS_CouldBePBRAsset( const char *filename ) {
+	int len = (int)strlen( filename );
+	return (qboolean)( FS_IsExt( filename, ".jpg", len ) || FS_IsExt( filename, ".png", len ) || FS_IsExt( filename, ".tga", len ) );
+}
+
+// assets0.pk3 through assets3.pk3 are the original base-game asset packs and carry no PBR
+// content, so their files never need the per-file classification pass.
+static qboolean FS_IsKnownNonPBRPak( const char *pakBasename ) {
+	static const char *const knownNonPBRPaks[] = { "assets0", "assets1", "assets2", "assets3" };
+	for ( size_t i = 0; i < sizeof( knownNonPBRPaks ) / sizeof( knownNonPBRPaks[0] ); i++ ) {
+		if ( !Q_stricmp( pakBasename, knownNonPBRPaks[i] ) ) {
+			return qtrue;
+		}
+	}
+	return qfalse;
+}
+
+// assets8_pbr<N>.pk3 are dedicated PBR packs - every file in them counts as PBR, skipping
+// per-file classification. Deliberately coarser: a few plain player-skin reskins in
+// assets8_pbr3.pk3 get swept up too and fall back to their lower-res versions - not a bug.
+#define FS_ALL_PBR_PAK_PREFIX "assets8_pbr"
+static qboolean FS_IsKnownAllPBRPak( const char *pakBasename ) {
+	return (qboolean)!Q_stricmpn( pakBasename, FS_ALL_PBR_PAK_PREFIX, strlen( FS_ALL_PBR_PAK_PREFIX ) );
+}
+
+// A pack's file list never changes after loading, so classify each file once here rather
+// than on every FS_FOpenFileRead call. Two well-known pak names get an even cheaper
+// shortcut (FS_IsKnownNonPBRPak/AllPBRPak).
+static void FS_TagPBRAssets( pack_t *pack, fileInPack_t *buildBuffer, int numFiles ) {
+	if ( FS_IsKnownNonPBRPak( pack->pakBasename ) ) {
+		return; // isPBRAsset already defaults to qfalse - Z_Malloc zero-fills buildBuffer
+	}
+
+	if ( FS_IsKnownAllPBRPak( pack->pakBasename ) ) {
+		for ( int i = 0; i < numFiles; i++ ) {
+			buildBuffer[i].isPBRAsset = qtrue;
+		}
+		return;
+	}
+
+	for ( int i = 0; i < numFiles; i++ ) {
+		if ( FS_CouldBePBRAsset( buildBuffer[i].name ) ) {
+			buildBuffer[i].isPBRAsset = FS_ClassifyPBRAsset( buildBuffer[i].name, FS_PackHasFileCallback, pack );
+		}
+	}
+}
+
+#ifndef DEDICATED
+static qboolean FS_ShouldBlockPBRAssets( void ) {
+	if ( !r_pbrTextures ) {
+		return qfalse; // not registered yet (very early startup) - nothing to block
+	}
+	switch ( r_pbrTextures->integer ) {
+		case 0: return qtrue;	// never load PBR-authored assets, on any renderer
+		case 2: return qfalse;	// always load them, on any renderer
+		default:				// 1 (default): only on rd-rend2
+			return (qboolean)( !cl_renderer || Q_stricmp( cl_renderer->string, FS_REND2_RENDER_LIBRARY ) );
+	}
+}
+#else
+static qboolean FS_ShouldBlockPBRAssets( void ) {
+	return qfalse; // the server never renders; don't filter what it advertises/serves
+}
+#endif
+
 /*
 ===========
 FS_FOpenFileRead
@@ -1388,6 +1557,12 @@ long FS_FOpenFileRead( const char *filename, fileHandle_t *file, qboolean unique
 				do {
 					// case and separator insensitive comparisons
 					if ( !FS_FilenameCompare( pakFile->name, filename ) ) {
+						// skip this pak's copy of a PBR asset when unwanted, falling through
+						// to whatever provides the file further down the search path
+						if ( pakFile->isPBRAsset && FS_ShouldBlockPBRAssets() ) {
+							pakFile = pakFile->next;
+							continue;
+						}
 						// found it!
 
 						// mark the pak as having been referenced and mark specifics on cgame and ui
@@ -1509,6 +1684,10 @@ long FS_FOpenFileRead( const char *filename, fileHandle_t *file, qboolean unique
 				}
 
 				dir = search->dir;
+
+				if ( FS_ShouldBlockPBRAssets() && FS_CouldBePBRAsset( filename ) && FS_IsPBRAssetFile( search, filename ) ) {
+					continue;
+				}
 
 				netpath = FS_BuildOSPath( dir->path, dir->gamedir, filename );
 				fsh[*file].handleFiles.file.o = fopen (netpath, "rb");
@@ -2191,6 +2370,8 @@ static pack_t *FS_LoadZipFile( const char *zipfile, const char *basename )
 	pack->pure_checksum = LittleLong( pack->pure_checksum );
 
 	Z_Free(fs_headerLongs);
+
+	FS_TagPBRAssets( pack, buildBuffer, pack->numfiles );
 
 	pack->buildBuffer = buildBuffer;
 	return pack;
@@ -3062,13 +3243,6 @@ static void FS_AddGameDirectory( const char *path, const char *dir ) {
 	qsort( sorted, numfiles, sizeof(char*), paksort );
 
 	for ( i = 0 ; i < numfiles ; i++ ) {
-		// rend2-only asset paks: skip before opening the zip, so they never reach the
-		// search path, fs_packFiles, or any checksum/referenced-pak list
-		if ( !fs_allowRend2OnlyPaks
-			&& !Q_stricmpn( sorted[i], FS_REND2_ONLY_PAK_PREFIX, strlen( FS_REND2_ONLY_PAK_PREFIX ) ) ) {
-			Com_Printf( "Skipping %s (requires the rend2 renderer)\n", sorted[i] );
-			continue;
-		}
 		pakfile = FS_BuildOSPath( path, dir, sorted[i] );
 		if ( ( pak = FS_LoadZipFile( pakfile, sorted[i] ) ) == 0 )
 			continue;
@@ -3998,29 +4172,6 @@ void FS_InitFilesystem( void ) {
 #endif
 
   // bk001208 - SafeMode see below, FIXME?
-}
-
-/*
-================
-FS_SetRend2OnlyPaksAllowed
-
-Records whether rend2-only asset paks (see FS_REND2_ONLY_PAK_PREFIX) may load. Returns
-qtrue if this changed the answer, meaning the caller should FS_Restart to rebuild the
-search path. Called from CL_InitRef, which is the first point where cl_renderer is both
-registered and canonicalized, and which also re-runs on every vid_restart.
-================
-*/
-qboolean FS_SetRend2OnlyPaksAllowed( qboolean allow ) {
-#ifdef DEDICATED
-	return qfalse;
-#else
-	if ( fs_allowRend2OnlyPaks == allow ) {
-		return qfalse;
-	}
-
-	fs_allowRend2OnlyPaks = allow;
-	return qtrue;
-#endif
 }
 
 /*

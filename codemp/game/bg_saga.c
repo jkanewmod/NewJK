@@ -1202,7 +1202,7 @@ void BG_SiegeLoadClasses(siegeClassDesc_t *descBuffer)
 {
 	int numFiles;
 	int filelen;
-	char filelist[4096];
+	char filelist[MAX_SIEGE_CLASS_FILELIST];
 	char filename[MAX_QPATH];
 	char* fileptr;
 	int i;
@@ -1333,7 +1333,7 @@ void BG_SiegeLoadTeams(void)
 {
 	int numFiles;
 	int filelen;
-	char filelist[4096];
+	char filelist[MAX_SIEGE_TEAM_FILELIST];
 	char filename[MAX_QPATH];
 	char* fileptr;
 	int i;
