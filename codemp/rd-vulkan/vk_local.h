@@ -657,6 +657,13 @@ typedef struct {
 	float modelview_transform[16]  QALIGN(16);
 } Vk_World;
 
+/*
+	newjk: "this entity has no alternate lighting slot" for entity_ubo_offset_realLight below.
+	Deliberately the same value vk_append_uniform returns when the geometry buffer is full, so
+	an append that failed degrades to the entity's normal lighting rather than binding garbage.
+*/
+#define VK_ENTITY_UBO_OFFSET_NONE	(~0U)
+
 typedef struct vk_tess_s {
 	VkCommandBuffer		command_buffer;
 
@@ -697,6 +704,13 @@ typedef struct vk_tess_s {
 
 	uint32_t			camera_ubo_offset;
 	uint32_t			entity_ubo_offset[REFENTITYNUM_WORLD + 1];
+	/*
+		newjk: parallel to entity_ubo_offset, holding the same entity with its real
+		lightgrid-sampled light in place of its forced fullbright color. Only populated for
+		entities in fullbrightPlayers, VK_ENTITY_UBO_OFFSET_NONE otherwise. A fullbright
+		player's held weapon binds this so it renders normally lit while its owner does not.
+	*/
+	uint32_t			entity_ubo_offset_realLight[REFENTITYNUM_WORLD + 1];
 	uint32_t			bones_ubo_offset;
 	uint32_t			fogs_ubo_offset;
 } vk_tess_t;

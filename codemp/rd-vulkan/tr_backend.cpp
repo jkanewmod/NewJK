@@ -24,6 +24,8 @@ along with this program; if not, see <http://www.gnu.org/licenses/>.
 #include "tr_local.h"
 #include "tr_WorldEffects.h"
 
+#include <algorithm>
+
 backEndData_t	*backEndData;
 backEndState_t	backEnd;
 
@@ -1000,15 +1002,20 @@ static void vk_update_camera_constants( const trRefdef_t *refdef, const viewParm
 	vk.cmd->camera_ubo_offset = vk_append_uniform( &uniform, sizeof(uniform), vk.uniform_camera_item_size );
 }
 
-static void vk_update_entity_light_constants( vkUniformEntity_t &uniform, const trRefEntity_t *refEntity ) 
+static void vk_set_entity_light_constants( vkUniformEntity_t &uniform, const vec3_t ambientLight, const vec3_t directedLight, const vec3_t lightDir )
 {
 	static const float normalizeFactor = 1.0f / 255.0f;
 
-	VectorScale(refEntity->ambientLight, normalizeFactor, uniform.ambientLight);
-	VectorScale(refEntity->directedLight, normalizeFactor, uniform.directedLight);
-	VectorCopy(refEntity->lightDir, uniform.lightOrigin);
+	VectorScale(ambientLight, normalizeFactor, uniform.ambientLight);
+	VectorScale(directedLight, normalizeFactor, uniform.directedLight);
+	VectorCopy(lightDir, uniform.lightOrigin);
 
 	uniform.lightOrigin[3] = 0.0f;
+}
+
+static void vk_update_entity_light_constants( vkUniformEntity_t &uniform, const trRefEntity_t *refEntity )
+{
+	vk_set_entity_light_constants( uniform, refEntity->ambientLight, refEntity->directedLight, refEntity->lightDir );
 }
 
 static void vk_update_entity_matrix_constants( vkUniformEntity_t &uniform, const trRefEntity_t *refEntity ) 
@@ -1035,6 +1042,7 @@ static void vk_update_entity_matrix_constants( vkUniformEntity_t &uniform, const
 static void vk_update_entity_constants( const trRefdef_t *refdef ) {
 	uint32_t i;
 	Com_Memset( vk.cmd->entity_ubo_offset, 0, sizeof(vk.cmd->entity_ubo_offset) );
+	Com_Memset( vk.cmd->entity_ubo_offset_realLight, 0xFF, sizeof(vk.cmd->entity_ubo_offset_realLight) );
 
 	for ( i = 0; i < refdef->num_entities; i++ ) {
 		trRefEntity_t *ent = &refdef->entities[i];
@@ -1046,6 +1054,25 @@ static void vk_update_entity_constants( const trRefdef_t *refdef ) {
 		vk_update_entity_matrix_constants( uniform, ent );
 
 		vk.cmd->entity_ubo_offset[i] = vk_append_uniform( &uniform, sizeof(uniform), vk.uniform_entity_item_size );
+
+		/*
+			newjk: a fullbright player's held weapon has to draw with the player's real light
+			rather than the forced fullbright color it inherited (see mechanism (C) in
+			RB_StageIteratorGeneric). On the CPU color path that is a mid-draw write to
+			currentEntity->ambientLight, which is far too late for this UBO - it is baked once
+			per view before any surface draws - so bake a second copy carrying the real light
+			and let the weapon's surfaces bind that instead. The player's own entity gets one
+			too and simply never binds it; only a "models/weapons2/" shader can.
+		*/
+		auto fullbrightPlayer = std::find_if( fullbrightPlayers.begin(), fullbrightPlayers.end(),
+			[&]( const FullbrightEnt &p ) { return p.ent == ent; } );
+		if ( fullbrightPlayer != fullbrightPlayers.end() ) {
+			vkUniformEntity_t realLight = uniform;
+			vk_set_entity_light_constants( realLight, fullbrightPlayer->ambientLight,
+				fullbrightPlayer->directedLight, fullbrightPlayer->lightDir );
+
+			vk.cmd->entity_ubo_offset_realLight[i] = vk_append_uniform( &realLight, sizeof(realLight), vk.uniform_entity_item_size );
+		}
 	}
 
 	const trRefEntity_t *ent = &tr.worldEntity;

@@ -2865,8 +2865,15 @@ void RB_StageIteratorGeneric( void )
 			else 
 			{
 				const int refEntityNum = backEnd.currentEntity - backEnd.refdef.entities;
+				uint32_t entityUboOffset = vk.cmd->entity_ubo_offset[refEntityNum];
 
-				vk.cmd->descriptor_set.offset[VK_DESC_UNIFORM_ENTITY_BINDING] = vk.cmd->entity_ubo_offset[refEntityNum];
+				// newjk: a weapon held by a fullbright player binds the entity copy carrying
+				// the owner's real light, since the ambientLight write above only reaches the
+				// CPU color path - see vk_update_entity_constants
+				if ( overridingFullbrightEnt && vk.cmd->entity_ubo_offset_realLight[refEntityNum] != VK_ENTITY_UBO_OFFSET_NONE )
+					entityUboOffset = vk.cmd->entity_ubo_offset_realLight[refEntityNum];
+
+				vk.cmd->descriptor_set.offset[VK_DESC_UNIFORM_ENTITY_BINDING] = entityUboOffset;
 				vk.cmd->descriptor_set.offset[VK_DESC_UNIFORM_BONES_BINDING] = vk.cmd->bones_ubo_offset;
 			}
 		}
