@@ -143,6 +143,7 @@ Desktop.ini
 dist
 build
 build64
+build64-relwithdebinfo
 eggs
 parts
 bin

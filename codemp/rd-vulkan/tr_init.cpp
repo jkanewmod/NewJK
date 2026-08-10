@@ -1125,7 +1125,7 @@ void R_Init( void ) {
 	}
 
 	vk_debug("----- R_Init -----\n" );
-	ri.Printf(PRINT_ALL, "----- R_Init -----\n");
+	ri.Printf(PRINT_DEVELOPER, "----- R_Init -----\n");
 	// clear all our internal state
 	Com_Memset( &tr, 0, sizeof( tr ) );
 	Com_Memset( &backEnd, 0, sizeof( backEnd ) );

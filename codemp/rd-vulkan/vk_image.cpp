@@ -147,7 +147,7 @@ static void R_AddImageToPool(image_t *image)
     {
         uint32_t new_capacity = tr.images.capacity * 2;
 
-		ri.Printf( PRINT_ALL, S_COLOR_YELLOW "Resizing image pool from %u to %u entries\n", tr.images.capacity, new_capacity );
+		ri.Printf( PRINT_DEVELOPER, S_COLOR_YELLOW "Resizing image pool from %u to %u entries\n", tr.images.capacity, new_capacity );
 
         image_t **new_items = (image_t**)Z_Malloc(sizeof(image_t*) * new_capacity, TAG_IMAGE_T);
 		Com_Memset(new_items, 0, sizeof(*new_items) * new_capacity);
