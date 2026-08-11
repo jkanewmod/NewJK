@@ -412,7 +412,13 @@ void R_AddMD3Surfaces( trRefEntity_t *ent ) {
 		// don't add third_person objects if not viewing through a portal
 		if ( !personalModel ) {
 #ifdef USE_VBO_MDV
-			if ( vk.vboMdvActive ) 
+			/*
+				newjk: RF_VOLUMETRIC shades each vertex by its normal against the view axis
+				(ComputeColors), and the VBO path has nowhere to put that - it uploads one
+				baseColor/vertColor pair per stage, not per-vertex colors. Keep those surfaces
+				on the CPU path so they still get the real falloff.
+			*/
+			if ( vk.vboMdvActive && !( ent->e.renderfx & RF_VOLUMETRIC ) )
 				R_AddDrawSurf( (surfaceType_t *)&model->vboSurfaces[i], shader, fogNum, qfalse );
 			else
 #endif

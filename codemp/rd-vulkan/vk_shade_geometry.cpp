@@ -1806,8 +1806,14 @@ static void vk_compute_tex_coords( const textureBundle_t *bundle, vktcMod_t *tcM
 	}
 }
 
-static void vk_compute_colors( const int b, const shaderStage_t *pStage, int forceRGBGen ){	
-	if ( backEnd.currentEntity->e.renderfx & RF_VOLUMETRIC ) 
+static void vk_compute_colors( const int b, const shaderStage_t *pStage, int forceRGBGen ){
+	/*
+		newjk: unreachable now - R_AddMD3Surfaces keeps RF_VOLUMETRIC entities off the VBO
+		path, which is where this runs. Leave it that way: returning here writes nothing to
+		uniform_global.bundle[b], so the draw silently inherits the previous one's baseColor
+		and rgbGen. That turned the DEMP2 alt-fire shell whatever color was drawn before it.
+	*/
+	if ( backEnd.currentEntity->e.renderfx & RF_VOLUMETRIC )
 		return;
 
 	float *baseColor, *vertColor;
