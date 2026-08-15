@@ -444,7 +444,9 @@ typedef enum cgameImportLegacy_e {
 	CG_SETWINDOWTITLE,
 	CG_KEYCATCHLOCK,
 	// see R_SetNextEntityNum in cgameImport_s below
-	CG_R_SETNEXTENTITYNUM
+	CG_R_SETNEXTENTITYNUM,
+	// draw surfaces the backend handled last frame; see GetSurfaceCount in tr_public.h
+	CG_R_GETSURFACECOUNT
 } cgameImportLegacy_t;
 
 typedef enum cgameExportLegacy_e {

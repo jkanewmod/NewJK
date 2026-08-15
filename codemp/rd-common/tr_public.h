@@ -103,6 +103,22 @@ typedef struct refexport_s {
 	// if the pointers are not NULL, timing info will be returned
 	void				(*EndFrame)								( int *frontEndMsec, int *backEndMsec );
 
+	/*
+		Draw surfaces the backend was handed on the last completed frame - the same number
+		r_speeds 1 reports as "surfs". Counted before any backend-specific stage collapsing, so
+		unlike a triangle total it does not fold in how many passes each shader needs: vanilla
+		and vulkan agree on it within a few percent for the same scene, where their triangle
+		totals sit about 2.7x apart. rd-rend2 still reads almost exactly 3x the other two: it
+		hands the main view's whole surface list to RB_RenderDrawSurfList three times a frame
+		(depth prepass, shading, refraction fill) and the count is taken on entry, before each
+		pass filters down to the surfaces it actually draws.
+
+		Always the *previous* frame: the backend runs after whoever is drawing this frame has
+		finished with it, and the counters are wiped at the top of every frame. Reads 0 while
+		the window is not visible, since the backend does not run at all then.
+	*/
+	int					(*GetSurfaceCount)						( void );
+
 	// Returns qtrue if the graphics device has been lost (currently only possible under Vulkan; the
 	// other backends always return qfalse). The renderer cannot act on this itself - erroring out
 	// from inside a render call would unwind through state the caller is still using - so the

@@ -25,11 +25,25 @@ along with this program; if not, see <http://www.gnu.org/licenses/>.
 
 
 /*
+	Snapshot of the last completed frame's draw surface count, taken just before the counters
+	are wiped below. Kept out of trGlobals_t deliberately: the renderer is unloaded and
+	reloaded on every vid_restart, so a file static resets exactly when the count stops being
+	meaningful.
+*/
+static int	r_lastFrameSurfaces;
+
+int RE_GetSurfaceCount( void ) {
+	return r_lastFrameSurfaces;
+}
+
+/*
 =====================
 R_PerformanceCounters
 =====================
 */
 void R_PerformanceCounters( void ) {
+	r_lastFrameSurfaces = backEnd.pc.c_surfaces;
+
 	if ( !r_speeds->integer ) {
 		// clear the counters even if we aren't printing
 		memset( &tr.pc, 0, sizeof( tr.pc ) );

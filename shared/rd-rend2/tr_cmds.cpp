@@ -23,12 +23,25 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 #include "tr_allocator.h"
 
 /*
+	Snapshot of the last completed frame's draw surface count, taken just before the counters
+	are wiped below. Kept out of trGlobals_t deliberately: the renderer is unloaded and
+	reloaded on every vid_restart, so a file static resets exactly when the count stops being
+	meaningful.
+*/
+static int	r_lastFrameSurfaces;
+
+int RE_GetSurfaceCount( void ) {
+	return r_lastFrameSurfaces;
+}
+
+/*
 =====================
 R_PerformanceCounters
 =====================
 */
 void R_PerformanceCounters( void ) {
 	gpuFrame_t *currentFrame = backEndData->frames + (backEndData->realFrameNumber % MAX_FRAMES);
+	r_lastFrameSurfaces = backEnd.pc.c_surfaces;
 
 	if ( !r_speeds->integer ) {
 		// clear the counters even if we aren't printing

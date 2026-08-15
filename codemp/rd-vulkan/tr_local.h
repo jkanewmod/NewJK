@@ -2531,6 +2531,7 @@ void RE_ClearScene( void );
 void RE_AddRefEntityToScene( const refEntity_t *ent );
 // newjk: no-op here; declared so refexport_t is filled identically across backends
 void RE_SetNextEntityNum( int entityNum );
+int RE_GetSurfaceCount( void );
 void RE_AddMiniRefEntityToScene( const miniRefEntity_t *ent );
 void RE_AddPolyToScene( qhandle_t hShader , int numVerts, const polyVert_t *verts, int num );
 // newjk: noShadowFromEntity accepted for parity and ignored in this backend

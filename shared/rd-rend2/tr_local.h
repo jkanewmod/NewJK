@@ -3517,6 +3517,7 @@ void RE_ClearScene( void );
 void RE_AddRefEntityToScene( const refEntity_t *ent );
 // newjk: tags the next ref-entity so it can be excluded from its own light's shadow
 void RE_SetNextEntityNum( int entityNum );
+int RE_GetSurfaceCount( void );
 void RE_AddMiniRefEntityToScene( const miniRefEntity_t *miniRefEnt );
 void RE_AddPolyToScene(qhandle_t hShader, int numVerts, const polyVert_t *verts, int num = 1);
 void RE_AddLightToScene( const vec3_t org, float intensity, float r, float g, float b, int noShadowFromEntity );

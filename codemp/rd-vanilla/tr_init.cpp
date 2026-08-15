@@ -2091,6 +2091,7 @@ Q_EXPORT refexport_t* QDECL GetRefAPI( int apiVersion, refimport_t *rimp ) {
 	re.EndFrame								= RE_EndFrame;
 	// always qfalse here; only rd-vulkan can lose a device
 	re.DeviceLost							= RE_DeviceLost;
+	re.GetSurfaceCount						= RE_GetSurfaceCount;
 	re.MarkFragments						= R_MarkFragments;
 	re.LerpTag								= R_LerpTag;
 	re.ModelBounds							= R_ModelBounds;

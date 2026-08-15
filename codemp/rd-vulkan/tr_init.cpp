@@ -1483,6 +1483,7 @@ Q_EXPORT refexport_t* QDECL GetRefAPI( int apiVersion, refimport_t *rimp ) {
 	re.EndFrame								= RE_EndFrame;
 	// newjk: the client polls this between frames and errors out on a lost device
 	re.DeviceLost							= RE_DeviceLost;
+	re.GetSurfaceCount						= RE_GetSurfaceCount;
 	re.MarkFragments						= R_MarkFragments;
 	re.LerpTag								= R_LerpTag;
 	re.ModelBounds							= R_ModelBounds;

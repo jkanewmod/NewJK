@@ -1846,6 +1846,7 @@ void RE_ClearScene( void );
 void RE_AddRefEntityToScene( const refEntity_t *ent );
 // no-op in this backend; declared so the refexport_t table is filled identically everywhere
 void RE_SetNextEntityNum( int entityNum );
+int RE_GetSurfaceCount( void );
 void RE_AddMiniRefEntityToScene( const miniRefEntity_t *ent );
 void RE_AddPolyToScene( qhandle_t hShader , int numVerts, const polyVert_t *verts, int num );
 // noShadowFromEntity is accepted for signature parity and ignored in this backend
