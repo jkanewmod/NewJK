@@ -81,7 +81,7 @@ CMAKE_DEPENDENT_OPTION(BuildSymbolServer "Build WIP Windows Symbol Server (exper
 set(UseInternalOpenALDefault OFF)
 set(UseInternalZlibDefault   OFF)
 set(UseInternalPNGDefault    OFF)
-set(UseInternalJPEGDefault   OFF)
+set(UseInternalJPEGDefault   ON )
 set(UseInternalSDL2Default   OFF)
 
 if(WIN32)
