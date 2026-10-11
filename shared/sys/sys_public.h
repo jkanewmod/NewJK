@@ -184,6 +184,8 @@ typedef enum glProfile_e
 typedef enum glContextFlag_e
 {
 	GLCONTEXT_DEBUG = (1 << 1),
+	// core profile only: treat the requested version as a minimum and create the newest the driver offers
+	GLCONTEXT_NEWEST_CORE = (1 << 2),
 } glContextFlag_t;
 
 typedef struct windowDesc_s

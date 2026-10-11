@@ -1617,7 +1617,21 @@ void vk_present_frame( void )
 	switch ( res ) {
 		case VK_SUCCESS:
 			break;
-		case VK_SUBOPTIMAL_KHR:
+		case VK_SUBOPTIMAL_KHR: {
+			// newjk: the frame was still presented. Only rebuild if the window size actually changed;
+			// some drivers report suboptimal on every present for reasons a rebuild can't fix, and
+			// rebuilding anyway restarts the swapchain every frame (black screen). The size query
+			// is a round trip to the display server, so it is asked a few times a second at most
+			static int lastSizeCheck;
+			int now = ri.Milliseconds();
+
+			if ( now - lastSizeCheck >= 250 || now < lastSizeCheck ) {
+				lastSizeCheck = now;
+				if ( vk_surface_size_changed() )
+					vk_restart_swapchain( __func__ );
+			}
+			break;
+		}
 		case VK_ERROR_OUT_OF_DATE_KHR:
 			// swapchain re-creation needed
 			vk_restart_swapchain( __func__ );

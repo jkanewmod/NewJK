@@ -557,8 +557,11 @@ static void InitOpenGL( void )
 		windowDesc.gl.majorVersion = 3;
 		windowDesc.gl.minorVersion = 2;
 		windowDesc.gl.profile = GLPROFILE_CORE;
+		// newjk: 3.2 is the minimum; a newer context supplies features as core even
+		// when the driver trims the extension list (see GLimp_InitExtensions)
+		windowDesc.gl.contextFlags = GLCONTEXT_NEWEST_CORE;
 		if ( r_debugContext->integer )
-			windowDesc.gl.contextFlags = GLCONTEXT_DEBUG;
+			windowDesc.gl.contextFlags |= GLCONTEXT_DEBUG;
 
 		window = ri.WIN_Init(&windowDesc, &glConfig);
 

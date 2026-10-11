@@ -947,6 +947,13 @@ void R_BuildMDXM( model_t *mod, mdxmHeader_t *mdxm )
 	mdxmLOD_t			*lod;
 	uint32_t			i, n, k, w;
 
+	if ( mdxm->numLODs <= 0 || mdxm->numSurfaces <= 0 )
+	{
+		ri.Printf( PRINT_DEVELOPER, "R_BuildMDXM: %s has numLODs=%d numSurfaces=%d; skipping VBO build.\n",
+			mod->name, mdxm->numLODs, mdxm->numSurfaces );
+		return;
+	}
+
 	lod = (mdxmLOD_t *)( (byte *)mdxm + mdxm->ofsLODs );
 	mod->data.glm->vboModels = (mdxmVBOModel_t *)ri.Hunk_Alloc( sizeof (mdxmVBOModel_t) * mdxm->numLODs, h_low );
 
@@ -988,6 +995,17 @@ void R_BuildMDXM( model_t *mod, mdxmHeader_t *mdxm )
 		}
 
 		baseVertexes[mdxm->numSurfaces] = numVerts;
+
+		if ( numVerts <= 0 )
+		{
+			// a zero-size buffer is invalid; with no meshes the lod takes the cpu path
+			ri.Hunk_FreeTempMemory ( indexOffsets );
+			ri.Hunk_FreeTempMemory ( baseVertexes );
+			vboModel->vboMeshes = NULL;
+			vboModel->numVBOMeshes = 0;
+			lod = (mdxmLOD_t *)( (byte *)lod + lod->ofsEnd );
+			continue;
+		}
 
 		dataSize += numVerts * sizeof (*attr.verts);
 		dataSize += numVerts * sizeof (*attr.normals);
@@ -1032,20 +1050,56 @@ void R_BuildMDXM( model_t *mod, mdxmHeader_t *mdxm )
 
 		surf = (mdxmSurface_t *)((byte *)lod + sizeof(mdxmLOD_t) + (mdxm->numSurfaces * sizeof(mdxmLODSurfOffset_t)));
 
+		int badIndexes = 0;
+		int badWeights = 0;
+
 		for ( n = 0; n < mdxm->numSurfaces; n++ )
 		{
 			mdxmTriangle_t *t = (mdxmTriangle_t *)((byte *)surf + surf->ofsTriangles);
 
 			for ( k = 0; k < surf->numTriangles; k++, index += 3 )
 			{
-				index[0] = t[k].indexes[0] + baseVertexes[n];
-				assert( index[0] >= 0 && index[0] < numVerts );
+				int w;
 
-				index[1] = t[k].indexes[1] + baseVertexes[n];
-				assert( index[1] >= 0 && index[1] < numVerts );
+				/*
+					TRIANGLE INDICES COME STRAIGHT OUT OF A .glm ON DISK, so they are asset data
+					and cannot be trusted -- a custom or damaged model from a server's pk3 reaches
+					here unvalidated. This used to be three asserts, which is not a check: in a
+					debug build it ABORTS the client (reported as "crashed while loading the new
+					map" after a map change pulled in a model the previous map never used), and in
+					a release build it compiles away entirely and an out-of-range index is written
+					into the index buffer for the GPU to dereference. Neither is acceptable for
+					data somebody else authored.
 
-				index[2] = t[k].indexes[2] + baseVertexes[n];
-				assert( index[2] >= 0 && index[2] < numVerts );
+					Clamped rather than dropped so the buffer stays well formed and every offset
+					computed from numTriangles still lines up; the model renders with a few
+					degenerate triangles instead of taking the client down. The warning names it,
+					because "which model" is the one thing an abort here never told anybody.
+
+					Note the old `index[N] >= 0` half could never fail -- index is uint32_t, so a
+					negative sum had already wrapped to a huge positive by the time it was tested.
+					The signed local below is what actually catches that case.
+				*/
+				for ( w = 0; w < 3; w++ )
+				{
+					int vertIndex = t[k].indexes[w] + baseVertexes[n];
+
+					if ( vertIndex < 0 || vertIndex >= numVerts )
+					{
+						if ( !badIndexes )
+						{
+							ri.Printf( PRINT_DEVELOPER, "R_BuildMDXM: %s lod %d surf %d tri %d idx %d: "
+								"raw=%d base=%d -> %d, valid range 0..%d "
+								"(surf numVerts=%d numTriangles=%d, lod numVerts=%d)\n",
+								mod->name, i, n, k, w, t[k].indexes[w], baseVertexes[n], vertIndex,
+								numVerts - 1, surf->numVerts, surf->numTriangles, numVerts );
+						}
+						badIndexes++;
+						vertIndex = surf->numVerts > 0 ? baseVertexes[n] : 0;	// an empty surface's base is one past the end
+					}
+
+					index[w] = (uint32_t)vertIndex;
+				}
 			}
 
 			// Build tangent space
@@ -1055,6 +1109,13 @@ void R_BuildMDXM( model_t *mod, mdxmHeader_t *mdxm )
 		}
 
 		assert( index == (indices + numTriangles * 3) );
+
+		if ( badIndexes )
+		{
+			ri.Printf( PRINT_DEVELOPER, "R_BuildMDXM: %s LOD %d has %d out-of-range triangle "
+				"%s (max vertex %d); clamped.\n",
+				mod->name, i, badIndexes, badIndexes == 1 ? "index" : "indices", numVerts - 1 );
+		}
 
 		surf = (mdxmSurface_t *)((byte *)lod + sizeof (mdxmLOD_t) + (mdxm->numSurfaces * sizeof (mdxmLODSurfOffset_t)));
 
@@ -1079,6 +1140,19 @@ void R_BuildMDXM( model_t *mod, mdxmHeader_t *mdxm )
 				int numWeights = G2_GetVertWeights(&v[k]);
 				int lastWeight = 255;
 				int lastInfluence = numWeights - 1;
+
+				if ( lastInfluence < 0 )
+				{
+					for ( w = 0; w < 4; w++ )
+					{
+						attr.weights[w] = 0;
+						attr.bonerefs[w] = 0;
+					}
+					attr.weights += stride;
+					attr.bonerefs += stride;
+					continue;
+				}
+
 				for ( w = 0; w < lastInfluence; w++ )
 				{
 					float weight = G2_GetVertBoneWeightNotSlow( &v[k], w );
@@ -1090,10 +1164,14 @@ void R_BuildMDXM( model_t *mod, mdxmHeader_t *mdxm )
 					lastWeight -= attr.weights[w];
 				}
 
-				assert(lastWeight > 0);
+				if ( lastWeight < 0 )
+				{
+					badWeights++;
+					lastWeight = 0;
+				}
 
 				// Ensure that all the weights add up to 1.0
-				attr.weights[lastInfluence] = lastWeight;
+				attr.weights[lastInfluence] = (byte)lastWeight;
 				int packedIndex = G2_GetVertBoneIndex(&v[k], lastInfluence);
 				attr.bonerefs[lastInfluence] = boneRef[packedIndex];
 
@@ -1135,6 +1213,14 @@ void R_BuildMDXM( model_t *mod, mdxmHeader_t *mdxm )
 
 		VBO_t *vbo = R_CreateVBO( modelName, data, dataSize );
 		IBO_t *ibo = R_CreateIBO( modelName, (byte *)indices, sizeof(uint32_t) * numTriangles * 3 );
+
+
+		if ( badWeights )
+		{
+			ri.Printf( PRINT_DEVELOPER, "R_BuildMDXM: %s LOD %d had %d vertex %s whose leading bone "
+				"weights already totalled 1.0; clamped the remainder to zero.\n",
+				mod->name, i, badWeights, badWeights == 1 ? "weight" : "weights" );
+		}
 
 		ri.Hunk_FreeTempMemory ( data );
 		ri.Hunk_FreeTempMemory ( tangentsf );

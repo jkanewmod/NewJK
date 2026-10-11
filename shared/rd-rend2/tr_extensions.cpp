@@ -258,6 +258,16 @@ static qboolean GLimp_HaveExtension(const char *ext)
 	return (qboolean)((*ptr == ' ') || (*ptr == '\0'));  // verify it's complete string.
 }
 
+// newjk: major * 10 + minor of the context. A feature that is core in it counts as
+// present even when the driver leaves its extension out of the list, which NVIDIA
+// does for executables named jamp.exe.
+static int glContextVersion;
+
+static qboolean GLimp_HaveFeature(const char *ext, int coreMajor, int coreMinor)
+{
+	return (qboolean)(glContextVersion >= coreMajor * 10 + coreMinor || GLimp_HaveExtension(ext));
+}
+
 template<typename GLFuncType>
 static qboolean GetGLFunction ( GLFuncType& glFunction, const char *glFunctionString, qboolean errorOnFailure )
 {
@@ -539,12 +549,20 @@ void GLimp_InitExtensions()
 
 	Com_Printf ("Initializing OpenGL extensions\n" );
 
+	{
+		GLint major = 0, minor = 0;
+		qglGetIntegerv(GL_MAJOR_VERSION, &major);
+		qglGetIntegerv(GL_MINOR_VERSION, &minor);
+		glContextVersion = major * 10 + minor;
+		Com_Printf ("...OpenGL %d.%d core context\n", major, minor);
+	}
+
 	// Select our tc scheme
 	GLW_InitTextureCompression();
 
 	// GL_EXT_texture_filter_anisotropic
 	glConfig.maxTextureFilterAnisotropy = 0;
-	if ( GLimp_HaveExtension( "EXT_texture_filter_anisotropic" ) )
+	if ( GLimp_HaveFeature( "EXT_texture_filter_anisotropic", 4, 6 ) )
 	{
 		qglGetFloatv( GL_MAX_TEXTURE_MAX_ANISOTROPY_EXT, &glConfig.maxTextureFilterAnisotropy );
 		Com_Printf ("...GL_EXT_texture_filter_anisotropic available\n" );
@@ -598,7 +616,7 @@ void GLimp_InitExtensions()
 
 	// GL_ARB_texture_compression_bptc
 	extension = "GL_ARB_texture_compression_bptc";
-	if (GLimp_HaveExtension(extension))
+	if (GLimp_HaveFeature(extension, 4, 2))
 	{
 		if (r_ext_compressed_textures->integer >= 2)
 			glRefConfig.textureCompression |= TCR_BPTC;
@@ -613,7 +631,7 @@ void GLimp_InitExtensions()
 	// GL_ARB_texture_storage
 	extension = "GL_ARB_texture_storage";
 	glRefConfig.immutableTextures = qfalse;
-	if( GLimp_HaveExtension( extension ) )
+	if( GLimp_HaveFeature( extension, 4, 2 ) )
 	{
 		qboolean loaded = qtrue;
 
@@ -633,7 +651,7 @@ void GLimp_InitExtensions()
 	// GL_ARB_buffer_storage
 	extension = "GL_ARB_buffer_storage";
 	glRefConfig.immutableBuffers = qfalse;
-	if( GLimp_HaveExtension( extension ) )
+	if( GLimp_HaveFeature( extension, 4, 4 ) )
 	{
 		qboolean loaded = qtrue;
 
@@ -656,16 +674,18 @@ void GLimp_InitExtensions()
 
 	// GL_ARB_debug_output
 	extension = "GL_ARB_debug_output";
-	if ( GLimp_HaveExtension( extension ) )
+	if ( GLimp_HaveFeature( extension, 4, 3 ) )
 	{
 		qboolean loaded = qtrue;
 
 		if ( r_debugContext->integer )
 		{
-			loaded = (qboolean)(loaded && GetGLFunction (qglDebugMessageControlARB, "glDebugMessageControlARB", qfalse));
-			loaded = (qboolean)(loaded && GetGLFunction (qglDebugMessageInsertARB, "glDebugMessageInsertARB", qfalse));
-			loaded = (qboolean)(loaded && GetGLFunction (qglDebugMessageCallbackARB, "glDebugMessageCallbackARB", qfalse));
-			loaded = (qboolean)(loaded && GetGLFunction (qglGetDebugMessageLogARB, "glGetDebugMessageLogARB", qfalse));
+			// newjk: core 4.3 names; the ARB entry points belong to the extension
+			const qboolean core = (qboolean)(glContextVersion >= 43);
+			loaded = (qboolean)(loaded && GetGLFunction (qglDebugMessageControlARB, core ? "glDebugMessageControl" : "glDebugMessageControlARB", qfalse));
+			loaded = (qboolean)(loaded && GetGLFunction (qglDebugMessageInsertARB, core ? "glDebugMessageInsert" : "glDebugMessageInsertARB", qfalse));
+			loaded = (qboolean)(loaded && GetGLFunction (qglDebugMessageCallbackARB, core ? "glDebugMessageCallback" : "glDebugMessageCallbackARB", qfalse));
+			loaded = (qboolean)(loaded && GetGLFunction (qglGetDebugMessageLogARB, core ? "glGetDebugMessageLog" : "glGetDebugMessageLogARB", qfalse));
 		}
 		else
 		{
@@ -678,7 +698,7 @@ void GLimp_InitExtensions()
 
 	// GL_ARB_timer_query
 	extension = "GL_ARB_timer_query";
-	if ( GLimp_HaveExtension( extension ) )
+	if ( GLimp_HaveFeature( extension, 3, 3 ) )
 	{
 		qboolean loaded = qtrue;
 
@@ -692,7 +712,7 @@ void GLimp_InitExtensions()
 	}
 
 	extension = "GL_KHR_debug";
-	if ( GLimp_HaveExtension( extension ) )
+	if ( GLimp_HaveFeature( extension, 4, 3 ) )
 	{
 		qboolean loaded = qtrue;
 

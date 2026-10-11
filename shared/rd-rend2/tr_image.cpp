@@ -1899,6 +1899,17 @@ static void RawImage_UploadTexture( byte *data, int x, int y, int width, int hei
 		dataFormat = GL_DEPTH_COMPONENT;
 		dataType = GL_UNSIGNED_BYTE;
 		break;
+	// newjk: without GL_ARB_texture_storage these go through glTexImage2D, which
+	// rejects a packed depth-stencil format paired with GL_RGBA data
+	case GL_DEPTH_STENCIL:
+	case GL_DEPTH24_STENCIL8:
+		dataFormat = GL_DEPTH_STENCIL;
+		dataType = GL_UNSIGNED_INT_24_8;
+		break;
+	case GL_DEPTH32F_STENCIL8:
+		dataFormat = GL_DEPTH_STENCIL;
+		dataType = GL_FLOAT_32_UNSIGNED_INT_24_8_REV;
+		break;
 	case GL_R8:
 		dataFormat = GL_RED;
 		dataType = GL_UNSIGNED_BYTE;

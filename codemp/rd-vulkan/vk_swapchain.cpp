@@ -60,6 +60,21 @@ void vk_restart_swapchain( const char *funcname )
     vk_update_post_process_pipelines();
 }
 
+// newjk: whether the window's surface is now a different size from the current swapchain
+qboolean vk_surface_size_changed( void )
+{
+	VkSurfaceCapabilitiesKHR caps;
+
+	if ( qvkGetPhysicalDeviceSurfaceCapabilitiesKHR( vk.physical_device, vk.surface, &caps ) != VK_SUCCESS )
+		return qtrue;
+
+	// the swapchain decides the size, or the window is minimized
+	if ( caps.currentExtent.width == 0xffffffff || caps.currentExtent.width == 0 || caps.currentExtent.height == 0 )
+		return qfalse;
+
+	return (qboolean)( caps.currentExtent.width != gls.windowWidth || caps.currentExtent.height != gls.windowHeight );
+}
+
 static const char *vk_pmode_to_str( VkPresentModeKHR mode )
 {
     static char buf[32];
@@ -97,12 +112,18 @@ void vk_create_swapchain( VkPhysicalDevice physical_device, VkDevice device,
         image_extent.height = MIN( surface_caps.maxImageExtent.height, MAX( surface_caps.minImageExtent.height, (uint32_t)glConfig.vidHeight ) );
     }
 
-    // Minimization can set the window size to 0 when a swapchain restart is triggered, which results in a GPU crash later.
-	// Window resizing below the gls window size also results in the same issue, though of course that's not normally possible.
-	// With this clamping, new frames still aren't displayed while the window is too small, but that shouldn't matter while
-	// minimized. If windowed mode resizing is ever implemented later then something more dynamic needs to be setup anyway.
-	if ( image_extent.width < gls.windowWidth) image_extent.width = gls.windowWidth;
-	if ( image_extent.height < gls.windowHeight) image_extent.height = gls.windowHeight;
+	/*
+	newjk: a minimized window reports a 0x0 surface, which can't back a swapchain (and leads to a GPU
+	crash later), so keep the last size until it's restored. Any other size must be used exactly: on
+	Windows the surface's min/max/current extents are all equal, and a swapchain of any other size is
+	reported out of date/suboptimal on every present, restarting it every frame (black screen). This
+	also lets the size come back down after a briefly larger surface during startup (fullscreen mode
+	switch, DPI-scaled initial window), since gls is synced to whatever extent is used below.
+	*/
+	if ( image_extent.width == 0 || image_extent.height == 0 ) {
+		image_extent.width = gls.windowWidth;
+		image_extent.height = gls.windowHeight;
+	}
 
 	// gls.windowWidth/Height is otherwise only ever set once, from the requested render
 	// resolution (glConfig.vidWidth/vidHeight), and never re-synced from the actual Vulkan
@@ -205,6 +226,9 @@ void vk_create_swapchain( VkPhysicalDevice physical_device, VkDevice device,
 
     if ( !vk.fboActive )
         desc.imageUsage |= VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT;
+    else if ( surface_caps.supportedUsageFlags & VK_IMAGE_USAGE_TRANSFER_DST_BIT )
+        desc.imageUsage |= VK_IMAGE_USAGE_TRANSFER_DST_BIT; // the splash writes the swapchain image directly
+    vk.swapchainTransferDst = (qboolean)( ( desc.imageUsage & VK_IMAGE_USAGE_TRANSFER_DST_BIT ) != 0 );
 
     desc.imageSharingMode = VK_SHARING_MODE_EXCLUSIVE;
     desc.queueFamilyIndexCount = 0;

@@ -178,6 +178,9 @@ static void vk_render_splash( void )
 	VkImageBlit					imageBlit;
 	float						ratio;
 
+	if ( !vk.swapchainTransferDst )
+		return;	// the swapchain cannot be written to directly
+
 	ratio = ( (float)( SCREEN_WIDTH * glConfig.vidHeight ) / (float)( SCREEN_HEIGHT * glConfig.vidWidth ) );
 
 	// Matches rd-vanilla's R_Splash() exactly: purely a function of the actual

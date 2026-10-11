@@ -416,9 +416,10 @@ void R_AddMD3Surfaces( trRefEntity_t *ent ) {
 				newjk: RF_VOLUMETRIC shades each vertex by its normal against the view axis
 				(ComputeColors), and the VBO path has nowhere to put that - it uploads one
 				baseColor/vertColor pair per stage, not per-vertex colors. Keep those surfaces
-				on the CPU path so they still get the real falloff.
+				on the CPU path so they still get the real falloff. The VBO holds frame 0 only,
+				so vertex-animated models stay there too.
 			*/
-			if ( vk.vboMdvActive && !( ent->e.renderfx & RF_VOLUMETRIC ) )
+			if ( vk.vboMdvActive && model->numFrames == 1 && !( ent->e.renderfx & RF_VOLUMETRIC ) )
 				R_AddDrawSurf( (surfaceType_t *)&model->vboSurfaces[i], shader, fogNum, qfalse );
 			else
 #endif

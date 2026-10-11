@@ -1025,6 +1025,7 @@ typedef struct {
 	qboolean wideLines;
 	qboolean clearAttachment;		// requires VK_IMAGE_USAGE_TRANSFER_DST_BIT
 	qboolean fboActive;
+	qboolean swapchainTransferDst;	// the swapchain images take transfer writes (the splash)
 	qboolean blitEnabled;
 
 	qboolean vboWorldActive;
@@ -1148,6 +1149,7 @@ void		vk_update_post_process_pipelines( void );
 
 // swapchain
 void		vk_restart_swapchain( const char *funcname );
+qboolean	vk_surface_size_changed( void );
 void		vk_destroy_swapchain( void );
 void		vk_create_swapchain( VkPhysicalDevice physical_device, VkDevice device,
 	VkSurfaceKHR surface, VkSurfaceFormatKHR surface_format, VkSwapchainKHR *swapchain);

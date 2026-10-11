@@ -2461,9 +2461,12 @@ static inline void vk_set_ghoul2_vbo_mesh( const CRenderSurface &RS, CRenderable
 	if ( !vk.vboGhoul2Active )
 		return;
 
-	surf->vboMesh = &RS.currentModel->data.glm->vboModels[lod].vboMeshes[RS.surfaceNum];
+	const mdxmVBOModel_t *vboModel = RS.currentModel->data.glm->vboModels ? &RS.currentModel->data.glm->vboModels[lod] : NULL;
+
+	// NULL when the model or this lod built no buffers: the cpu path draws it
+	surf->vboMesh = vboModel && vboModel->vboMeshes ? &vboModel->vboMeshes[RS.surfaceNum] : NULL;
 #ifdef _DEBUG
-	assert( surf->vboMesh != NULL && RS.surfaceNum == surfaceIndex );
+	assert( RS.surfaceNum == surfaceIndex );
 #endif
 }
 #endif

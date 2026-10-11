@@ -355,6 +355,42 @@ static void GetDisplayDPI(float &dpi, float &defaultDpi) {
 #endif
 
 /*
+With GLCONTEXT_NEWEST_CORE the requested version is only a minimum. Some drivers trim
+the advertised extension list for executables they recognize as old games (NVIDIA does
+for jamp.exe), but still grant a newer core context, whose core features cover most of
+what the trimmed extensions would have provided.
+*/
+static SDL_GLContext GLimp_CreateContext( SDL_Window *window, const windowDesc_t *windowDesc )
+{
+	static const int coreVersions[][2] = { {4,6}, {4,5}, {4,4}, {4,3}, {4,2}, {4,1}, {4,0}, {3,3} };
+	const int requested = windowDesc->gl.majorVersion * 10 + windowDesc->gl.minorVersion;
+
+	if ( windowDesc->gl.majorVersion && windowDesc->gl.profile == GLPROFILE_CORE
+		&& ( windowDesc->gl.contextFlags & GLCONTEXT_NEWEST_CORE ) )
+	{
+		for ( size_t i = 0; i < ARRAY_LEN( coreVersions ); i++ )
+		{
+			if ( coreVersions[i][0] * 10 + coreVersions[i][1] <= requested )
+				break;
+
+			SDL_GL_SetAttribute( SDL_GL_CONTEXT_MAJOR_VERSION, coreVersions[i][0] );
+			SDL_GL_SetAttribute( SDL_GL_CONTEXT_MINOR_VERSION, coreVersions[i][1] );
+
+			SDL_GLContext context = SDL_GL_CreateContext( window );
+			if ( context )
+				return context;
+
+			Com_DPrintf( "OpenGL %d.%d core context not available: %s\n", coreVersions[i][0], coreVersions[i][1], SDL_GetError() );
+		}
+
+		SDL_GL_SetAttribute( SDL_GL_CONTEXT_MAJOR_VERSION, windowDesc->gl.majorVersion );
+		SDL_GL_SetAttribute( SDL_GL_CONTEXT_MINOR_VERSION, windowDesc->gl.minorVersion );
+	}
+
+	return SDL_GL_CreateContext( window );
+}
+
+/*
 ===============
 GLimp_SetMode
 ===============
@@ -704,7 +740,7 @@ static rserr_t GLimp_SetMode(glconfig_t *glConfig, const windowDesc_t *windowDes
 
 			if ( windowDesc->api == GRAPHICS_API_OPENGL )
 			{
-				if( ( opengl_context = SDL_GL_CreateContext( screen ) ) == NULL )
+				if( ( opengl_context = GLimp_CreateContext( screen, windowDesc ) ) == NULL )
 				{
 					Com_Printf( "SDL_GL_CreateContext failed: %s\n", SDL_GetError( ) );
 					continue;
