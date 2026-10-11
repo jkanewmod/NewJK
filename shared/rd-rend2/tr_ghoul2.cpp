@@ -1201,7 +1201,7 @@ void G2_TimingModel(
 	}
 	else
 	{
-		time = (currentTime - bone.startTime) / 50.0f;
+		time = ((currentTime - bone.startTime) + G2TimeFraction) / 50.0f;
 	}
 
 	time = Q_max(0.0f, time);
@@ -3372,6 +3372,7 @@ bool G2_NeedsRecalc(CGhoul2Info *ghlInfo,int frameNum)
 	G2_SetupModelPointers(ghlInfo);
 	// not sure if I still need this test, probably
 	if (ghlInfo->mSkelFrameNum!=frameNum||
+		ghlInfo->mSkelFrameFrac!=G2TimeFraction||
 		!ghlInfo->mBoneCache||
 		ghlInfo->mBoneCache->mod!=ghlInfo->currentModel)
 	{
@@ -3383,6 +3384,7 @@ bool G2_NeedsRecalc(CGhoul2Info *ghlInfo,int frameNum)
 		}
 #endif
 		ghlInfo->mSkelFrameNum=frameNum;
+		ghlInfo->mSkelFrameFrac=G2TimeFraction;
 		return true;
 	}
 	return false;
@@ -5150,4 +5152,3 @@ qboolean R_LoadMDXA(model_t *mod, void *buffer, const char *mod_name, qboolean &
 
 	return qtrue;
 }
-

@@ -117,6 +117,7 @@ qboolean CL_GetSnapshot( int snapshotNumber, snapshot_t *snapshot ) {
 		return qfalse;
 	}
 
+
 	// if the entities in the frame have fallen out of their
 	// circular buffer, we can't return it
 	if ( cl.parseEntitiesNum - clSnap->parseEntitiesNum >= MAX_PARSE_ENTITIES ) {
@@ -506,7 +507,7 @@ rescan:
 	Cmd_TokenizeString( s );
 	cmd = Cmd_Argv(0);
 
-	if ( !strcmp( cmd, "disconnect" ) ) {
+	if ( !strcmp( cmd, "disconnect" ) && !clc.demoplaying ) {
 		char strEd[MAX_STRINGED_SV_STRING];
 		CL_CheckSVStringEdRef(strEd, Cmd_Argv(1));
 		Com_Error (ERR_SERVERDISCONNECT, "%s: %s\n", SE_GetString("MP_SVGAME_SERVER_DISCONNECTED"), strEd );
@@ -586,6 +587,8 @@ CL_ShutdonwCGame
 ====================
 */
 void CL_ShutdownCGame( void ) {
+	CL_DemoApiDetach();
+	CL_DemoSetConsumedKeys( NULL, 0 );
 	Key_SetCatcher( Key_GetCatcher( ) & ~KEYCATCH_CGAME );
 
 	if ( !cls.cgameStarted )
@@ -775,7 +778,11 @@ void CL_FirstSnapshot( void ) {
 	if ( cl.snap.snapFlags & SNAPFLAG_NOT_ACTIVE ) {
 		return;
 	}
+	CL_BecomeActive();
+}
 
+// the connection process is over: the client is in the game
+void CL_BecomeActive( void ) {
 	re->RegisterMedia_LevelLoadEnd();
 
 	cls.state = CA_ACTIVE;
@@ -818,11 +825,19 @@ void CL_SetCGameTime( void ) {
 		}
 		if ( cl.newSnapshots ) {
 			cl.newSnapshots = qfalse;
-			CL_FirstSnapshot();
+			if ( clc.demoplaying && cl.snap.valid && ( demoApiServiceDemo || !( cl.snap.snapFlags & SNAPFLAG_NOT_ACTIVE ) ) ) {
+				CL_BecomeActive();	// a game module driving the demo goes active itself; classic playback waits for an active snapshot
+			} else {
+				CL_FirstSnapshot();
+			}
 		}
 		if ( cls.state != CA_ACTIVE ) {
 			return;
 		}
+	}
+
+	if ( CL_DemoApiSetClientTime() ) {
+		return;
 	}
 
 	// if we have gotten to this point, cl.snap is guaranteed to be valid

@@ -37,6 +37,9 @@ void CL_ShutdownUI( void ) {
 
 	cls.uiStarted = qfalse;
 
+	// whoever asked for these is about to be unloaded
+	CL_DemoScan_CancelAll();
+
 	CL_UnbindUI();
 }
 

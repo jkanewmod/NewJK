@@ -26,6 +26,7 @@ along with this program; if not, see <http://www.gnu.org/licenses/>.
 
 #include "client.h"
 #include "cl_cgameapi.h"
+#include "cl_demo_local.h"
 #include "qcommon/stringed_ingame.h"
 
 #ifdef USE_INTERNAL_ZLIB
@@ -389,6 +390,11 @@ void CL_ParseSetGame( msg_t *msg )
 	}
 	newGameDir[i] = 0;
 
+	CL_SetGameDir( newGameDir );
+}
+
+void CL_SetGameDir( const char *newGameDir )
+{
 	if(FS_CheckDirTraversal(newGameDir))
 	{
 		Com_Printf(S_COLOR_YELLOW "WARNING: Server sent invalid fs_game value %s\n", newGameDir);
@@ -409,6 +415,7 @@ void CL_ParseSetGame( msg_t *msg )
 	//Now update the overrides manually
 	MSG_CheckNETFPSFOverrides(qfalse);
 	MSG_CheckNETFPSFOverrides(qtrue);
+	CL_DemoScan_RefreshLayout();
 }
 
 
@@ -511,7 +518,10 @@ CL_ParseGamestate
 ==================
 */
 void CL_ParseGamestate( msg_t *msg ) {
-	S_StopAllSounds();
+
+	if ( clc.demoplaying ) {
+		CL_DemoNoteStreamSegment();
+	}
 
 	int				i;
 	entityState_t	*es;
@@ -525,10 +535,22 @@ void CL_ParseGamestate( msg_t *msg ) {
 	clc.connectPacketCount = 0;
 
 	// wipe local client state
-	CL_ClearState();
+	{
+		char *preservedSharedMemory = clc.demoRewinding ? cl.mSharedMemory : NULL;
+
+		CL_ClearState();
+
+		if ( preservedSharedMemory ) {
+			cl.mSharedMemory = preservedSharedMemory;
+		}
+	}
 
 	// a gamestate always marks a server command sequence
 	clc.serverCommandSequence = MSG_ReadLong( msg );
+
+	if ( clc.demoRewinding ) {
+		clc.lastExecutedServerCommand = clc.serverCommandSequence;
+	}
 
 	// parse all the configstrings and baselines
 	cl.gameState.dataCount = 1;	// leave a 0 at the beginning for uninitialized configstrings
@@ -625,6 +647,34 @@ void CL_ParseGamestate( msg_t *msg ) {
 		// enabling this can cause double loading of a map when connecting to
 		// a server which has a different game directory set
 		//clc.downloadRestart = qtrue;
+	}
+
+	// the table this gamestate establishes, for reconstructing configstrings at any later time
+	if ( clc.demoplaying ) {
+		CL_DemoNoteGamestateParsed();
+	}
+
+	if ( clc.demoRewinding ) {
+		int			thisSegment = CL_DemoParsingSegment();
+		qboolean	sameSegment = (qboolean)( thisSegment >= 0 && thisSegment == CL_DemoLoadedSegment() );
+
+		clc.demoRewinding = qfalse;
+		Cvar_Set( "cl_paused", "0" );
+
+		if ( sameSegment ) {
+			return;			// re-reading the gamestate we are already living in: nothing to load
+		}
+
+		Com_DPrintf( "demo: crossed into a different level instance during a seek "
+			"(segment %d -> %d); loading it rather than skipping.\n",
+			CL_DemoLoadedSegment(), thisSegment );
+		CL_DemoCacheClear();
+		// fall through to the reload below
+	}
+
+	S_StopAllSounds();
+	if ( clc.demoplaying ) {
+		CL_DemoSetLoadedSegment( CL_DemoParsingSegment() );
 	}
 
 	// This used to call CL_StartHunkUsers, but now we enter the download state before loading the
@@ -883,7 +933,7 @@ void CL_ParseServerMessage( msg_t *msg ) {
 			CL_ParseDownload( msg );
 			break;
 		case svc_mapchange:
-			if ( cls.cgameStarted )
+			if ( cls.cgameStarted && !( clc.demoplaying && ( clc.demoRewinding || demoApiAttached ) ) )
 				CGVM_MapChange();
 			break;
 		}

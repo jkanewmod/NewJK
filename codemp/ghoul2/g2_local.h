@@ -114,6 +114,7 @@ public:
 				Array()[i].mBoneCache=0;
 				Array()[i].mTransformedVertsArray=0;
 				Array()[i].mSkelFrameNum=0;
+				Array()[i].mSkelFrameFrac=0.0f;
 				Array()[i].mMeshFrameNum=0;
 			}
 		}
@@ -260,6 +261,8 @@ void		SaveGhoul2InfoArray();
 
 void		G2API_SetTime(int currentTime, int clock);
 int			G2API_GetTime(int argTime);
+
+extern float G2TimeFraction;
 
 qhandle_t	G2API_PrecacheGhoul2Model(const char *fileName);
 

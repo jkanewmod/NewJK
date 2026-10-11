@@ -2667,8 +2667,9 @@ void S_Respatialize( int entityNum, const vec3_t head, matrix3_t axis, int inwat
 				continue;
 			}
 
-			// anything coming from the view entity will always be full volume
-			if (ch->entnum == listener_number) {
+			// anything coming from the view entity will always be full volume; a sentinel listener
+			// (free camera) must not pull every effect sound, which carries ENTITYNUM_NONE, along
+			if (ch->entnum == listener_number && !(ch->fixed_origin && listener_number >= ENTITYNUM_WORLD)) {
 				if (ch->entchannel == CHAN_ANNOUNCERLEFT) {
 					ch->leftvol = ch->master_vol;
 					ch->rightvol = 0;

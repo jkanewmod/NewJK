@@ -248,7 +248,7 @@ typedef struct clientConnection_s {
 	qboolean	downloadRestart;	// if true, we need to do another FS_Restart because we downloaded a pak
 
 	// demo information
-	char		demoName[MAX_QPATH];
+	char		demoName[MAX_OSPATH];
 	qboolean	spDemoRecording;
 	qboolean	demorecording;
 	qboolean	demoplaying;
@@ -262,6 +262,9 @@ typedef struct clientConnection_s {
 
 	float		aviVideoFrameRemainder;
 	float		aviSoundFrameRemainder;
+
+	qboolean	demoRewinding;				// suppresses the cgame reload a gamestate parse would normally cause
+	float		demoTimescaleRemainder;
 
 	// big stuff at end of structure so most offsets are 15 bits or less
 	netchan_t	netchan;
@@ -428,6 +431,16 @@ extern	cvar_t	*cl_showSend;
 extern	cvar_t	*cl_timeNudge;
 extern	cvar_t	*cl_enableTimeNudge;
 extern	cvar_t	*cl_showTimeDelta;
+extern	cvar_t	*cl_demoTimeFrac;
+extern	cvar_t	*cl_demoTimeDebug;
+extern	cvar_t	*cl_demoKeyframeMB;
+#define DEMOKF_BUDGET_MB	64
+void CL_PlayDemo_f( void );
+void CL_DemoRestart_f( void );
+void CL_DemoSeekServer_f( void );
+#ifdef DEMO_DEBUG
+void CL_DemoRawGolden_f( void );
+#endif
 extern	cvar_t	*cl_keycatchLock;
 
 extern	cvar_t	*cl_yawspeed;
@@ -515,6 +528,46 @@ void CL_Vid_Restart_f( void );
 void CL_Snd_Restart_f (void);
 void CL_StartDemoLoop( void );
 void CL_NextDemo( void );
+void CL_DemoCacheClear( void );
+int  CL_DemoParsingSegment( void );
+void CL_DemoNoteStreamSegment( void );
+int  CL_DemoLoadedSegment( void );
+void CL_DemoSetLoadedSegment( int fileOffset );
+
+// the demo playback service -- cg_demoapi.h; implemented in cl_demo_api.cpp
+void CL_DemoApiDetach( void );
+void CL_DemoRelease( void );
+qboolean CL_DemoApiSetClientTime( void );
+qboolean CL_DemoApiGetGameState( gameState_t *gs );
+int  CL_DemoApiGetInfo( demoApiInfo_t *out );
+int  CL_DemoApiLevelStarts( int first, demoApiLevelStart_t *out, int max );
+int  CL_DemoApiFrameClock( demoApiClock_t *out );
+int  CL_DemoApiEvents( demoApiEventCursor_t *c, entityState_t *out );
+void CL_SetGameDir( const char *newGameDir );
+void CL_DemoSetConsumedKeys( const int *keys, int count );
+int  CL_DemoApiEnsure( demoApiEnsure_t *e );
+extern qboolean demoApiServiceDemo;
+int  CL_DemoApiFindSnapshot( int serverTime, int mode );
+int  CL_DemoApiGetSnapshot( int serverTime, snapshot_t *out );
+int  CL_DemoApiCommands( demoApiCmdCursor_t *c );
+void CL_DemoApiSetTimeFraction( float g2Frac, float fxFrac );
+
+// the demo file scanner -- cg_demoscan.h; implemented in cl_demoscan.cpp
+struct demoScanRequest_s;
+struct demoScanResultHeader_s;
+void CL_DemoScan_Init( void );
+void CL_DemoScan_Shutdown( void );
+void CL_DemoScan_CancelAll( void );
+int  CL_DemoScan_Submit( const char *demoPath, const struct demoScanRequest_s *req );
+int  CL_DemoScan_Poll( struct demoScanResultHeader_s *out, int max );
+int  CL_DemoScan_Fetch( int jobId, void *buf, int bufSize );
+int  CL_DemoScan_Control( int op, int jobId, int value );
+void CL_DemoScan_RefreshLayout( void );
+#ifdef DEMO_DEBUG
+int  CL_DemoScan_WaitJob( int jobId, demoScanResultHeader_t *out, int tries );
+#endif
+extern float cl_demoFxTimeFrac;
+void CL_DemoNoteGamestateParsed( void );
 void CL_ReadDemoMessage( void );
 
 void CL_InitDownloads(void);
@@ -647,6 +700,7 @@ qboolean CL_GameCommand( void );
 void CL_CGameRendering( stereoFrame_t stereo );
 void CL_SetCGameTime( void );
 void CL_FirstSnapshot( void );
+void CL_BecomeActive( void );
 void CL_ShaderStateChanged(void);
 
 //

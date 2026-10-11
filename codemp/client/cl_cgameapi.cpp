@@ -25,6 +25,7 @@ along with this program; if not, see <http://www.gnu.org/licenses/>.
 #include "qcommon/timing.h"
 #include "client.h"
 #include "cl_uiapi.h"
+#include "cgame/cg_demoscan.h"
 #include "botlib/botlib.h"
 #include "snd_ambient.h"
 #include "FXExport.h"
@@ -342,6 +343,11 @@ static void CL_GetGlconfig( glconfig_t *glconfig ) {
 }
 
 static void CL_GetGameState( gameState_t *gs ) {
+	// while cgame owns the playhead, the configstrings it sees are the ones in force THERE,
+	// not wherever the decoder happens to have read ahead to
+	if ( CL_DemoApiGetGameState( gs ) ) {
+		return;
+	}
 	*gs = cl.gameState;
 }
 
@@ -1209,6 +1215,15 @@ intptr_t CL_CgameSystemCalls( intptr_t *args ) {
 		CL_SetNextEntityNum( (int)args[1] );
 		return 0;
 
+	case CG_DEMOSCAN_SUBMIT:
+		return CL_DemoScan_Submit( (const char *)VMA(1), (const demoScanRequest_t *)VMA(2) );
+	case CG_DEMOSCAN_POLL:
+		return CL_DemoScan_Poll( (demoScanResultHeader_t *)VMA(1), args[2] );
+	case CG_DEMOSCAN_FETCH:
+		return CL_DemoScan_Fetch( args[1], VMA(2), args[3] );
+	case CG_DEMOSCAN_CONTROL:
+		return CL_DemoScan_Control( args[1], args[2], args[3] );
+
 	case CG_R_GETSURFACECOUNT:
 		return re->GetSurfaceCount();
 
@@ -1304,6 +1319,41 @@ intptr_t CL_CgameSystemCalls( intptr_t *args ) {
 
 	case CG_KEY_SETCATCHER:
 		CL_Key_SetCatcher( args[1] );
+		return 0;
+
+	case CG_KEY_ISBINDINGDOWN:
+		return Key_IsBindingDown( (const char *)VMA(1) );
+
+	case CG_DEMO_GETINFO:
+		return CL_DemoApiGetInfo( (demoApiInfo_t *)VMA(1) );
+
+	case CG_DEMO_ENSURE:
+		return CL_DemoApiEnsure( (demoApiEnsure_t *)VMA(1) );
+
+	case CG_DEMO_LEVELSTARTS:
+		return CL_DemoApiLevelStarts( args[1], (demoApiLevelStart_t *)VMA(2), args[3] );
+
+	case CG_DEMO_FRAMECLOCK:
+		return CL_DemoApiFrameClock( (demoApiClock_t *)VMA(1) );
+
+	case CG_DEMO_EVENTS:
+		return CL_DemoApiEvents( (demoApiEventCursor_t *)VMA(1), (entityState_t *)VMA(2) );
+
+	case CG_KEY_SETCONSUMED:
+		CL_DemoSetConsumedKeys( (const int *)VMA(1), args[2] );
+		return 0;
+
+	case CG_DEMO_FINDSNAPSHOT:
+		return CL_DemoApiFindSnapshot( args[1], args[2] );
+
+	case CG_DEMO_GETSNAPSHOT:
+		return CL_DemoApiGetSnapshot( args[1], (snapshot_t *)VMA(2) );
+
+	case CG_DEMO_COMMANDS:
+		return CL_DemoApiCommands( (demoApiCmdCursor_t *)VMA(1) );
+
+	case CG_DEMO_SETTIMEFRACTION:
+		CL_DemoApiSetTimeFraction( VMF(1), VMF(2) );
 		return 0;
 
 	case CG_KEY_GETKEY:

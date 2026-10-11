@@ -3083,6 +3083,81 @@ void MSG_initHuffman() {
 
 #endif //._USINGNEWHUFFTABLE_
 
+const node_t *MSG_HuffDecodeTree( void ) {
+	byte	scratch[8];
+	msg_t	msg;
+
+	MSG_Init( &msg, scratch, sizeof( scratch ) );	// builds the tree and applies the field overrides, once
+	return msgHuff.decompressor.tree;
+}
+
+int MSG_EntityFieldLayout( int *bitsOut, int maxFields, int *floatIntBitsOut ) {
+	int		i;
+	int		numFields = (int)ARRAY_LEN( entityStateFields );
+	byte	scratch[8];
+	msg_t	msg;
+
+	MSG_Init( &msg, scratch, sizeof( scratch ) );
+
+	if ( numFields > maxFields ) {
+		return 0;
+	}
+	for ( i = 0; i < numFields; i++ ) {
+		bitsOut[i] = entityStateFields[i].bits;
+	}
+	if ( floatIntBitsOut ) {
+		*floatIntBitsOut = FLOAT_INT_BITS;
+	}
+	return numFields;
+}
+
+int MSG_PlayerFieldLayout( int table, int *bitsOut, int maxFields, const char *fieldName, int *fieldIndexOut ) {
+	netField_t	*fields;
+	int			i, numFields;
+	byte		scratch[8];
+	msg_t		msg;
+
+	MSG_Init( &msg, scratch, sizeof( scratch ) );
+
+#ifdef _OPTIMIZED_VEHICLE_NETWORKING
+	if ( table == 1 ) {
+		fields = pilotPlayerStateFields;
+		numFields = (int)ARRAY_LEN( pilotPlayerStateFields );
+	} else if ( table == 2 ) {
+		fields = vehPlayerStateFields;
+		numFields = (int)ARRAY_LEN( vehPlayerStateFields );
+	} else
+#endif
+	{
+		fields = playerStateFields;
+		numFields = (int)ARRAY_LEN( playerStateFields );
+	}
+	if ( numFields > maxFields ) {
+		return 0;
+	}
+	if ( fieldIndexOut ) {
+		*fieldIndexOut = -1;
+	}
+	for ( i = 0; i < numFields; i++ ) {
+		bitsOut[i] = fields[i].bits;
+		if ( fieldIndexOut && fieldName && !strcmp( fields[i].name, fieldName ) ) {
+			*fieldIndexOut = i;
+		}
+	}
+	return numFields;
+}
+
+int MSG_EntityFieldIndex( const char *fieldName ) {
+	int i;
+
+	for ( i = 0; i < (int)ARRAY_LEN( entityStateFields ); i++ ) {
+		if ( !strcmp( entityStateFields[i].name, fieldName ) ) {
+			return i;
+		}
+	}
+	return -1;
+}
+
 void MSG_shutdownHuffman()
 {
 #ifdef _NEWHUFFTABLE_

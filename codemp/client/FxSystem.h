@@ -42,6 +42,10 @@ public:
 	int		mFrameTime;
 	bool	mTimeFrozen;
 	float	mRealTime;
+
+	float	mTimeFrac;
+	float	mFrameTimeF;
+	int		mFrameNum;
 	refdef_t*	refdef;
 #ifdef _DEBUG
 	int		mMainRefs;
@@ -53,6 +57,12 @@ public:
 
 	inline	int	GetTime(void) { return mTime; }
 	inline	int	GetFrameTime(void) { return mFrameTime; }
+
+	inline	float	Since( int start ) const { return (float)( mTime - start ) + mTimeFrac; }
+	inline	float	Until( int end )   const { return (float)( end - mTime ) - mTimeFrac; }
+	// parm times are fractional; done in double so the whole and the fractional parts don't cancel
+	inline	float	Since( float start ) const { return (float)( (double)mTime + (double)mTimeFrac - (double)start ); }
+	inline	float	Until( float end )   const { return (float)( (double)end - (double)mTime - (double)mTimeFrac ); }
 
 	void	ReInit(refdef_t* pRefdef);
 	void	AdjustTime( int time );

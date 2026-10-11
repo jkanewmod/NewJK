@@ -584,6 +584,7 @@ void	FS_InitFilesystem (void);
 void	FS_Shutdown( qboolean closemfp );
 
 qboolean	FS_ConditionalRestart( int checksumFeed );
+qboolean	FS_ResolveDirFile( const char *qpath, char *out, int outSize );
 void	FS_Restart( int checksumFeed );
 // shutdown and restart the filesystem so changes to fs_gamedir can take effect
 
@@ -783,6 +784,7 @@ extern	cvar_t	*com_developer;
 extern	cvar_t	*com_dedicated;
 extern	cvar_t	*com_speeds;
 extern	cvar_t	*com_timescale;
+extern	cvar_t	*com_fixedtime;
 extern	cvar_t	*com_sv_running;
 extern	cvar_t	*com_cl_running;
 extern	cvar_t	*com_version;
@@ -814,6 +816,8 @@ extern	int		time_frontend;
 extern	int		time_backend;		// renderer backend time
 
 extern	int		com_frameTime;
+
+extern	int		com_frameMsecRaw;
 
 extern	qboolean	com_errorEntered;
 
@@ -1048,6 +1052,13 @@ void	Huff_offsetReceive (node_t *node, int *ch, byte *fin, int *offset);
 void	Huff_offsetTransmit (huff_t *huff, int ch, byte *fout, int *offset);
 void	Huff_putBit( int bit, byte *fout, int *offset);
 int		Huff_getBit( byte *fout, int *offset);
+
+// what a reader that keeps its own bit cursor needs in order to decode messages without going
+// through the MSG_Read* functions, which share one. Both are fixed once initialized.
+const node_t	*MSG_HuffDecodeTree( void );
+int		MSG_EntityFieldLayout( int *bitsOut, int maxFields, int *floatIntBitsOut );
+int		MSG_PlayerFieldLayout( int table, int *bitsOut, int maxFields, const char *fieldName, int *fieldIndexOut );
+int		MSG_EntityFieldIndex( const char *fieldName );
 
 extern huffman_t clientHuffTables;
 

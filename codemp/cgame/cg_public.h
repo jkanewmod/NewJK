@@ -25,6 +25,8 @@ along with this program; if not, see <http://www.gnu.org/licenses/>.
 
 #define	CGAME_API_VERSION		2
 
+#include "cg_demoapi.h"
+
 #define	CMD_BACKUP			512
 #define	CMD_MASK			(CMD_BACKUP - 1)
 // allow a lot of command backups for very fast systems
@@ -446,7 +448,27 @@ typedef enum cgameImportLegacy_e {
 	// see R_SetNextEntityNum in cgameImport_s below
 	CG_R_SETNEXTENTITYNUM,
 	// draw surfaces the backend handled last frame; see GetSurfaceCount in tr_public.h
-	CG_R_GETSURFACECOUNT
+	CG_R_GETSURFACECOUNT,
+	CG_KEY_ISBINDINGDOWN,
+
+	// the demo playback service: cg_demoapi.h
+	CG_DEMO_GETINFO,			// ( demoApiInfo_t *out ) -> qboolean
+	CG_DEMO_ENSURE,				// ( demoApiEnsure_t *inout ) -> qboolean
+	CG_DEMO_FINDSNAPSHOT,		// ( int serverTime, int mode ) -> serverTime of the match, or -1
+	CG_DEMO_GETSNAPSHOT,		// ( int serverTime, snapshot_t *out ) -> qboolean; exact time only
+	CG_DEMO_COMMANDS,			// ( demoApiCmdCursor_t *cursor ) -> qboolean; tokenized for CG_Argv
+	CG_DEMO_SETTIMEFRACTION,	// ( float g2Fraction, float fxFraction )
+	CG_DEMO_LEVELSTARTS,		// ( int first, demoApiLevelStart_t *out, int max ) -> count
+	CG_DEMO_FRAMECLOCK,			// ( demoApiClock_t *out ) -> qboolean
+
+	// the demo file scanner: cg_demoscan.h, the same service as UI_DEMOSCAN_*
+	CG_DEMOSCAN_SUBMIT,			// ( const char *demoPath, const demoScanRequest_t *req ) -> jobId, 0 = refused
+	CG_DEMOSCAN_POLL,			// ( demoScanResultHeader_t *out, int max ) -> count
+	CG_DEMOSCAN_FETCH,			// ( int jobId, void *buf, int bufSize ) -> bytes copied; the job is gone afterwards
+	CG_DEMOSCAN_CONTROL,		// ( int op, int jobId, int value ) -> depends on op
+
+	CG_KEY_SETCONSUMED,			// ( const int *keys, int count ): during demo playback their binds do not run
+	CG_DEMO_EVENTS				// ( demoApiEventCursor_t *cursor, entityState_t *out ) -> qboolean
 } cgameImportLegacy_t;
 
 typedef enum cgameExportLegacy_e {

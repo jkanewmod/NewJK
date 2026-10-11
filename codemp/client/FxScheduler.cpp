@@ -881,6 +881,25 @@ void CFxScheduler::PlayEffect( int id, vec3_t origin, matrix3_t axis, const int 
 		}
 	}
 
+	// slow motion: an effect played on every rendered frame (missile trails, confusion) spawns at
+	// most once per effect millisecond, as with a whole-millisecond clock; one-shots still play
+	if ( theFxHelper.mFrameTimeF < 1.0f )
+	{
+		static int		playedFrame[FX_MAX_EFFECTS];
+		static double	playedAt[FX_MAX_EFFECTS];
+		double			now = (double)theFxHelper.mTime + theFxHelper.mTimeFrac;
+
+		if ( playedFrame[id] != theFxHelper.mFrameNum )
+		{
+			if ( now >= playedAt[id] && now - playedAt[id] < 1.0 )
+			{
+				return;
+			}
+			playedFrame[id] = theFxHelper.mFrameNum;
+			playedAt[id] = now;
+		}
+	}
+
 	// Get the effect.
 	fx = &mEffectTemplates[id];
 

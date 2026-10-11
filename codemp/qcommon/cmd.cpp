@@ -70,10 +70,11 @@ extern int com_frameNumber;
 struct PendingCommand {
 	const std::string cmd;
 	const bool useFrameNumber;
+	const bool realTime;		// delayr: wall-clock milliseconds, unaffected by timescale
 	const int when;
-	bool inExecution = false;
-	PendingCommand(const char *cmd, int len, bool useFrameNumber, int delay) :
-		cmd(cmd, len), useFrameNumber(useFrameNumber), when(delay + (useFrameNumber ? com_frameNumber : Com_Milliseconds())) {};
+	PendingCommand(const char *cmd, int len, bool useFrameNumber, bool realTime, int delay) :
+		cmd(cmd, len), useFrameNumber(useFrameNumber), realTime(realTime),
+		when(delay + (useFrameNumber ? com_frameNumber : (realTime ? Sys_Milliseconds() : Com_Milliseconds()))) {};
 };
 
 std::list<PendingCommand> pendingCommandsList;
@@ -86,6 +87,11 @@ static void Cmd_Delay_f() {
 // this will only run if waitf didn't get picked up in Cbuf_Execute, i.e. they didn't type a valid argument
 static void Cmd_Waitf_f() {
 	Com_Printf("Usage:   waitf [number of frames to wait];[other commands]\nExample: action 1;waitf 2;action 2\n");
+}
+
+// this will only run if delayr didn't get picked up in Cbuf_Execute, i.e. they didn't type a valid argument
+static void Cmd_Delayr_f() {
+	Com_Printf("Usage:   delayr [num of REAL milliseconds to wait, ignoring timescale];[other commands]\n");
 }
 
 static void CancelPendingCommands(bool useFrameNumber) {
@@ -103,7 +109,7 @@ static void CancelPendingCommands(bool useFrameNumber) {
 	char *args = Cmd_Args();
 
 	for (auto it = pendingCommandsList.begin(); it != pendingCommandsList.end();) {
-		if (it->inExecution || it->useFrameNumber != useFrameNumber || (VALIDSTRING(args) && !Q_stristr(it->cmd.c_str(), args))) {
+		if (it->useFrameNumber != useFrameNumber || (VALIDSTRING(args) && !Q_stristr(it->cmd.c_str(), args))) {
 			++it;
 			continue;
 		}
@@ -224,24 +230,30 @@ void Cbuf_ExecuteText (int exec_when, const char *text)
 	}
 }
 
+static bool Cbuf_PendingDue(const PendingCommand &p) {
+	if (p.useFrameNumber)
+		return com_frameNumber >= p.when;
+	return (p.realTime ? Sys_Milliseconds() : Com_Milliseconds()) >= p.when;
+}
+
 void Cbuf_CheckPending() {
-	if (!pendingCommandsList.size())
-		return;
-
-	for (auto it = pendingCommandsList.begin(); it != pendingCommandsList.end();) {
-		if ((it->useFrameNumber && com_frameNumber < it->when) || (!it->useFrameNumber && Com_Milliseconds() < it->when)) {
+	// one at a time, rescanning after each: a command can add or cancel pending entries
+	size_t budget = pendingCommandsList.size();
+	while (budget-- > 0 && !pendingCommandsList.empty()) {
+		auto it = pendingCommandsList.begin();
+		while (it != pendingCommandsList.end() && !Cbuf_PendingDue(*it))
 			++it;
-			continue;
-		}
+		if (it == pendingCommandsList.end())
+			return;
 
-		Cbuf_AddText(it->cmd.c_str());
+		std::string cmd = it->cmd;
+		pendingCommandsList.erase(it);
+
+		Cbuf_AddText(cmd.c_str());
 
 		if (cmd_wait <= 0) {
-			it->inExecution = true;
 			Cbuf_Execute();
 		}
-
-		it = pendingCommandsList.erase(it);
 	}
 }
 
@@ -288,13 +300,17 @@ void Cbuf_Execute (void)
 		if (cmd_text.cursize >= 7) {
 			while (p - text < cmd_text.cursize && ( *p == ' ' || *p == '\t')) ++p; // skip leading whitespace
 			if (p - text < cmd_text.cursize) {
-				bool delay = false, waitf = false;
-				if (!Q_stricmpn(p, "delay", 5))
+				bool delay = false, waitf = false, realTime = false;
+				if (!Q_stricmpn(p, "delayr", 6)) {
+					delay = true;
+					realTime = true;
+				}
+				else if (!Q_stricmpn(p, "delay", 5))
 					delay = true;
 				else if (!Q_stricmpn(p, "waitf", 5))
 					waitf = true;
 				if (delay || waitf) {
-					p += 5;
+					p += realTime ? 6 : 5;
 					if (*p == ' ' || *p == '\t' || *p == '\n' || *p == '\r') {
 						while (p - text < cmd_text.cursize && (*p == ' ' || *p == '\t')) ++p; // skip whitespace between delay and whatever follows
 
@@ -317,7 +333,7 @@ void Cbuf_Execute (void)
 
 								if (gotSemicolonOrNewline && *p && p - text < cmd_text.cursize) {
 									// add this to the list of pending commands
-									pendingCommandsList.emplace_back(p, cmd_text.cursize - (p - text), waitf, num);
+									pendingCommandsList.emplace_back(p, cmd_text.cursize - (p - text), waitf, realTime, num);
 									cmd_text.cursize = 0;
 									return;
 								}
@@ -1184,6 +1200,7 @@ void Cmd_Init (void) {
 	Cmd_SetCommandCompletionFunc( "vstr", Cvar_CompleteCvarName );
 	Cmd_AddCommand( "wait", Cmd_Wait_f, "Pause command buffer execution" );
 	Cmd_AddCommand( "delay", Cmd_Delay_f, "Wait a specified number of milliseconds before executing whatever is entered afterward" );
+	Cmd_AddCommand( "delayr", Cmd_Delayr_f, "Like delay, but in real milliseconds unaffected by timescale" );
 	Cmd_AddCommand( "delaycancel", Cmd_DelayCancel_f, "Cancel a pending delay" );
 	Cmd_AddCommand( "waitf", Cmd_Waitf_f, "Wait a specified number of frames, without pausing all command execution, before executing whatever is entered afterward" );
 	Cmd_AddCommand( "waitfcancel", Cmd_WaitfCancel_f, "Cancel a pending waitf" );

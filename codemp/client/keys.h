@@ -81,3 +81,4 @@ qboolean	Key_GetOverstrikeMode	( void );
 void		Key_SetOverstrikeMode	( qboolean state );
 void		Key_ClearStates			( void );
 int			Key_GetKey				( const char *binding );
+qboolean	Key_IsBindingDown		( const char *binding );

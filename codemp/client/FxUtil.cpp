@@ -266,7 +266,7 @@ CParticle *FX_AddParticle( vec3_t org, vec3_t vel, vec3_t accel, float size1, fl
 							EMatImpactEffect matImpactFX /*MATIMPACTFX_NONE*/, int fxParm /*-1*/,
 							CGhoul2Info_v *ghoul2/*0*/, int entNum/*-1*/, int modelNum/*-1*/, int boltNum/*-1*/ )
 {
-	if ( theFxHelper.mFrameTime < 1 )
+	if ( theFxHelper.mFrameTimeF <= 0.0f )
 	{ // disallow adding effects when the system is paused
 		return 0;
 	}
@@ -361,7 +361,7 @@ CLine *FX_AddLine( vec3_t start, vec3_t end, float size1, float size2, float siz
 									EMatImpactEffect matImpactFX /*MATIMPACTFX_NONE*/, int fxParm /*-1*/,
 									CGhoul2Info_v *ghoul2/*0*/, int entNum/*-1*/, int modelNum/*-1*/, int boltNum/*-1*/)
 {
-	if ( theFxHelper.mFrameTime < 1 )
+	if ( theFxHelper.mFrameTimeF <= 0.0f )
 	{ // disallow adding new effects when the system is paused
 		return 0;
 	}
@@ -447,7 +447,7 @@ CElectricity *FX_AddElectricity( vec3_t start, vec3_t end, float size1, float si
 								EMatImpactEffect matImpactFX /*MATIMPACTFX_NONE*/, int fxParm /*-1*/,
 								CGhoul2Info_v *ghoul2/*0*/, int entNum/*-1*/, int modelNum/*-1*/, int boltNum/*-1*/ )
 {
-	if ( theFxHelper.mFrameTime < 1 )
+	if ( theFxHelper.mFrameTimeF <= 0.0f )
 	{ // disallow adding new effects when the system is paused
 		return 0;
 	}
@@ -543,7 +543,7 @@ CTail *FX_AddTail( vec3_t org, vec3_t vel, vec3_t accel,
 							EMatImpactEffect matImpactFX /*MATIMPACTFX_NONE*/, int fxParm /*-1*/,
 							CGhoul2Info_v *ghoul2/*0*/, int entNum/*-1*/, int modelNum/*-1*/, int boltNum/*-1*/ )
 {
-	if ( theFxHelper.mFrameTime < 1 )
+	if ( theFxHelper.mFrameTimeF <= 0.0f )
 	{ // disallow adding effects when the system is paused
 		return 0;
 	}
@@ -650,7 +650,7 @@ CCylinder *FX_AddCylinder( vec3_t start, vec3_t normal,
 							CGhoul2Info_v *ghoul2/*0*/, int entNum/*-1*/, int modelNum/*-1*/, int boltNum/*-1*/,
 							qboolean traceEnd)
 {
-	if ( theFxHelper.mFrameTime < 1 )
+	if ( theFxHelper.mFrameTimeF <= 0.0f )
 	{ // disallow adding new effects when the system is paused
 		return 0;
 	}
@@ -766,7 +766,7 @@ CEmitter *FX_AddEmitter( vec3_t org, vec3_t vel, vec3_t accel,
 								EMatImpactEffect matImpactFX /*MATIMPACTFX_NONE*/, int fxParm /*-1*/,
 								CGhoul2Info_v *ghoul2/*0*/, int entNum/*-1*/, int modelNum/*-1*/, int boltNum/*-1*/ )
 {
-	if ( theFxHelper.mFrameTime < 1 )
+	if ( theFxHelper.mFrameTimeF <= 0.0f )
 	{ // disallow adding effects when the system is paused
 		return 0;
 	}
@@ -858,7 +858,7 @@ CLight *FX_AddLight( vec3_t org, float size1, float size2, float sizeParm,
 							EMatImpactEffect matImpactFX /*MATIMPACTFX_NONE*/, int fxParm /*-1*/,
 							CGhoul2Info_v *ghoul2/*0*/, int entNum/*-1*/, int modelNum/*-1*/, int boltNum/*-1*/)
 {
-	if ( theFxHelper.mFrameTime < 1 )
+	if ( theFxHelper.mFrameTimeF <= 0.0f )
 	{ // disallow adding effects when the system is paused
 		return 0;
 	}
@@ -931,7 +931,7 @@ COrientedParticle *FX_AddOrientedParticle( vec3_t org, vec3_t norm, vec3_t vel, 
 						EMatImpactEffect matImpactFX /*MATIMPACTFX_NONE*/, int fxParm /*-1*/,
 						CGhoul2Info_v *ghoul2/*0*/, int entNum/*-1*/, int modelNum/*-1*/, int boltNum/*-1*/ )
 {
-	if ( theFxHelper.mFrameTime < 1 )
+	if ( theFxHelper.mFrameTimeF <= 0.0f )
 	{ // disallow adding effects when the system is paused
 		return 0;
 	}
@@ -1024,7 +1024,7 @@ CPoly *FX_AddPoly( vec3_t *verts, vec2_t *st, int numVerts,
 							vec3_t rotationDelta, float bounce, int motionDelay,
 							int killTime, qhandle_t shader, int flags )
 {
-	if ( theFxHelper.mFrameTime < 1 || !verts )
+	if ( theFxHelper.mFrameTimeF <= 0.0f || !verts )
 	{ // disallow adding effects when the system is paused or the user doesn't pass in a vert array
 		return 0;
 	}
@@ -1097,7 +1097,7 @@ CFlash *FX_AddFlash( vec3_t origin,
 					int killTime, qhandle_t shader, int flags,
 					EMatImpactEffect matImpactFX /*MATIMPACTFX_NONE*/, int fxParm /*-1*/ )
 {
-	if ( theFxHelper.mFrameTime < 1 )
+	if ( theFxHelper.mFrameTimeF <= 0.0f )
 	{ // disallow adding new effects when the system is paused
 		return 0;
 	}
@@ -1180,7 +1180,7 @@ CBezier *FX_AddBezier( vec3_t start, vec3_t end,
 								vec3_t sRGB, vec3_t eRGB, float rgbParm,
 								int killTime, qhandle_t shader, int flags )
 {
-	if ( theFxHelper.mFrameTime < 1 )
+	if ( theFxHelper.mFrameTimeF <= 0.0f )
 	{ // disallow adding new effects when the system is paused
 		return 0;
 	}

@@ -156,9 +156,17 @@ qboolean G2_TestModelPointers(CGhoul2Info *ghlInfo);
 #define NUM_G2T_TIME (2)
 static int G2TimeBases[NUM_G2T_TIME];
 
+// sub-millisecond remainder of the clock above -- see g2_local.h for why it exists
+float G2TimeFraction = 0.0f;
+
 void G2API_SetTime(int currentTime,int clock)
 {
 	assert(clock>=0&&clock<NUM_G2T_TIME);
+
+	G2TimeFraction = ri->Cvar_VariableValue( "cl_demoTimeFrac" );
+	if ( !( G2TimeFraction >= 0.0f && G2TimeFraction < 1.0f ) ) {
+		G2TimeFraction = 0.0f;	// also catches NaN, which would poison every bone
+	}
 #if G2_DEBUG_TIME
 	ri->Printf( PRINT_ALL, "Set Time: before c%6d  s%6d",G2TimeBases[1],G2TimeBases[0]);
 #endif

@@ -79,6 +79,7 @@ int		time_backend;		// renderer backend time
 
 int			com_frameTime;
 int			com_frameNumber;
+int			com_frameMsecRaw;
 
 qboolean	com_errorEntered = qfalse;
 qboolean	com_fullyInitialized = qfalse;
@@ -1262,6 +1263,8 @@ void Com_Init( char *commandLine ) {
 		com_logfile = Cvar_Get ("logfile", "0", CVAR_TEMP );
 
 		com_timescale = Cvar_Get ("timescale", "1", CVAR_CHEAT | CVAR_SYSTEMINFO );
+		// negative: backward demo playback
+		Cvar_CheckRange( com_timescale, -20.0f, 1000000.0f, qfalse );
 		com_fixedtime = Cvar_Get ("fixedtime", "0", CVAR_CHEAT);
 		com_showtrace = Cvar_Get ("com_showtrace", "0", CVAR_CHEAT);
 
@@ -1443,6 +1446,10 @@ int Com_ModifyMsec( int msec ) {
 		msec *= com_timescale->value;
 	}
 
+	if ( msec < 0 ) {
+		msec = 0;
+	}
+
 	// don't let it scale below 1 msec
 	if ( msec < 1 && com_timescale->value) {
 		msec = 1;
@@ -1579,6 +1586,7 @@ void Com_Frame( void ) {
 		com_frameTime = Com_EventLoop();
 
 		msec = com_frameTime - lastTime;
+		com_frameMsecRaw = msec;
 
 		Cbuf_Execute ();
 		Cbuf_CheckPending();

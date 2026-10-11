@@ -268,6 +268,7 @@ public:
 	char			mFileName[MAX_QPATH];
 	int				mAnimFrameDefault;
 	int				mSkelFrameNum;
+	float			mSkelFrameFrac;	// the sub-ms term the skeleton was built with, see G2_NeedsRecalc
 	int				mMeshFrameNum;
 	int				mFlags;	// used for determining whether to do full collision detection against this object
 // to here
@@ -302,6 +303,7 @@ public:
 	mModel(0),
 	mAnimFrameDefault(0),
 	mSkelFrameNum(-1),
+	mSkelFrameFrac(0.0f),
 	mMeshFrameNum(-1),
 	mFlags(0),
 	mTransformedVertsArray(0),

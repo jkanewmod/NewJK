@@ -599,7 +599,7 @@ public:
 	vec2_t	mST[MAX_CPOLY_VERTS];
 
 	float	mRot[3][3];
-	int		mLastFrameTime;
+	float	mLastFrameTime;
 
 
 	CPoly() {}

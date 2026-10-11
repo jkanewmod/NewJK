@@ -36,6 +36,10 @@ set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
 option(BuildPortableVersion "Build portable version (does not read or write files from your user/home directory" OFF)
 
 option(BuildMPEngine "Whether to create projects for the MP client (openjk.exe)" ON)
+option(BuildDemoDebug "Compile the demo playback diagnostics (cl_demoTimeDebug) into the MP client" OFF)
+if(BuildDemoDebug)
+	add_definitions(-DDEMO_DEBUG)
+endif()
 option(BuildMPRdVanilla "Whether to create projects for the MP default renderer (rd-vanilla_x86.dll)" ON)
 # both new backends build by default; which one actually loads is chosen at runtime by cl_renderer
 option(BuildMPRdVulkan "Whether to create projects for the MP vulkan renderer (rd-vulkan_x86.dll)" ON)

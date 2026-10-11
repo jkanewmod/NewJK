@@ -31,6 +31,7 @@ along with this program; if not, see <http://www.gnu.org/licenses/>.
  *****************************************************************************/
 
 #include "qcommon/qcommon.h"
+#include <sys/stat.h>
 
 #ifndef DEDICATED
 #ifndef FINAL_BUILD
@@ -780,6 +781,32 @@ search the paths.  This is to determine if opening a file to write
 NOTE TTimo: this goes with FS_FOpenFileWrite for opening the file afterwards
 ================
 */
+/*
+================
+FS_ResolveDirFile
+
+The os path of a loose file, from the first directory in the search order that has it (paks are
+not looked in). qfalse when none does.
+================
+*/
+qboolean FS_ResolveDirFile( const char *qpath, char *out, int outSize )
+{
+	searchpath_t	*sp;
+	struct stat		st;
+
+	for ( sp = fs_searchpaths; sp; sp = sp->next ) {
+		if ( sp->dir ) {
+			// FS_BuildOSPath answers from a rotating static buffer: copy it before anything else can ask
+			Q_strncpyz( out, FS_BuildOSPath( sp->dir->path, sp->dir->gamedir, qpath ), outSize );
+			if ( stat( out, &st ) == 0 && !( st.st_mode & S_IFDIR ) ) {
+				return qtrue;
+			}
+		}
+	}
+	out[0] = '\0';
+	return qfalse;
+}
+
 qboolean FS_FileExists( const char *file )
 {
 	return FS_FileInPathExists(FS_BuildOSPath(fs_homepath->string, fs_gamedir, file));

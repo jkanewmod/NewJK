@@ -41,6 +41,9 @@ SFxHelper::SFxHelper() :
 	mOldTime(0),
 	mFrameTime(0),
 	mTimeFrozen(false),
+	mTimeFrac(0.0f),
+	mFrameTimeF(0.0f),
+	mFrameNum(0),
 	refdef(0)
 {
 }
@@ -50,6 +53,8 @@ void SFxHelper::ReInit(refdef_t* pRefdef)
 	mTime = 0;
 	mOldTime = 0;
 	mFrameTime = 0;
+	mTimeFrac = 0.0f;
+	mFrameTimeF = 0.0f;
 	mTimeFrozen = false;
 	refdef = pRefdef;
 }
@@ -70,6 +75,7 @@ void SFxHelper::Print( const char *msg, ... )
 //------------------------------------------------------
 void SFxHelper::AdjustTime( int frametime )
 {
+	mFrameNum++;
 #ifdef _DEBUG
 	if ( fx_freeze->integer || ( frametime <= 0 ))
 #else
@@ -78,15 +84,27 @@ void SFxHelper::AdjustTime( int frametime )
 	{
 		// Allow no time progression when we are paused.
 		mFrameTime = 0;
+		mFrameTimeF = 0.0f;
 		mRealTime = 0.0f;
 	}
 	else
 	{
+		float	oldFrac = mTimeFrac;
+
 		mOldTime = mTime;
 		mTime = frametime;
 		mFrameTime = mTime - mOldTime;
 
-		mRealTime = mFrameTime * 0.001f;
+		// the fraction of the clock cgame feeds this system, whichever clock that is -- see
+		// CL_DemoApiSetTimeFraction; zero outside demo playback
+		mTimeFrac = clc.demoplaying ? cl_demoFxTimeFrac : 0.0f;
+
+		mFrameTimeF = (float)mFrameTime + ( mTimeFrac - oldFrac );
+		if ( mFrameTimeF < 0.0f ) {
+			mFrameTimeF = 0.0f;
+		}
+
+		mRealTime = mFrameTimeF * 0.001f;
 
 
 /*		mFrameTime = frametime;

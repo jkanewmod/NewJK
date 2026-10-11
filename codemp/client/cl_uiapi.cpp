@@ -28,6 +28,7 @@ along with this program; if not, see <http://www.gnu.org/licenses/>.
 #include "snd_ambient.h"
 #include "FXExport.h"
 #include "FxUtil.h"
+#include "cgame/cg_demoscan.h"
 
 extern IHeapAllocator *G2VertSpaceClient;
 extern botlib_export_t *botlib_export;
@@ -1286,6 +1287,18 @@ intptr_t CL_UISystemCalls( intptr_t *args ) {
 	case UI_R_FONT_DRAWSTRING_FLOAT:
 		re->Font_DrawString_Float(VMF(1), VMF(2), (const char *)VMA(3), (const float *)VMA(4), args[5], args[6], VMF(7));
 		return 0;
+
+	case UI_DEMOSCAN_SUBMIT:
+		return CL_DemoScan_Submit( (const char *)VMA(1), (const demoScanRequest_t *)VMA(2) );
+
+	case UI_DEMOSCAN_POLL:
+		return CL_DemoScan_Poll( (demoScanResultHeader_t *)VMA(1), args[2] );
+
+	case UI_DEMOSCAN_FETCH:
+		return CL_DemoScan_Fetch( args[1], VMA(2), args[3] );
+
+	case UI_DEMOSCAN_CONTROL:
+		return CL_DemoScan_Control( args[1], args[2], args[3] );
 
 	default:
 		Com_Error( ERR_DROP, "Bad UI system trap: %ld", (long int) args[0] );

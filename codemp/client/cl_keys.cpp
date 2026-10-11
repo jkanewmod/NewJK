@@ -1263,6 +1263,29 @@ int Key_GetKey( const char *binding ) {
 
 /*
 ===================
+Key_IsBindingDown
+
+Unlike Key_GetKey (which returns only the first key found bound to a command,
+by scan order -- not necessarily any key a player actually uses, since a
+command can legitimately be bound to more than one physical key at once, e.g.
+default configs binding both WASD and comma/period to strafe), this checks
+every key bound to the given command and reports true if any of them is
+currently held.
+===================
+*/
+qboolean Key_IsBindingDown( const char *binding ) {
+	if ( binding ) {
+		for ( int i=0; i<MAX_KEYS; i++ ) {
+			if ( kg.keys[i].binding[BINDINGMOD_NONE] && !Q_stricmp( binding, kg.keys[i].binding[BINDINGMOD_NONE] ) && Key_IsDown( i ) )
+				return qtrue;
+		}
+	}
+
+	return qfalse;
+}
+
+/*
+===================
 Key_Unbind_f
 ===================
 */
@@ -1559,12 +1582,48 @@ CL_ParseBinding
 Execute the commands in the bind string
 ===================
 */
+// keys the game module handles itself during demo playback: their binds do not run
+static qboolean	demoKeyConsumed[MAX_KEYS];
+static qboolean	demoKeyDownConsumed[MAX_KEYS];	// the up follows the verdict its down got
+
+void CL_DemoSetConsumedKeys( const int *keys, int count ) {
+	int i;
+
+	Com_Memset( demoKeyConsumed, 0, sizeof( demoKeyConsumed ) );
+	for ( i = 0; keys && i < count; i++ ) {
+		if ( keys[i] > 0 && keys[i] < MAX_KEYS ) {
+			demoKeyConsumed[keys[i]] = qtrue;
+		}
+	}
+}
+
+static qboolean CL_DemoKeyConsumesBind( int key, qboolean down ) {
+	if ( key < 0 || key >= MAX_KEYS ) {
+		return qfalse;
+	}
+	if ( down ) {
+		// decided on the press only: a repeat must not flip a key whose "+" bind already ran
+		if ( kg.keys[keynames[key].upper].repeats <= 1 ) {
+			demoKeyDownConsumed[key] = (qboolean)( clc.demoplaying && demoKeyConsumed[key] );
+		}
+		return demoKeyDownConsumed[key];
+	}
+	if ( demoKeyDownConsumed[key] ) {
+		demoKeyDownConsumed[key] = qfalse;
+		return qtrue;
+	}
+	return qfalse;
+}
+
 void CL_ParseBinding( int key, qboolean down, unsigned time )
 {
 	char buf[ MAX_STRING_CHARS ], *p = buf, *end;
 	qboolean allCommands, allowUpCmds;
 
 	if( cls.state == CA_DISCONNECTED && Key_GetCatcher( ) == 0 )
+		return;
+
+	if ( CL_DemoKeyConsumesBind( key, down ) )
 		return;
 
 	// for rshift/ralt/rctrl, prefer the specific rshift/rctrl/ralt bind if
@@ -1603,7 +1662,7 @@ void CL_ParseBinding( int key, qboolean down, unsigned time )
 	Q_strncpyz(buf, binding, sizeof(buf));
 
 	// run all bind commands if console, ui, etc aren't reading keys
-	allCommands = (qboolean)( Key_GetCatcher( ) == 0 );
+	allCommands = (qboolean)( ( Key_GetCatcher( ) & ~( clc.demoplaying ? KEYCATCH_CGAME : 0 ) ) == 0 );
 
 	// allow button up commands if in game even if key catcher is set
 	allowUpCmds = (qboolean)( cls.state != CA_DISCONNECTED );
@@ -1758,11 +1817,15 @@ void CL_KeyDownEvent( int key, unsigned time )
 		if ( Key_GetCatcher() & KEYCATCH_CGAME ) {
 			Key_SetCatcher( Key_GetCatcher( ) & ~KEYCATCH_CGAME );
 			CGVM_EventHandling( CGAME_EVENT_NONE );
-			return;
+
+			if ( !clc.demoplaying || cls.state != CA_ACTIVE ) {
+				return;
+			}
 		}
 
 		if ( !(Key_GetCatcher() & KEYCATCH_UI) ) {
-			if ( cls.state == CA_ACTIVE )
+			// a demo opens its menu in any connected state: it is never "not in the game yet"
+			if ( cls.state == CA_ACTIVE || ( clc.demoplaying && cls.state >= CA_CONNECTED ) )
 				UIVM_SetActiveMenu( UIMENU_INGAME );
 			else {
 				CL_Disconnect_f();
@@ -1909,7 +1972,7 @@ void Key_SetCatcher( int catcher ) {
 	if ( catcher != keyCatchers )
 		Key_ClearStates();
 
-	IN_SetTextInput((qboolean)!!(catcher));
+	IN_SetTextInput((qboolean)!!(catcher & ~( clc.demoplaying ? KEYCATCH_CGAME : 0 )));
 
 	keyCatchers = catcher;
 }

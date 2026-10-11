@@ -211,6 +211,12 @@ typedef enum uiImportLegacy_e {
 	UI_G2_ATTACHG2MODEL,
 	// newmod start
 	UI_R_FONT_DRAWSTRING_FLOAT = 5001,
+
+	// the demo file scanner: cgame/cg_demoscan.h
+	UI_DEMOSCAN_SUBMIT,			// ( const char *demoPath, const demoScanRequest_t *req ) -> job id, 0 = cannot
+	UI_DEMOSCAN_POLL,			// ( demoScanResultHeader_t *out, int max ) -> how many finished
+	UI_DEMOSCAN_FETCH,			// ( int jobId, void *buf, int bufSize ) -> bytes copied; releases the job
+	UI_DEMOSCAN_CONTROL,		// ( int op, int jobId, int value )
 } uiImportLegacy_t;
 
 typedef enum uiExportLegacy_e {

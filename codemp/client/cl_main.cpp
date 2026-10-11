@@ -61,6 +61,10 @@ cvar_t	*cl_packetdup;
 cvar_t	*cl_timeNudge;
 cvar_t	*cl_enableTimeNudge;
 cvar_t	*cl_showTimeDelta;
+#ifdef DEMO_DEBUG
+cvar_t	*cl_demoTimeDebug;	// 1 = trace every step of a demo seek to the console; see DemoDbg
+#endif
+cvar_t	*cl_demoTimeFrac;	// sub-millisecond remainder of demo playback time not yet folded into
 cvar_t	* cl_keycatchLock;
 
 cvar_t	*cl_commandSize;
@@ -429,88 +433,9 @@ CLIENT SIDE DEMO PLAYBACK
 =======================================================================
 */
 
-/*
-=================
-CL_DemoCompleted
-=================
-*/
-void CL_DemoCompleted( void ) {
-	if (cl_timedemo && cl_timedemo->integer) {
-		int	time;
+// The demo playback machinery -- CL_ReadDemoMessage, the seek index, the decoded snapshot cache,
+// seeking and backward playback -- lives in cl_demo.cpp.
 
-		time = Sys_Milliseconds() - clc.timeDemoStart;
-		if ( time > 0 ) {
-			Com_Printf ("%i frames, %3.1f seconds: %3.1f fps\n", clc.timeDemoFrames,
-			time/1000.0, clc.timeDemoFrames*1000.0 / time);
-		}
-	}
-
-/*	CL_Disconnect( qtrue );
-	CL_NextDemo();
-	*/
-
-	//rww - The above code seems to just stick you in a no-menu state and you can't do anything there.
-	//I'm not sure why it ever worked in TA, but whatever. This code will bring us back to the main menu
-	//after a demo is finished playing instead.
-	CL_Disconnect_f();
-	S_StopAllSounds();
-	UIVM_SetActiveMenu( UIMENU_MAIN );
-
-	CL_NextDemo();
-}
-
-/*
-=================
-CL_ReadDemoMessage
-=================
-*/
-void CL_ReadDemoMessage( void ) {
-	int			r;
-	msg_t		buf;
-	byte		bufData[ MAX_MSGLEN ];
-	int			s;
-
-	if ( !clc.demofile ) {
-		CL_DemoCompleted ();
-		return;
-	}
-
-	// get the sequence number
-	r = FS_Read( &s, 4, clc.demofile);
-	if ( r != 4 ) {
-		CL_DemoCompleted ();
-		return;
-	}
-	clc.serverMessageSequence = LittleLong( s );
-
-	// init the message
-	MSG_Init( &buf, bufData, sizeof( bufData ) );
-
-	// get the length
-	r = FS_Read (&buf.cursize, 4, clc.demofile);
-	if ( r != 4 ) {
-		CL_DemoCompleted ();
-		return;
-	}
-	buf.cursize = LittleLong( buf.cursize );
-	if ( buf.cursize == -1 ) {
-		CL_DemoCompleted ();
-		return;
-	}
-	if ( buf.cursize > buf.maxsize ) {
-		Com_Error (ERR_DROP, "CL_ReadDemoMessage: demoMsglen > MAX_MSGLEN");
-	}
-	r = FS_Read( buf.data, buf.cursize, clc.demofile );
-	if ( r != buf.cursize ) {
-		Com_Printf( "Demo file was truncated.\n");
-		CL_DemoCompleted ();
-		return;
-	}
-
-	clc.lastPacketTime = cls.realtime;
-	buf.readcount = 0;
-	CL_ParseServerMessage( &buf );
-}
 
 /*
 ====================
@@ -526,164 +451,6 @@ static void CL_CompleteDemoName( char *args, int argNum )
 		Com_sprintf(demoExt, sizeof(demoExt), ".dm_%d", PROTOCOL_VERSION);
 		Field_CompleteFilename( "demos", demoExt, qtrue, qtrue );
 	}
-}
-
-/*
-====================
-CL_PlayDemo_f
-
-demo <demoname>
-
-====================
-*/
-void CL_PlayDemo_f( void ) {
-	char		name[MAX_OSPATH], extension[32];
-	char		*arg;
-
-	Cvar_Set("demoname", "");
-
-	if (Cmd_Argc() < 2) {
-		Com_Printf ("demo <demoname>\n");
-		return;
-	}
-
-	// open the demo file
-	arg = Cmd_Args();
-
-	// try exact string typed
-	{
-		char rawArg[MAX_OSPATH] = { 0 };
-		char *cmd = Cmd_Cmd();
-		char *p = Com_SkipTokens(cmd, 1, " \t"); // skip first token ("demo")
-		while (*p && isspace((unsigned char)*p)) {
-			p++;
-		}
-		Q_strncpyz(rawArg, p, sizeof(rawArg));
-
-		if (rawArg[0]) {
-			Com_sprintf(extension, sizeof(extension), ".dm_%d", PROTOCOL_LEGACY);
-			if (!Q_stricmp(rawArg + strlen(rawArg) - strlen(extension), extension)) {
-				Com_sprintf(name, sizeof(name), "demos/%s", rawArg);
-			}
-			else {
-				Com_sprintf(name, sizeof(name), "demos/%s.dm_%d", rawArg, PROTOCOL_LEGACY);
-			}
-
-			if (!FS_FileExists(name)) {
-				Com_sprintf(extension, sizeof(extension), ".dm_%d", PROTOCOL_VERSION);
-				if (!Q_stricmp(rawArg + strlen(rawArg) - strlen(extension), extension)) {
-					Com_sprintf(name, sizeof(name), "demos/%s", rawArg);
-				}
-				else {
-					Com_sprintf(name, sizeof(name), "demos/%s.dm_%d", rawArg, PROTOCOL_VERSION);
-				}
-			}
-
-			if (!FS_FileExists(name)) {
-				Com_sprintf(name, sizeof(name), "demos/%s", rawArg);
-			}
-
-			// test if this file actually exists
-			{
-				fileHandle_t f;
-				FS_FOpenFileRead(name, &f, qtrue);
-				if (f) {
-					FS_FCloseFile(f);
-					arg = rawArg; // only use rawArg if it definitely exists
-				}
-			}
-		}
-	}
-
-	//could probably be alot cleaner
-	//look for the old protocol first
-	Com_sprintf(extension, sizeof(extension), ".dm_%d", PROTOCOL_LEGACY);
-	if (!Q_stricmp(arg + strlen(arg) - strlen(extension), extension)) {
-		Com_sprintf(name, sizeof(name), "demos/%s", arg);
-	}
-	else {
-		Com_sprintf(name, sizeof(name), "demos/%s.dm_%d", arg, PROTOCOL_LEGACY);
-	}
-
-	if (!FS_FileExists(name)) {//start over w/ normal protocol idk
-		Com_sprintf(extension, sizeof(extension), ".dm_%d", PROTOCOL_VERSION);
-		if (!Q_stricmp(arg + strlen(arg) - strlen(extension), extension)) {
-			Com_sprintf(name, sizeof(name), "demos/%s", arg);
-		}
-		else {
-			Com_sprintf(name, sizeof(name), "demos/%s.dm_%d", arg, PROTOCOL_VERSION);
-		}
-	}
-
-	if (!FS_FileExists(name)) { //couldn't find a file with either extension?
-		Com_sprintf(name, sizeof(name), "demos/%s", arg);
-	}
-
-	// don't overwrite clc.demofile unless we're sure it's valid
-	{
-		fileHandle_t f;
-		FS_FOpenFileRead(name, &f, qtrue);
-		if (!f) {
-			char errorMsg[1024];
-			if (!Q_stricmp(arg, "(null)"))
-				Com_sprintf(errorMsg, sizeof(errorMsg), "%s\n", SE_GetString("CON_TEXT_NO_DEMO_SELECTED"));
-			else
-				Com_sprintf(errorMsg, sizeof(errorMsg), "Unable to open %s.\n", name);
-
-			Com_Printf(errorMsg);
-			return;
-		}
-		FS_FCloseFile(f);
-	}
-
-	// make sure a local server is killed
-	// 2 means don't force disconnect of local client
-	Cvar_Set("sv_killserver", "2");
-
-	CL_Disconnect(qtrue);
-
-	FS_FOpenFileRead( name, &clc.demofile, qtrue );
-	if (!clc.demofile) {
-		// theoretically shouldn't happen since we tested above,
-		// but just in case
-		char errorMsg[1024];
-		if (!Q_stricmp(arg, "(null)"))
-			Com_sprintf(errorMsg, sizeof(errorMsg), "%s\n", SE_GetString("CON_TEXT_NO_DEMO_SELECTED"));
-		else
-			Com_sprintf(errorMsg, sizeof(errorMsg), "Unable to open %s.\n", name);
-
-		Com_Printf(errorMsg);
-		return;
-	}
-
-	Q_strncpyz( clc.demoName, arg, sizeof( clc.demoName ) );
-	Cvar_Set("demoname", arg);
-
-	Con_Close();
-
-	cls.state = CA_CONNECTED;
-	clc.demoplaying = qtrue;
-	Cvar_Set("cl_demoPlaying", "1");
-	Q_strncpyz( cls.servername, arg, sizeof( cls.servername ) );
-
-	// read demo messages until connected
-	while ( cls.state >= CA_CONNECTED && cls.state < CA_PRIMED ) {
-		CL_ReadDemoMessage();
-	}
-	// don't get the first snapshot this frame, to prevent the long
-	// time from the gamestate load from messing causing a time skip
-	clc.firstDemoFrameSkipped = qfalse;
-}
-
-void CL_DemoRestart_f(void) {
-	char *demoname = Cvar_VariableString("demoname");
-	if (!VALIDSTRING(demoname)) {
-		Com_Printf("No demo available to restart.\n");
-		return;
-	}
-
-	Com_Printf("Restarting demo \"%s\".\n", demoname);
-	Cbuf_ExecuteText(EXEC_APPEND, va("demo \"%s\"\n", demoname));
 }
 
 
@@ -921,6 +688,7 @@ void CL_Disconnect( qboolean showMainMenu ) {
 		FS_FCloseFile( clc.demofile );
 		clc.demofile = 0;
 	}
+	CL_DemoRelease();
 
 	if ( cls.uiStarted && showMainMenu ) {
 		UIVM_SetActiveMenu( UIMENU_NONE );
@@ -1504,6 +1272,7 @@ void CL_Vid_Restart_f( void ) {
 	FS_ClearPakReferences( FS_UI_REF | FS_CGAME_REF );
 	// reinitialize the filesystem if the game directory or checksum has changed
 	FS_ConditionalRestart( clc.checksumFeed );
+	CL_DemoScan_RefreshLayout();	// the mod's own field widths, like g_nOverrideChecked above
 
 	cls.rendererStarted = qfalse;
 	cls.uiStarted = qfalse;
@@ -2502,11 +2271,54 @@ void CL_Frame ( int msec ) {
 		}
 	}
 
+	// the frame's length for a demo playhead, before timescale
+	{
+		extern float	cl_demoFrameMsec;
+		extern int		cl_demoFrameNum, cl_demoFrameFlags;
+
+		cl_demoFrameNum++;
+		if ( takeVideoFrame ) {
+			cl_demoFrameMsec = 1000.0f / Q_max( cl_aviFrameRate->value, 1.0f );
+			cl_demoFrameFlags = DEMOCLOCK_VIDEO;
+		} else if ( cl_timedemo && cl_timedemo->integer ) {
+			cl_demoFrameMsec = 50.0f;
+			cl_demoFrameFlags = DEMOCLOCK_TIMEDEMO;
+		} else if ( com_fixedtime->integer ) {
+			cl_demoFrameMsec = (float)com_fixedtime->integer;
+			cl_demoFrameFlags = DEMOCLOCK_FIXED;
+		} else {
+			cl_demoFrameMsec = (float)Q_min( com_frameMsecRaw, 5000 );
+			cl_demoFrameFlags = 0;
+		}
+	}
+
 	// save the msec before checking pause
 	cls.realFrametime = msec;
 
 	// decide the simulation time
 	cls.frametime = msec;
+
+	if ( clc.demoplaying && !demoApiServiceDemo && !takeVideoFrame && !com_fixedtime->integer ) {
+		// classic playback only: a game module driving the demo keeps its own clock, so real time keeps the ui, console and ambient clocks moving at any timescale
+		int rawMsec = com_frameMsecRaw;
+		float scaled;
+		int advance;
+
+		if ( rawMsec > 5000 ) {
+			rawMsec = 5000;	// same hitch clamp Com_ModifyMsec applies to remote/demo clients
+		}
+
+		if ( com_timescale->value < 0.0f ) {
+			scaled = clc.demoTimescaleRemainder;
+		} else {
+			scaled = (float)rawMsec * com_timescale->value + clc.demoTimescaleRemainder;
+		}
+		advance = (int)scaled;
+		clc.demoTimescaleRemainder = scaled - (float)advance;
+
+		cls.frametime = advance;
+	}
+
 	if(cl_framerate->integer)
 	{
 		avgFrametime+=msec;
@@ -3176,6 +2988,14 @@ void CL_Init( void ) {
 
 	cl_timeNudge = Cvar_Get ("cl_timeNudge", "0", CVAR_TEMP );
 	cl_enableTimeNudge = Cvar_Get("cl_enableTimeNudge", "1", CVAR_ROM | CVAR_INTERNAL);
+	cl_demoTimeFrac = Cvar_Get("cl_demoTimeFrac", "0", CVAR_ROM | CVAR_INTERNAL);
+	CL_DemoScan_Init();
+#ifdef _DEBUG
+	cl_demoKeyframeMB = Cvar_Get("cl_demoKeyframeMB", va( "%d", DEMOKF_BUDGET_MB ), CVAR_TEMP, "Demo seek index megabytes; 0 disables it");
+#endif
+#ifdef DEMO_DEBUG
+	cl_demoTimeDebug = Cvar_Get("cl_demoTimeDebug", "0", CVAR_TEMP, "Trace demo seeking to the console for diagnosis");
+#endif
 	cl_shownet = Cvar_Get ("cl_shownet", "0", CVAR_TEMP );
 	cl_showSend = Cvar_Get ("cl_showSend", "0", CVAR_TEMP );
 	cl_showTimeDelta = Cvar_Get ("cl_showTimeDelta", "0", CVAR_TEMP );
@@ -3314,6 +3134,10 @@ void CL_Init( void ) {
 	Cmd_AddCommand ("demo", CL_PlayDemo_f, "Playback a demo" );
 	Cmd_SetCommandCompletionFunc( "demo", CL_CompleteDemoName );
 	Cmd_AddCommand ("demo_restart", CL_DemoRestart_f, "Restarts the current or last-played demo" );
+	Cmd_AddCommand ("demoSeekServer", CL_DemoSeekServer_f, "Demo playback service: seek to a server time, loading the map it lies in");
+#ifdef DEMO_DEBUG
+	Cmd_AddCommand ("demoRawGolden", CL_DemoRawGolden_f);
+#endif
 	Cmd_AddCommand ("stoprecord", CL_StopRecord_f, "Stop recording a demo" );
 	Cmd_AddCommand ("configstrings", CL_Configstrings_f, "Prints the configstrings list" );
 	Cmd_AddCommand ("clientinfo", CL_Clientinfo_f, "Prints the userinfo variables" );
@@ -3381,6 +3205,9 @@ void CL_Shutdown( void ) {
 	// RJ: added the shutdown all to close down the cgame (to free up some memory, such as in the fx system)
 	CL_ShutdownAll( qtrue );
 
+	// joins the scanner's thread: it must not outlive the process it reads for
+	CL_DemoScan_Shutdown();
+
 	S_Shutdown();
 	//CL_ShutdownUI();
 
@@ -3393,6 +3220,10 @@ void CL_Shutdown( void ) {
 	Cmd_RemoveCommand ("record");
 	Cmd_RemoveCommand ("demo");
 	Cmd_RemoveCommand ("demo_restart");
+	Cmd_RemoveCommand ("demoSeekServer");
+#ifdef DEMO_DEBUG
+	Cmd_RemoveCommand ("demoRawGolden");
+#endif
 	Cmd_RemoveCommand ("cinematic");
 	Cmd_RemoveCommand ("stoprecord");
 	Cmd_RemoveCommand ("connect");
@@ -4208,4 +4039,3 @@ CL_ShowIP_f
 void CL_ShowIP_f(void) {
 	Sys_ShowIP();
 }
-

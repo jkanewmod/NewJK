@@ -42,6 +42,16 @@ along with this program; if not, see <http://www.gnu.org/licenses/>.
 #include "snd_local.h"
 #ifndef _WIN32
 #include <cmath>
+
+// the cinematic clock under timescale; reverse demo playback holds the frame like a pause
+static int CIN_ScaledMilliseconds( void ) {
+	float scale = com_timescale->value;
+
+	if ( scale < 0.0f ) {
+		scale = 0.0f;
+	}
+	return (int)( Sys_Milliseconds() * scale );
+}
 #endif
 
 #define MAXSIZE				8
@@ -1193,7 +1203,7 @@ redump:
 			if (cinTable[currentHandle].numQuads == -1) {
 				readQuadInfo( framedata );
 				setupQuad( 0, 0 );
-				cinTable[currentHandle].startTime = cinTable[currentHandle].lastTime = Sys_Milliseconds()*com_timescale->value;
+				cinTable[currentHandle].startTime = cinTable[currentHandle].lastTime = CIN_ScaledMilliseconds();
 			}
 			if (cinTable[currentHandle].numQuads != 1) cinTable[currentHandle].numQuads = 0;
 			break;
@@ -1265,7 +1275,7 @@ redump:
 
 static void RoQ_init( void )
 {
-	cinTable[currentHandle].startTime = cinTable[currentHandle].lastTime = Sys_Milliseconds()*com_timescale->value;
+	cinTable[currentHandle].startTime = cinTable[currentHandle].lastTime = CIN_ScaledMilliseconds();
 
 	cinTable[currentHandle].RoQPlayed = 24;
 
@@ -1396,11 +1406,11 @@ e_status CIN_RunCinematic (int handle)
 		return cinTable[currentHandle].status;
 	}
 
-	thisTime = Sys_Milliseconds()*com_timescale->value;
+	thisTime = CIN_ScaledMilliseconds();
 	if (cinTable[currentHandle].shader && (abs(thisTime - (double)cinTable[currentHandle].lastTime))>100) {
 		cinTable[currentHandle].startTime += thisTime - cinTable[currentHandle].lastTime;
 	}
-	cinTable[currentHandle].tfps = ((((Sys_Milliseconds()*com_timescale->value) - cinTable[currentHandle].startTime)*cinTable[currentHandle].roqFPS)/1000);
+	cinTable[currentHandle].tfps = ((((CIN_ScaledMilliseconds()) - cinTable[currentHandle].startTime)*cinTable[currentHandle].roqFPS)/1000);
 
 	start = cinTable[currentHandle].startTime;
 	while(  (cinTable[currentHandle].tfps != cinTable[currentHandle].numQuads)
@@ -1408,7 +1418,7 @@ e_status CIN_RunCinematic (int handle)
 	{
 		RoQInterrupt();
 		if ((unsigned)start != cinTable[currentHandle].startTime) {
-		  cinTable[currentHandle].tfps = ((((Sys_Milliseconds()*com_timescale->value)
+		  cinTable[currentHandle].tfps = ((((CIN_ScaledMilliseconds())
 							  - cinTable[currentHandle].startTime)*cinTable[currentHandle].roqFPS)/1000);
 			start = cinTable[currentHandle].startTime;
 		}

@@ -1299,7 +1299,7 @@ void	RB_SetGL2D (void) {
 	qglDisable( GL_CLIP_PLANE0 );
 
 	// set time for 2D shaders
-	backEnd.refdef.time = ri->Milliseconds()*ri->Cvar_VariableValue( "timescale" );
+	backEnd.refdef.time = ri->Milliseconds();
 	backEnd.refdef.floatTime = backEnd.refdef.time * 0.001f;
 }
 
