@@ -243,6 +243,9 @@ PFNGLQUERYCOUNTERPROC qglQueryCounter;
 PFNGLGETQUERYOBJECTI64VPROC qglGetQueryObjecti64v;
 PFNGLGETQUERYOBJECTUI64VPROC qglGetQueryObjectui64v;
 
+// GL_VERSION_1_4 (core, but not declared by windows' own gl.h)
+PFNGLBLENDCOLORPROC qglBlendColor;
+
 // GL_KHR_debug
 PFNGLPUSHDEBUGGROUPPROC qglPushDebugGroupKHR;
 PFNGLPOPDEBUGGROUPPROC qglPopDebugGroupKHR;
@@ -337,6 +340,7 @@ void GLimp_InitCoreFunctions()
 	GetGLFunction (qglMultiDrawArrays, "glMultiDrawArrays", qtrue);
 	GetGLFunction (qglMultiDrawElements, "glMultiDrawElements", qtrue);
 	GetGLFunction (qglMultiDrawElementsBaseVertex, "glMultiDrawElementsBaseVertex", qtrue);
+	GetGLFunction (qglBlendColor, "glBlendColor", qtrue);
 
 	// Vertex arrays
 	GetGLFunction (qglVertexAttribPointer, "glVertexAttribPointer", qtrue);

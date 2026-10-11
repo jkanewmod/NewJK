@@ -240,6 +240,9 @@ cvar_t *r_screenshotJpegQuality;
 PFNGLACTIVETEXTUREARBPROC qglActiveTextureARB;
 PFNGLCLIENTACTIVETEXTUREARBPROC qglClientActiveTextureARB;
 PFNGLMULTITEXCOORD2FARBPROC qglMultiTexCoord2fARB;
+#ifdef _WIN32
+PFNGLBLENDCOLORPROC qglBlendColor;
+#endif
 #if !defined(__APPLE__)
 PFNGLTEXIMAGE3DPROC qglTexImage3D;
 PFNGLTEXSUBIMAGE3DPROC qglTexSubImage3D;
@@ -460,6 +463,15 @@ extern bool g_bDynamicGlowSupported;
 extern bool g_bARBShadersAvailable;
 static void GLimp_InitExtensions( void )
 {
+#ifdef _WIN32
+	// GL 1.4 core function, not declared by windows' own gl.h -- see qgl.h. Loaded whether or not
+	// extensions are allowed, and absent on GL 1.1 drivers, so its use in tr_shade.cpp is gated
+	qglBlendColor = ( PFNGLBLENDCOLORPROC ) ri->GL_GetProcAddress( "glBlendColor" );
+	glConfigExt.blendColorAvailable = (qboolean)( qglBlendColor != NULL );
+#else
+	glConfigExt.blendColorAvailable = qtrue;
+#endif
+
 	if ( !r_allowExtensions->integer )
 	{
 		Com_Printf ("*** IGNORING OPENGL EXTENSIONS ***\n" );
@@ -752,6 +764,7 @@ static void GLimp_InitExtensions( void )
 		g_bDynamicGlowSupported = false;
 		ri->Cvar_Set( "r_DynamicGlow","0" );
 	}
+
 }
 
 // Truncates the GL extensions string by only allowing up to 'maxExtensions' extensions in the string.

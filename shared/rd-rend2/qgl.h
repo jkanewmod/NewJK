@@ -34,8 +34,11 @@
 #define qglBindTexture glBindTexture
 #define qglBitmap glBitmap
 #define qglBlendFunc glBlendFunc
+// this renderer requires an OpenGL 3.2 core context, so (like every other post-1.1 function in
+// this file) glBlendColor has to be loaded dynamically rather than linked directly -- windows'
+// own gl.h doesn't even declare it. See GLimp_InitCoreFunctions in tr_extensions.cpp.
 // newjk: constant blend color, for the entity-alpha blend
-#define qglBlendColor glBlendColor
+extern PFNGLBLENDCOLORPROC qglBlendColor;
 #define qglCallList glCallList
 #define qglCallLists glCallLists
 #define qglClear glClear

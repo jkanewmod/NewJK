@@ -59,7 +59,14 @@ along with this program; if not, see <http://www.gnu.org/licenses/>.
 #define qglBindTexture glBindTexture
 #define qglBitmap glBitmap
 #define qglBlendFunc glBlendFunc
+#ifdef _WIN32
+// windows' opengl32.dll only exports GL 1.1 directly, and its gl.h doesn't declare glBlendColor
+// (GL 1.4 core) at all, so it has to be loaded dynamically like the ARB/EXT functions below --
+// see qglActiveTextureARB for the same pattern. Loaded in GLimp_InitExtensions (tr_init.cpp).
+extern PFNGLBLENDCOLORPROC qglBlendColor;	// constant blend color, for the entity-alpha blend in tr_shade.cpp
+#else
 #define qglBlendColor glBlendColor	// constant blend color, for the entity-alpha blend in tr_shade.cpp
+#endif
 #define qglCallList glCallList
 #define qglCallLists glCallLists
 #define qglClear glClear

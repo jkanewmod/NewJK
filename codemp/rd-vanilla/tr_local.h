@@ -1069,6 +1069,9 @@ struct glconfigExt_t
 
 	// r_blackBars copy of the frame; 0 until first use
 	GLuint blackBarsImage;
+
+	// glBlendColor can be called (false on windows without extensions or on GL 1.1)
+	qboolean blendColorAvailable;
 };
 
 int		 R_Images_StartIteration(void);

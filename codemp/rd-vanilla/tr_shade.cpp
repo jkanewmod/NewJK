@@ -1784,7 +1784,7 @@ static void RB_IterateStagesGeneric( shaderCommands_t *input )
 			{
 				const int entAlpha = backEnd.currentEntity->e.shaderRGBA[3];
 
-				if ( !( pStage->stateBits & (GLS_SRCBLEND_BITS | GLS_DSTBLEND_BITS) ) )
+				if ( glConfigExt.blendColorAvailable && !( pStage->stateBits & (GLS_SRCBLEND_BITS | GLS_DSTBLEND_BITS) ) )
 				{
 					/* An opaque stage never consulted alpha at all, so fading it with SRC_ALPHA would
 					suddenly make it obey its texture's alpha channel. On a multi-stage skin that erases
