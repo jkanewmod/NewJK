@@ -172,7 +172,34 @@ typedef struct window_s
 {
 	void *handle; // OS-dependent window handle
 	graphicsApi_t api;
+
+	// r_blackBars: native-size window, vidWidth x vidHeight frame aspect-fit into it
+	qboolean blackBars;
+	int drawableWidth, drawableHeight;
 } window_t;
+
+// centered rect (x, y, w, h) that fits a width x height frame into the window
+static inline void WIN_BlackBarsRect( const window_t *window, int width, int height, int rect[4] )
+{
+	const int ww = window->drawableWidth, wh = window->drawableHeight;
+
+	rect[0] = rect[1] = 0;
+	rect[2] = ww;
+	rect[3] = wh;
+	if ( width <= 0 || height <= 0 )
+		return;
+
+	if ( (int64_t)ww * height > (int64_t)wh * width )
+	{
+		rect[2] = (int)( (int64_t)wh * width / height );
+		rect[0] = ( ww - rect[2] ) / 2;
+	}
+	else
+	{
+		rect[3] = (int)( (int64_t)ww * height / width );
+		rect[1] = ( wh - rect[3] ) / 2;
+	}
+}
 
 typedef enum glProfile_e
 {

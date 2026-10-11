@@ -1965,6 +1965,98 @@ static void RB_GammaCorrectRender()
 }
 
 
+// r_blackBars: the frame sits bottom left in the native size window. fit it into
+// the window to present, then put it back for reads after the swap (screenshots)
+// s, t: how much of the texture holds the frame (less than 1 when the copy was cropped)
+static void RB_DrawBlackBarsImage( int x, int y, int w, int h, float s, float t )
+{
+	qglViewport( x, y, w, h );
+	qglBegin( GL_TRIANGLE_STRIP );
+		qglTexCoord2f( 0, 0 );
+		qglVertex2f( 0, 0 );
+		qglTexCoord2f( s, 0 );
+		qglVertex2f( 1, 0 );
+		qglTexCoord2f( 0, t );
+		qglVertex2f( 0, 1 );
+		qglTexCoord2f( s, t );
+		qglVertex2f( 1, 1 );
+	qglEnd();
+}
+
+extern int giTextureBindNum;
+
+void RB_Present( void )
+{
+	if ( !window.blackBars )
+	{
+		ri->WIN_Present( &window );
+		return;
+	}
+
+	const int vw = glConfig.vidWidth, vh = glConfig.vidHeight;
+	int cw = vw, ch = vh;
+	int rect[4];
+
+	// the scene is drawn into the window itself, so a mode larger than the window has nothing
+	// outside it: copy what there is rather than undefined pixels
+	if ( cw > window.drawableWidth || ch > window.drawableHeight )
+	{
+		static qboolean warned;
+
+		cw = Q_min( cw, window.drawableWidth );
+		ch = Q_min( ch, window.drawableHeight );
+		if ( !warned )
+		{
+			warned = qtrue;
+			ri->Printf( PRINT_ALL, S_COLOR_YELLOW "r_blackBars: the %dx%d mode is larger than the %dx%d window, so the picture is cropped\n", vw, vh, window.drawableWidth, window.drawableHeight );
+		}
+	}
+
+	GL_SelectTexture( 0 );
+	if ( !glConfigExt.blackBarsImage )
+	{
+		// numbered like every other image (tr_image.cpp): a name from the driver could collide with one
+		glConfigExt.blackBarsImage = 1024 + giTextureBindNum++;
+		qglBindTexture( GL_TEXTURE_2D, glConfigExt.blackBarsImage );
+		qglTexImage2D( GL_TEXTURE_2D, 0, GL_RGB8, vw, vh, 0, GL_RGB, GL_UNSIGNED_BYTE, NULL );
+		qglTexParameteri( GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR );
+		qglTexParameteri( GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR );
+		qglTexParameteri( GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE );
+		qglTexParameteri( GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE );
+	}
+	qglBindTexture( GL_TEXTURE_2D, glConfigExt.blackBarsImage );
+	glState.currenttextures[0] = glConfigExt.blackBarsImage;
+	qglCopyTexSubImage2D( GL_TEXTURE_2D, 0, 0, 0, 0, 0, cw, ch );
+
+	GL_State( GLS_DEPTHTEST_DISABLE );
+	GL_Cull( CT_TWO_SIDED );
+	GL_TexEnv( GL_MODULATE );
+	qglColor4f( 1.0f, 1.0f, 1.0f, 1.0f );
+	qglDisable( GL_FOG );
+	qglMatrixMode( GL_PROJECTION );
+	qglLoadIdentity();
+	qglOrtho( 0, 1, 0, 1, 0, 1 );
+	qglMatrixMode( GL_MODELVIEW );
+	qglLoadIdentity();
+
+	qglDisable( GL_SCISSOR_TEST );
+	qglViewport( 0, 0, window.drawableWidth, window.drawableHeight );
+	qglClearColor( 0.0f, 0.0f, 0.0f, 1.0f );
+	qglClear( GL_COLOR_BUFFER_BIT );
+
+	WIN_BlackBarsRect( &window, vw, vh, rect );
+	RB_DrawBlackBarsImage( rect[0], rect[1], rect[2], rect[3], (float)cw / vw, (float)ch / vh );
+
+	ri->WIN_Present( &window );
+
+	RB_DrawBlackBarsImage( 0, 0, cw, ch, (float)cw / vw, (float)ch / vh );
+
+	qglEnable( GL_SCISSOR_TEST );
+	qglViewport( 0, 0, vw, vh );
+	qglScissor( 0, 0, vw, vh );
+	backEnd.projection2D = qfalse;
+}
+
 /*
 =============
 RB_SwapBuffers
@@ -2015,7 +2107,7 @@ const void	*RB_SwapBuffers( const void *data ) {
 
     GLimp_LogComment( "***************** RB_SwapBuffers *****************\n\n\n" );
 
-    ri->WIN_Present(&window);
+    RB_Present();
 
 	backEnd.projection2D = qfalse;
 

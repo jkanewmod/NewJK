@@ -1493,6 +1493,24 @@ void vk_end_frame( void )
                 vk.renderScaleX = vk.renderScaleY = 1.0;
 
                 vk_begin_render_pass( vk.render_pass.gamma, vk.framebuffers.gamma[vk.cmd->swapchain_image_index], qfalse, vk.renderWidth, vk.renderHeight );
+
+                // newjk: r_blackBars, the gamma pass only covers the fit rect
+                if ( window.blackBars ) {
+                    VkClearAttachment attachment;
+                    VkClearRect rect;
+
+                    Com_Memset( &attachment, 0, sizeof( attachment ) );
+                    attachment.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+                    attachment.colorAttachment = 0;
+                    attachment.clearValue.color.float32[3] = 1.0f;
+
+                    Com_Memset( &rect, 0, sizeof( rect ) );
+                    rect.rect.extent.width = gls.windowWidth;
+                    rect.rect.extent.height = gls.windowHeight;
+                    rect.layerCount = 1;
+
+                    qvkCmdClearAttachments( vk.cmd->command_buffer, 1, &attachment, 1, &rect );
+                }
                 qvkCmdBindPipeline( vk.cmd->command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, vk.gamma_pipeline );
                 //qvkCmdBindDescriptorSets( vk.cmd->command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, vk.pipeline_layout_post_process, 0, 1, &vk.dglow_image_descriptor[0], 0, NULL );
                 qvkCmdBindDescriptorSets( vk.cmd->command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, vk.pipeline_layout_post_process, 0, 1, &vk.color_descriptor, 0, NULL );

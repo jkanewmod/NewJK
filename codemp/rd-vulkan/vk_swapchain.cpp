@@ -108,8 +108,11 @@ void vk_create_swapchain( VkPhysicalDevice physical_device, VkDevice device,
 
     image_extent = surface_caps.currentExtent;
     if ( image_extent.width == 0xffffffff && image_extent.height == 0xffffffff ) {
-        image_extent.width = MIN( surface_caps.maxImageExtent.width, MAX( surface_caps.minImageExtent.width, (uint32_t)glConfig.vidWidth ) );
-        image_extent.height = MIN( surface_caps.maxImageExtent.height, MAX( surface_caps.minImageExtent.height, (uint32_t)glConfig.vidHeight ) );
+        // newjk: the surface leaves the size to us (Wayland); r_blackBars needs the native window size
+        const uint32_t width = window.blackBars ? (uint32_t)window.drawableWidth : (uint32_t)glConfig.vidWidth;
+        const uint32_t height = window.blackBars ? (uint32_t)window.drawableHeight : (uint32_t)glConfig.vidHeight;
+        image_extent.width = MIN( surface_caps.maxImageExtent.width, MAX( surface_caps.minImageExtent.width, width ) );
+        image_extent.height = MIN( surface_caps.maxImageExtent.height, MAX( surface_caps.minImageExtent.height, height ) );
     }
 
 	/*
@@ -134,6 +137,8 @@ void vk_create_swapchain( VkPhysicalDevice physical_device, VkDevice device,
 	// whatever extent we actually end up creating the swapchain at.
 	gls.windowWidth = image_extent.width;
 	gls.windowHeight = image_extent.height;
+
+	vk_set_black_bars();
 
     vk.clearAttachment = qtrue;
 

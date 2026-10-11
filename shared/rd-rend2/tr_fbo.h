@@ -53,6 +53,7 @@ typedef struct FBO_s
 } FBO_t;
 
 void FBO_Bind(FBO_t *fbo);
+uint32_t FBO_ScreenFramebuffer(void);
 void FBO_Init(void);
 void FBO_Shutdown(void);
 

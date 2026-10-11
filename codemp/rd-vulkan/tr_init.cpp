@@ -354,7 +354,9 @@ void RE_SetLightStyle( int style, int color );
 void RE_GetBModelVerts( int bmodelIndex, vec3_t *verts, vec3_t normal );
 
 void R_Set2DRatio( void ) {
-	if (cl_ratioFix->integer)
+	if (cl_ratioFix->integer && window.blackBars) // newjk: the frame, not the window
+		tr.widthRatioCoef = ((float)(SCREEN_WIDTH * gls.captureHeight) / (float)(SCREEN_HEIGHT * gls.captureWidth));
+	else if (cl_ratioFix->integer)
 		tr.widthRatioCoef = ((float)(SCREEN_WIDTH * gls.windowHeight) / (float)(SCREEN_HEIGHT * gls.windowWidth));
 	else
 		tr.widthRatioCoef = 1.0f;

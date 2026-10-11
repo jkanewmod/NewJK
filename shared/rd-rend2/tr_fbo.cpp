@@ -343,6 +343,18 @@ static void FBO_SetupDrawBuffers()
 
 /*
 ============
+FBO_ScreenFramebuffer
+
+newjk: "the screen" is the r_blackBars frame when there is one
+============
+*/
+uint32_t FBO_ScreenFramebuffer(void)
+{
+	return tr.screenFbo ? tr.screenFbo->frameBuffer : 0;
+}
+
+/*
+============
 FBO_Bind
 ============
 */
@@ -362,7 +374,7 @@ void FBO_Bind(FBO_t * fbo)
 
 	if (!fbo)
 	{
-		qglBindFramebuffer(GL_FRAMEBUFFER, 0);
+		qglBindFramebuffer(GL_FRAMEBUFFER, FBO_ScreenFramebuffer());
 		glState.currentFBO = NULL;
 	}
 	else
@@ -389,6 +401,21 @@ void FBO_Init(void)
 	GL_CheckErrors();
 
 	R_IssuePendingRenderCommands();
+
+	// newjk: r_blackBars
+	if (window.blackBars)
+	{
+		tr.screenFbo = FBO_Create("_screen", glConfig.vidWidth, glConfig.vidHeight);
+		FBO_Bind(tr.screenFbo);
+		FBO_CreateBuffer(tr.screenFbo, GL_RGBA8, 0, 0);
+		FBO_CreateBuffer(tr.screenFbo, GL_DEPTH24_STENCIL8, 0, 0);
+		FBO_SetupDrawBuffers();
+
+		if (!R_CheckFBO(tr.screenFbo))
+			tr.screenFbo = NULL;
+
+		FBO_Bind(NULL);
+	}
 
 /*	if(glRefConfig.textureNonPowerOfTwo)
 	{
@@ -781,6 +808,7 @@ void FBO_Shutdown(void)
 
 	ri.Printf(PRINT_ALL, "------- FBO_Shutdown -------\n");
 
+	tr.screenFbo = NULL; // newjk
 	FBO_Bind(NULL);
 
 	for(i = 0; i < tr.numFBOs; i++)
@@ -1005,8 +1033,8 @@ void FBO_FastBlit(FBO_t *src, vec4i_t srcBox, FBO_t *dst, vec4i_t dstBox, int bu
 	// get to a neutral state first
 	//FBO_Bind(NULL);
 
-	srcFb = src ? src->frameBuffer : 0;
-	dstFb = dst ? dst->frameBuffer : 0;
+	srcFb = src ? src->frameBuffer : FBO_ScreenFramebuffer();
+	dstFb = dst ? dst->frameBuffer : FBO_ScreenFramebuffer();
 
 	if (!srcBox)
 	{
@@ -1047,7 +1075,7 @@ void FBO_FastBlit(FBO_t *src, vec4i_t srcBox, FBO_t *dst, vec4i_t dstBox, int bu
 	                      dstBoxFinal[0], dstBoxFinal[1], dstBoxFinal[2], dstBoxFinal[3],
 						  buffers, filter);
 
-	qglBindFramebuffer(GL_FRAMEBUFFER, 0);
+	qglBindFramebuffer(GL_FRAMEBUFFER, FBO_ScreenFramebuffer());
 	glState.currentFBO = NULL;
 }
 
@@ -1071,6 +1099,6 @@ void FBO_FastBlitIndexed(FBO_t *src, FBO_t *dst, int srcReadBuffer, int dstDrawB
 	glState.currentFBO = dst;
 	FBO_SetupDrawBuffers();
 
-	qglBindFramebuffer(GL_FRAMEBUFFER, 0);
+	qglBindFramebuffer(GL_FRAMEBUFFER, FBO_ScreenFramebuffer());
 	glState.currentFBO = NULL;
 }

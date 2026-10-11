@@ -347,6 +347,7 @@ extern PFN_vkCmdBindPipeline							qvkCmdBindPipeline;
 extern PFN_vkCmdBindVertexBuffers						qvkCmdBindVertexBuffers;
 extern PFN_vkCmdBlitImage								qvkCmdBlitImage;
 extern PFN_vkCmdClearAttachments						qvkCmdClearAttachments;
+extern PFN_vkCmdClearColorImage						qvkCmdClearColorImage;
 extern PFN_vkCmdCopyBuffer								qvkCmdCopyBuffer;
 extern PFN_vkCmdCopyBufferToImage						qvkCmdCopyBufferToImage;
 extern PFN_vkCmdCopyImage								qvkCmdCopyImage;
@@ -1150,6 +1151,7 @@ void		vk_update_post_process_pipelines( void );
 // swapchain
 void		vk_restart_swapchain( const char *funcname );
 qboolean	vk_surface_size_changed( void );
+void		vk_set_black_bars( void );
 void		vk_destroy_swapchain( void );
 void		vk_create_swapchain( VkPhysicalDevice physical_device, VkDevice device,
 	VkSurfaceKHR surface, VkSurfaceFormatKHR surface_format, VkSwapchainKHR *swapchain);

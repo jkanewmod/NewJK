@@ -320,9 +320,16 @@ static void R_Splash()
 	const GLfloat black[] = { 0.0f, 0.0f, 0.0f, 1.0f };
     float ratio = (float)(SCREEN_WIDTH * glConfig.vidHeight) / (float)(SCREEN_HEIGHT * glConfig.vidWidth);
 
-	GL_SetViewportAndScissor( 0, 0, glConfig.vidWidth, glConfig.vidHeight );
+	GL_SetViewportAndScissor( 0, 0, window.drawableWidth, window.drawableHeight );
 	qglClearBufferfv(GL_COLOR, 0, black);
 	qglClear(GL_DEPTH_BUFFER_BIT);
+
+	if ( window.blackBars ) // newjk
+	{
+		int rect[4];
+		WIN_BlackBarsRect( &window, glConfig.vidWidth, glConfig.vidHeight, rect );
+		GL_SetViewportAndScissor( rect[0], rect[1], rect[2], rect[3] );
+	}
 
 	GLSL_InitSplashScreenShader();
 

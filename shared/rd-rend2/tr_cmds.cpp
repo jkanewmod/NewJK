@@ -744,9 +744,12 @@ void RE_BeginFrame( stereoFrame_t stereoFrame ) {
 
 				FBO_Bind(NULL);
 
-				qglDrawBuffer(GL_FRONT);
-				qglClear(GL_COLOR_BUFFER_BIT);
-				qglDrawBuffer(GL_BACK);
+				if (!tr.screenFbo) // newjk: no front/back buffer behind r_blackBars
+				{
+					qglDrawBuffer(GL_FRONT);
+					qglClear(GL_COLOR_BUFFER_BIT);
+					qglDrawBuffer(GL_BACK);
+				}
 				qglClear(GL_COLOR_BUFFER_BIT);
 
 				r_anaglyphMode->modified = qfalse;

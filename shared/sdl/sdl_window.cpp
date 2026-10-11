@@ -43,6 +43,8 @@ enum rserr_t
 static SDL_Window *screen = NULL;
 static SDL_GLContext opengl_context;
 static float displayAspect;
+static qboolean blackBarsAspectDiffers;
+static qboolean blackBarsActive;
 
 cvar_t *r_sdlDriver;
 cvar_t *r_allowSoftwareGL;
@@ -59,6 +61,7 @@ cvar_t	*r_mode;
 cvar_t	*r_displayRefresh;
 cvar_t	*r_cgameControlsAlwaysOnTop;
 cvar_t	*r_alwaysOnTop;
+cvar_t	*r_blackBars;
 
 // Window surface cvars
 cvar_t	*r_stencilbits;
@@ -160,11 +163,30 @@ void GLimp_Alert(void) {
 }
 #endif
 
+static void WIN_GetDrawableSize( window_t *window )
+{
+	int w = 0, h = 0;
+
+	if ( window->api == GRAPHICS_API_VULKAN )
+		SDL_Vulkan_GetDrawableSize( screen, &w, &h );
+	else
+		SDL_GL_GetDrawableSize( screen, &w, &h );
+
+	if ( w > 0 && h > 0 )
+	{
+		window->drawableWidth = w;
+		window->drawableHeight = h;
+	}
+}
+
 void WIN_Present( window_t *window )
 {
 	if ( window->api == GRAPHICS_API_OPENGL )
 	{
 		SDL_GL_SwapWindow(screen);
+
+		if ( window->blackBars )
+			WIN_GetDrawableSize( window );
 
 		if ( r_swapInterval->modified )
 		{
@@ -203,7 +225,9 @@ void WIN_Present( window_t *window )
 
 		if ( needToToggle )
 		{
-			sdlToggled = SDL_SetWindowFullscreen( screen, r_fullscreen->integer ) >= 0;
+			// the black bars window size depends on the fullscreen state
+			if ( !r_blackBars->integer || !blackBarsAspectDiffers )
+				sdlToggled = SDL_SetWindowFullscreen( screen, r_fullscreen->integer ) >= 0;
 
 			// SDL_WM_ToggleFullScreen didn't work, so do it the slow way
 			if ( !sdlToggled )
@@ -485,14 +509,50 @@ static rserr_t GLimp_SetMode(glconfig_t *glConfig, const windowDesc_t *windowDes
 		return RSERR_INVALID_MODE;
 	}
 
-	int windowDpiScaledWidth = glConfig->vidWidth, windowDpiScaledHeight = glConfig->vidHeight;
+	// differs by more than 1%, so rounding-only mismatches (1366x768 on 1920x1080) count as equal
+	blackBarsAspectDiffers = qfalse;
+	if ( desktopMode.w > 0 && desktopMode.h > 0 )
+	{
+		int64_t a = (int64_t)glConfig->vidWidth * desktopMode.h;
+		int64_t b = (int64_t)glConfig->vidHeight * desktopMode.w;
+		blackBarsAspectDiffers = (qboolean)( ( a > b ? a - b : b - a ) * 100 > b );
+	}
+	blackBarsActive = (qboolean)( blackBarsAspectDiffers
+		&& ( ( r_blackBars->integer == 1 && fullscreen ) || r_blackBars->integer == 2 ) );
+
+	int windowWidth = glConfig->vidWidth, windowHeight = glConfig->vidHeight;
+	qboolean blackBarsBordered = qfalse;
+	if ( blackBarsActive )
+	{
+		windowWidth = desktopMode.w;
+		windowHeight = desktopMode.h;
+		if ( !fullscreen && !noborder )
+		{
+			// a bordered window the size of the desktop ends up partly off-screen once the
+			// decorations are added: take the usable area instead and let the window manager
+			// fit it, as a maximized window
+			SDL_Rect usable;
+
+			if ( SDL_GetDisplayUsableBounds( display, &usable ) == 0 && usable.w > 0 && usable.h > 0 )
+			{
+				windowWidth = usable.w;
+				windowHeight = usable.h;
+				x = usable.x;
+				y = usable.y;
+			}
+			flags |= SDL_WINDOW_MAXIMIZED;
+			blackBarsBordered = qtrue;
+		}
+	}
+
+	int windowDpiScaledWidth = windowWidth, windowDpiScaledHeight = windowHeight;
 #ifdef _WIN32
 	if (fullscreen) { // fix fullscreen dpi scaling
 		float dpi, defaultDpi;
 		GetDisplayDPI(dpi, defaultDpi);
 
-		windowDpiScaledWidth = int(glConfig->vidWidth * dpi / defaultDpi);
-		windowDpiScaledHeight = int(glConfig->vidHeight * dpi / defaultDpi);
+		windowDpiScaledWidth = int(windowWidth * dpi / defaultDpi);
+		windowDpiScaledHeight = int(windowHeight * dpi / defaultDpi);
 
 		if (dpi != defaultDpi)
 			Com_Printf(" %d %d (DPI scaled: %d %d)\n", glConfig->vidWidth, glConfig->vidHeight, windowDpiScaledWidth, windowDpiScaledHeight);
@@ -508,11 +568,14 @@ static rserr_t GLimp_SetMode(glconfig_t *glConfig, const windowDesc_t *windowDes
 	}
 #endif
 
+	if ( blackBarsActive )
+		Com_Printf( "...black bars: %d %d window\n", windowWidth, windowHeight );
+
 	// Center window
-	if( r_centerWindow->integer && !fullscreen )
+	if( r_centerWindow->integer && !fullscreen && !blackBarsBordered )
 	{
-		x = ( desktopMode.w / 2 ) - ( glConfig->vidWidth / 2 );
-		y = ( desktopMode.h / 2 ) - ( glConfig->vidHeight / 2 );
+		x = ( desktopMode.w / 2 ) - ( windowWidth / 2 );
+		y = ( desktopMode.h / 2 ) - ( windowHeight / 2 );
 	}
 
 	// Destroy existing state if it exists
@@ -553,8 +616,8 @@ static rserr_t GLimp_SetMode(glconfig_t *glConfig, const windowDesc_t *windowDes
 			// desktop resolution, since FULLSCREEN_DESKTOP always uses the
 			// desktop's current mode and ignores any smaller requested size - a
 			// genuinely small borderless window still needs plain BORDERLESS.
-			if ( desktopMode.w > 0 && glConfig->vidWidth == desktopMode.w
-				&& glConfig->vidHeight == desktopMode.h )
+			if ( desktopMode.w > 0 && windowWidth == desktopMode.w
+				&& windowHeight == desktopMode.h )
 				flags |= SDL_WINDOW_FULLSCREEN_DESKTOP;
 			else
 				flags |= SDL_WINDOW_BORDERLESS;
@@ -726,8 +789,8 @@ static rserr_t GLimp_SetMode(glconfig_t *glConfig, const windowDesc_t *windowDes
 					default: Com_DPrintf( "testColorBits is %d, can't fullscreen\n", testColorBits ); continue;
 				}
 
-				mode.w = glConfig->vidWidth;
-				mode.h = glConfig->vidHeight;
+				mode.w = windowWidth;
+				mode.h = windowHeight;
 				mode.refresh_rate = glConfig->displayFrequency = r_displayRefresh->integer;
 				mode.driverdata = NULL;
 
@@ -890,7 +953,9 @@ window_t WIN_Init( const windowDesc_t *windowDesc, glconfig_t *glConfig )
 	r_displayRefresh	= Cvar_Get( "r_displayRefresh",		"0",		CVAR_LATCH );
 	r_cgameControlsAlwaysOnTop = Cvar_Get( "r_cgameControlsAlwaysOnTop",	"0",		CVAR_ROM | CVAR_TEMP );
 	r_alwaysOnTop		= Cvar_Get( "r_alwaysOnTop",		"0",		CVAR_ARCHIVE );
+	r_blackBars			= Cvar_Get( "r_blackBars",			"0",		CVAR_ARCHIVE_ND|CVAR_LATCH, "Black bars instead of stretching when the resolution's aspect ratio differs from the monitor's:\n 0 - off\n 1 - in fullscreen\n 2 - in fullscreen and windowed\n" );
 	Cvar_CheckRange( r_displayRefresh, 0, 240, qtrue );
+	Cvar_CheckRange( r_blackBars, 0, 2, qtrue );
 
 	// Window render surface cvars
 	r_stencilbits		= Cvar_Get( "r_stencilbits",		"8",		CVAR_ARCHIVE|CVAR_LATCH );
@@ -926,6 +991,11 @@ window_t WIN_Init( const windowDesc_t *windowDesc, glconfig_t *glConfig )
 	window_t window = {};
 
 	window.api = windowDesc->api;
+	window.blackBars = blackBarsActive;
+	window.drawableWidth = glConfig->vidWidth;
+	window.drawableHeight = glConfig->vidHeight;
+	if ( blackBarsActive )
+		WIN_GetDrawableSize( &window );
 
 #if defined(_WIN32)
 	SDL_SysWMinfo info;

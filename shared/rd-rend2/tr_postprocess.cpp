@@ -122,6 +122,12 @@ so gamma keeps working regardless of what those other cvars are set to.
 void RB_ApplyGamma(FBO_t *srcFbo, vec4i_t srcBox, vec4i_t dstBox)
 {
 	FBO_Bind(NULL);
+	RB_DrawGamma(srcFbo, dstBox);
+}
+
+// newjk: gamma pass into whatever framebuffer is bound
+void RB_DrawGamma(FBO_t *srcFbo, vec4i_t dstBox)
+{
 	GL_SetViewportAndScissor(dstBox[0], dstBox[1], dstBox[2], dstBox[3]);
 	GL_Cull(CT_TWO_SIDED);
 	GL_State(GLS_DEPTHTEST_DISABLE);

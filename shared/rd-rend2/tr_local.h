@@ -2621,6 +2621,7 @@ typedef struct trGlobals_s {
 
 	FBO_t					*renderFbo;
 	FBO_t					*gammaFbo;
+	FBO_t					*screenFbo;		// newjk: r_blackBars, stands in for the window framebuffer
 	FBO_t					*depthVelocityFbo;
 	FBO_t					*glowFboScaled[6];
 	FBO_t					*msaaResolveFbo;

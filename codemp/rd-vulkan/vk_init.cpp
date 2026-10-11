@@ -74,6 +74,26 @@ static void vk_set_render_scale( void )
 	}
 }
 
+// newjk: r_blackBars, aspect-fit the frame into the native size swapchain
+void vk_set_black_bars( void )
+{
+	window_t fit = window;
+	int rect[4];
+
+	if ( !window.blackBars )
+		return;
+
+	fit.drawableWidth = gls.windowWidth;
+	fit.drawableHeight = gls.windowHeight;
+	WIN_BlackBarsRect( &fit, gls.captureWidth, gls.captureHeight, rect );
+
+	vk.blitX0 = rect[0];
+	vk.blitY0 = rect[1];
+	if ( !r_renderScale->integer )
+		vk.blitFilter = GL_LINEAR;
+	vk.windowAdjusted = qtrue;
+}
+
 void get_viewport_rect( VkRect2D *r )
 {
 	if (backEnd.projection2D)
@@ -231,6 +251,13 @@ static void vk_render_splash( void )
 		VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
 		0, 0 );
 
+	// newjk: r_blackBars, the splash only covers the fit rect
+	if ( window.blackBars ) {
+		VkClearColorValue black = { { 0.0f, 0.0f, 0.0f, 1.0f } };
+		VkImageSubresourceRange range = { VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1 };
+		qvkCmdClearColorImage( vk.cmd->command_buffer, imageBuffer, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, &black, 1, &range );
+	}
+
 	Com_Memset( &imageBlit, 0, sizeof(imageBlit) );
 	imageBlit.srcSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
 	imageBlit.srcSubresource.mipLevel = 0;
@@ -348,8 +375,9 @@ void vk_create_window( void ) {
 		if (r_ignorehwgamma->integer)
 			glConfig.deviceSupportsGamma = qfalse;
 
-		gls.windowWidth = glConfig.vidWidth;
-		gls.windowHeight = glConfig.vidHeight;
+		// newjk: native size with r_blackBars
+		gls.windowWidth = window.drawableWidth;
+		gls.windowHeight = window.drawableHeight;
 
 		gls.captureWidth = glConfig.vidWidth;
 		gls.captureHeight = glConfig.vidHeight;

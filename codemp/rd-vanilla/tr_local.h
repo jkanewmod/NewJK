@@ -1066,6 +1066,9 @@ struct glconfigExt_t
 
 	qboolean doGammaCorrectionWithShaders;
 	const char *originalExtensionString;
+
+	// r_blackBars copy of the frame; 0 until first use
+	GLuint blackBarsImage;
 };
 
 int		 R_Images_StartIteration(void);
@@ -1730,6 +1733,7 @@ void RB_AddQuadStamp( vec3_t origin, vec3_t left, vec3_t up, byte *color );
 void RB_AddQuadStampExt( vec3_t origin, vec3_t left, vec3_t up, byte *color, float s1, float t1, float s2, float t2 );
 
 void RB_ShowImages( void );
+void RB_Present( void );
 
 
 /*

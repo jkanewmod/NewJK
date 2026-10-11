@@ -79,6 +79,7 @@ PFN_vkCmdBindPipeline							qvkCmdBindPipeline;
 PFN_vkCmdBindVertexBuffers						qvkCmdBindVertexBuffers;
 PFN_vkCmdBlitImage								qvkCmdBlitImage;
 PFN_vkCmdClearAttachments						qvkCmdClearAttachments;
+PFN_vkCmdClearColorImage						qvkCmdClearColorImage;
 PFN_vkCmdCopyBuffer								qvkCmdCopyBuffer;
 PFN_vkCmdCopyBufferToImage						qvkCmdCopyBufferToImage;
 PFN_vkCmdCopyImage								qvkCmdCopyImage;
@@ -1003,6 +1004,7 @@ __initStart:
 	INIT_DEVICE_FUNCTION(vkCmdBindVertexBuffers)
 	INIT_DEVICE_FUNCTION(vkCmdBlitImage)
 	INIT_DEVICE_FUNCTION(vkCmdClearAttachments)
+	INIT_DEVICE_FUNCTION(vkCmdClearColorImage)
 	INIT_DEVICE_FUNCTION(vkCmdCopyBuffer)
 	INIT_DEVICE_FUNCTION(vkCmdCopyBufferToImage)
 	INIT_DEVICE_FUNCTION(vkCmdCopyImage)
@@ -1137,6 +1139,7 @@ void vk_deinit_library( void )
 	qvkCmdBindVertexBuffers = NULL;
 	qvkCmdBlitImage = NULL;
 	qvkCmdClearAttachments = NULL;
+	qvkCmdClearColorImage = NULL;
 	qvkCmdCopyBuffer = NULL;
 	qvkCmdCopyBufferToImage = NULL;
 	qvkCmdCopyImage = NULL;

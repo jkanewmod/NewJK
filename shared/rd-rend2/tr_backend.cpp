@@ -3080,7 +3080,26 @@ static const void	*RB_SwapBuffers( const void *data ) {
 	full-resolution framebuffer copy plus a full-screen shader pass) rather than
 	paying for a no-op every frame. r_gamma isn't CVAR_LATCH, so this is re-checked
 	live every frame - no vid_restart needed to pick up a change away from 1. */
-	if ( fabsf( r_gamma->value - 1.0f ) > 0.001f )
+	if ( tr.screenFbo )
+	{
+		// newjk: r_blackBars, aspect-fit the frame into the native size window, gamma included
+		const GLfloat black[] = { 0.0f, 0.0f, 0.0f, 1.0f };
+		vec4i_t gammaBox, fitBox;
+		int rect[4];
+
+		VectorSet4(gammaBox, 0, 0, glConfig.vidWidth, glConfig.vidHeight);
+		FBO_FastBlit(NULL, gammaBox, tr.gammaFbo, gammaBox, GL_COLOR_BUFFER_BIT, GL_NEAREST);
+
+		WIN_BlackBarsRect(&window, glConfig.vidWidth, glConfig.vidHeight, rect);
+		VectorSet4(fitBox, rect[0], rect[1], rect[2], rect[3]);
+
+		qglBindFramebuffer(GL_FRAMEBUFFER, 0);
+		GL_State(GLS_DEPTHTEST_DISABLE);
+		GL_SetViewportAndScissor(0, 0, window.drawableWidth, window.drawableHeight);
+		qglClearBufferfv(GL_COLOR, 0, black);
+		RB_DrawGamma(tr.gammaFbo, fitBox);
+	}
+	else if ( fabsf( r_gamma->value - 1.0f ) > 0.001f )
 	{
 		vec4i_t gammaBox;
 		VectorSet4(gammaBox, 0, 0, glConfig.vidWidth, glConfig.vidHeight);
@@ -3095,6 +3114,12 @@ static const void	*RB_SwapBuffers( const void *data ) {
 	R_PushDebugGroup(AL_NONE, "Done with frame");
 
 	ri.WIN_Present( &window );
+
+	if ( tr.screenFbo ) // newjk: back to the r_blackBars frame
+	{
+		qglBindFramebuffer(GL_FRAMEBUFFER, tr.screenFbo->frameBuffer);
+		glState.currentFBO = NULL;
+	}
 
 	return (const void *)(cmd + 1);
 }
