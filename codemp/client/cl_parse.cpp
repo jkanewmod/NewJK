@@ -335,6 +335,26 @@ void CL_ParseSnapshot( msg_t *msg ) {
 		cl.snapshots[oldMessageNum & PACKET_MASK].valid = qfalse;
 	}
 
+	if ( !clc.demoplaying ) {
+		if ( cl.snapLastMessageNum && newSnap.messageNum == cl.snapLastMessageNum + 1 ) {
+			const int dt = newSnap.serverTime - cl.snapLastServerTime;
+			if ( dt > 0 && dt <= 250 ) {
+				// cls.realtime advances once per client frame, so this includes the frame quantization
+				const float jitter = fabsf( (float)( cls.realtime - cl.snapLastRealtime - dt ) );
+				if ( cl.snapInterval <= 0.0f ) {
+					cl.snapInterval = (float)dt;
+					cl.snapJitter = jitter;
+				} else {
+					cl.snapInterval += ( dt - cl.snapInterval ) * 0.125f;
+					cl.snapJitter += ( jitter - cl.snapJitter ) * 0.125f;
+				}
+			}
+		}
+		cl.snapLastMessageNum = newSnap.messageNum;
+		cl.snapLastServerTime = newSnap.serverTime;
+		cl.snapLastRealtime = cls.realtime;
+	}
+
 	// copy to the current good spot
 	cl.snap = newSnap;
 	cl.snap.ping = 999;

@@ -718,11 +718,48 @@ or bursted delayed packets.
 
 #define	RESET_TIME	500
 
+// stock tuning assumes ~33 ms snapshots; inside this band (or before the first sample) it is used unchanged
+#define SNAP_STOCK_INTERVAL		33.0f
+#define SNAP_STOCK_BAND			3.0f
+
+static qboolean CL_SnapIntervalIsStock( void ) {
+	return ( cl.snapInterval <= 0.0f || fabsf( cl.snapInterval - SNAP_STOCK_INTERVAL ) <= SNAP_STOCK_BAND ) ? qtrue : qfalse;
+}
+
+// scales a drift step by the server time it covers (one adjustment per client frame at most, possibly
+// several snapshots), so convergence per unit time matches a 33 ms stream
+static void CL_StepTimeDelta( int step, int covered ) {
+	if ( CL_SnapIntervalIsStock() ) {
+		cl.serverTimeDelta += step;
+		cl.timeDeltaFrac = 0.0f;
+		return;
+	}
+	float scale = ( covered > 0 ? (float)covered : cl.snapInterval ) / SNAP_STOCK_INTERVAL;
+	if ( scale < 0.25f ) scale = 0.25f;
+	else if ( scale > 4.0f ) scale = 4.0f;
+	cl.timeDeltaFrac += step * scale;
+	const int whole = (int)cl.timeDeltaFrac;
+	cl.serverTimeDelta += whole;
+	cl.timeDeltaFrac -= whole;
+}
+
+// how close to the latest snapshot counts as extrapolating: max(5, ~p90 of arrival jitter),
+// with p90 approximated as 1.6 * mean absolute jitter
+static int CL_ExtrapolationMargin( void ) {
+	if ( CL_SnapIntervalIsStock() )
+		return 5;
+	const int margin = (int)( cl.snapJitter * 1.6f + 0.5f );
+	return margin > 5 ? margin : 5;
+}
+
 void CL_AdjustTimeDelta( void ) {
 	int		newDelta;
 	int		deltaDelta;
 
 	cl.newSnapshots = qfalse;
+
+	const int covered = cl.lastAdjustServerTime ? cl.snap.serverTime - cl.lastAdjustServerTime : 0;
+	cl.lastAdjustServerTime = cl.snap.serverTime;
 
 	// the delta never drifts when replaying a demo
 	if ( clc.demoplaying ) {
@@ -754,10 +791,10 @@ void CL_AdjustTimeDelta( void ) {
 		if ( com_timescale->value == 0 || com_timescale->value == 1 ) {
 			if ( cl.extrapolatedSnapshot ) {
 				cl.extrapolatedSnapshot = qfalse;
-				cl.serverTimeDelta -= 2;
+				CL_StepTimeDelta( -2, covered );
 			} else {
 				// otherwise, move our sense of time forward to minimize total latency
-				cl.serverTimeDelta++;
+				CL_StepTimeDelta( 1, covered );
 			}
 		}
 	}
@@ -893,7 +930,7 @@ void CL_SetCGameTime( void ) {
 
 		// note if we are almost past the latest frame (without timeNudge),
 		// so we will try and adjust back a bit when the next snapshot arrives
-		if ( cls.realtime + cl.serverTimeDelta >= cl.snap.serverTime - 5 ) {
+		if ( cls.realtime + cl.serverTimeDelta >= cl.snap.serverTime - CL_ExtrapolationMargin() ) {
 			cl.extrapolatedSnapshot = qtrue;
 		}
 	}

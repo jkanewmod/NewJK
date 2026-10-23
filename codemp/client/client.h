@@ -105,6 +105,15 @@ typedef struct clientActive_s {
 									// cleared when CL_AdjustTimeDelta looks at it
 	qboolean	newSnapshots;		// set on parse of any valid packet
 
+	// measured snapshot stream (ms, EWMA 1/8 over consecutive messages), 0 until sampled
+	float		snapInterval;
+	float		snapJitter;
+	int			snapLastMessageNum;
+	int			snapLastServerTime;
+	int			snapLastRealtime;
+	float		timeDeltaFrac;		// sub-ms remainder of scaled time delta steps
+	int			lastAdjustServerTime;	// cl.snap.serverTime at the previous CL_AdjustTimeDelta
+
 	gameState_t	gameState;			// configstrings
 	char		mapname[MAX_QPATH];	// extracted from CS_SERVERINFO
 
