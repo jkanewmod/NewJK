@@ -39,6 +39,8 @@ CPrimitiveTemplate::CPrimitiveTemplate()
 	mCopy = false;
 	mName[0] = 0;
 	mCullRange = 0; // no distance culling
+	mEmitClass = FXEMIT_DYNAMIC;
+	mEmitLife = 0.0f;
 
 	mFlags = mSpawnFlags = 0;
 	mElasticity.SetRange(0.1f, 0.1f);
@@ -97,6 +99,8 @@ CPrimitiveTemplate &CPrimitiveTemplate::operator=(const CPrimitiveTemplate &that
 	mSpawnCount			= that.mSpawnCount;
 	mLife				= that.mLife;
 	mCullRange			= that.mCullRange;
+	mEmitClass			= that.mEmitClass;
+	mEmitLife			= that.mEmitLife;
 
 	mMediaHandles		= that.mMediaHandles;
 	mImpactFxHandles	= that.mImpactFxHandles;

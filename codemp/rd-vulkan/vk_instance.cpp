@@ -340,10 +340,6 @@ static void vk_create_instance( void )
     result = qvkCreateInstance(&desc, NULL, &vk.instance);
 #endif
 
-	// hotfix: reintroduce duplicate instance creation. 
-	// mysterious x64-linux configuration causing a crash after vid_restart.
-	result = qvkCreateInstance(&desc, NULL, &vk.instance);
-
     switch (result) {
         case VK_SUCCESS:
             vk_debug("--- Vulkan create instance success! ---\n\n"); break;
@@ -1008,6 +1004,7 @@ __initStart:
 	INIT_DEVICE_FUNCTION(vkCmdCopyBuffer)
 	INIT_DEVICE_FUNCTION(vkCmdCopyBufferToImage)
 	INIT_DEVICE_FUNCTION(vkCmdCopyImage)
+	INIT_DEVICE_FUNCTION(vkCmdCopyImageToBuffer)	// newjk: frame grabs
 	INIT_DEVICE_FUNCTION(vkCmdDraw)
 	INIT_DEVICE_FUNCTION(vkCmdDrawIndexed)
 	INIT_DEVICE_FUNCTION(vkCmdEndRenderPass)
@@ -1143,6 +1140,7 @@ void vk_deinit_library( void )
 	qvkCmdCopyBuffer = NULL;
 	qvkCmdCopyBufferToImage = NULL;
 	qvkCmdCopyImage = NULL;
+	qvkCmdCopyImageToBuffer = NULL;
 	qvkCmdDraw = NULL;
 	qvkCmdDrawIndexed = NULL;
 	qvkCmdEndRenderPass = NULL;

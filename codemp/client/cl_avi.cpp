@@ -65,9 +65,14 @@ typedef struct aviFileData_s
   int           chunkStackTop;
 
   byte          *cBuffer, *eBuffer;
+  int           openFrame;      // cls.framecount at open
 } aviFileData_t;
 
 static aviFileData_t afd;
+
+// a closed file's buffers: the renderer may still write the last requested frame into them this frame
+static byte *aviStaleBuffers[8];
+static int  numAviStaleBuffers;
 
 #define MAX_AVI_BUFFER 2048
 
@@ -337,6 +342,12 @@ qboolean CL_OpenAVIForWriting( const char *fileName )
   if( afd.fileOpen )
     return qfalse;
 
+  if( CL_CaptureActive() )
+  {
+    Com_Printf( S_COLOR_RED "Can't record video while a capture is active\n" );
+    return qfalse;
+  }
+
   Com_Memset( &afd, 0, sizeof( aviFileData_t ) );
 
   // Don't start if a framerate has not been chosen
@@ -362,6 +373,9 @@ qboolean CL_OpenAVIForWriting( const char *fileName )
   afd.framePeriod = (int)( 1000000.0f / afd.frameRate );
   afd.width = cls.glconfig.vidWidth;
   afd.height = cls.glconfig.vidHeight;
+  if( re->GetVideoFrameSize )
+    re->GetVideoFrameSize( &afd.width, &afd.height );
+  afd.openFrame = cls.framecount;
 
   if( cl_aviMotionJpeg->integer )
     afd.motionJpeg = qtrue;
@@ -482,6 +496,10 @@ void CL_WriteAVIVideoFrame( const byte *imageBuffer, int size )
   if( !afd.fileOpen )
     return;
 
+  // requested before this file opened
+  if( cls.framecount == afd.openFrame )
+    return;
+
   // Chunk header + contents + padding
   if( CL_CheckFileSize( 8 + size + 2 ) )
     return;
@@ -595,6 +613,27 @@ void CL_TakeVideoFrame( void )
       afd.cBuffer, afd.eBuffer, afd.motionJpeg );
 }
 
+static void CL_FreeAVIBuffer( byte *buf )
+{
+  if( numAviStaleBuffers < (int)ARRAY_LEN( aviStaleBuffers ) )
+    aviStaleBuffers[ numAviStaleBuffers++ ] = buf;
+  else
+    Z_Free( buf );
+}
+
+/*
+===============
+CL_FreeStaleAVIBuffers
+
+After the frame's render commands ran
+===============
+*/
+void CL_FreeStaleAVIBuffers( void )
+{
+  while( numAviStaleBuffers > 0 )
+    Z_Free( aviStaleBuffers[ --numAviStaleBuffers ] );
+}
+
 /*
 ===============
 CL_CloseAVI
@@ -660,8 +699,9 @@ qboolean CL_CloseAVI( void )
 
   SafeFS_Write( buffer, bufIndex, afd.f );
 
-  Z_Free( afd.cBuffer );
-  Z_Free( afd.eBuffer );
+  CL_FreeAVIBuffer( afd.cBuffer );
+  CL_FreeAVIBuffer( afd.eBuffer );
+  afd.cBuffer = afd.eBuffer = NULL;
   FS_FCloseFile( afd.f );
 
   Com_Printf( "Wrote %d:%d frames to %s\n", afd.numVideoFrames, afd.numAudioFrames, afd.fileName );

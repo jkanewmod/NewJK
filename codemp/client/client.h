@@ -558,6 +558,41 @@ int  CL_DemoApiEnsure( demoApiEnsure_t *e );
 extern qboolean demoApiServiceDemo;
 int  CL_DemoApiFindSnapshot( int serverTime, int mode );
 int  CL_DemoApiGetSnapshot( int serverTime, snapshot_t *out );
+
+// the capture service -- cg_capture.h; implemented in cl_capture.cpp
+typedef struct captureState_s {
+	qboolean		targetActive;
+	captureTarget_t	target;
+	qboolean		clockActive;
+	captureClock_t	clock;
+	float			remainder;
+	int				frameCounter;		// frames since SETCLOCK
+	qboolean		grabPending;		// grabs not yet polled
+	int				grabFrameNum;		// cl_demoFrameNum of the newest grab
+	int				grabFormat;
+	qboolean		audioActive;
+	int				audioFrameCounter;
+	qboolean		speakerMute;
+	int				notifyFrame;		// cls.framecount + 1 of the last grab that drew the notify lines
+} captureState_t;
+extern captureState_t cl_capture;
+qboolean CL_CaptureActive( void );
+qboolean CL_CaptureOwnsNotify( void );
+qboolean CL_CaptureGetCaps( captureCaps_t *out );
+qboolean CL_CaptureSetTarget( const captureTarget_t *t );
+qboolean CL_CaptureSetClock( const captureClock_t *c );
+qboolean CL_CaptureGrabFrame( byte *buffer, int bufSize, int pixelFormat );
+qboolean CL_CapturePollFrame( captureFrameInfo_t *out, qboolean wait );
+void     CL_CaptureReset( void );
+int      CL_CaptureFrameMsec( float *exactMsec );
+qboolean CL_CaptureMuteSpeakers( void );
+qboolean CL_CapturePresentThisFrame( void );
+qboolean CL_CaptureMixAudio( short *pcm, int maxFrames, int *outFrames, int flags );
+int      CL_CaptureAudioControl( int op, int value );
+qboolean CL_VulkanSupported( void );
+const char *CL_NormalizeRendererName( const char *value );
+const char *CL_RendererLibrary( void );
+qboolean CL_RequestRenderer( const char *name );
 int  CL_DemoApiCommands( demoApiCmdCursor_t *c );
 void CL_DemoApiSetTimeFraction( float g2Frac, float fxFrac );
 
@@ -738,4 +773,5 @@ void CL_TakeVideoFrame( void );
 void CL_WriteAVIVideoFrame( const byte *imageBuffer, int size );
 void CL_WriteAVIAudioFrame( const byte *pcmBuffer, int size );
 qboolean CL_CloseAVI( void );
+void CL_FreeStaleAVIBuffers( void );
 qboolean CL_VideoRecording( void );

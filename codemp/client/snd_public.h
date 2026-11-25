@@ -41,6 +41,7 @@ void S_RestartMusic( void );
 void S_StartBackgroundTrack( const char *intro, const char *loop, qboolean bCalledByCGameStart );
 void S_StopBackgroundTrack( void );
 float S_GetSampleLengthInMilliSeconds( sfxHandle_t sfxHandle);
+int S_GetDeviceRate( void );
 
 // cinematics and voice-over-network will send raw samples
 // 1.0 volume will be direct output of source samples

@@ -32,7 +32,8 @@ along with this program; if not, see <http://www.gnu.org/licenses/>.
 
 // 10: added SetNextEntityNum and DeviceLost, and gave AddLightToScene its noShadowFromEntity
 // parameter. All three backends are built from this tree, so they move together.
-#define	REF_API_VERSION 10
+// 11: capture target, frame grab, present control
+#define	REF_API_VERSION 11
 
 //
 // these are the functions exported by the refresh module
@@ -167,6 +168,14 @@ typedef struct refexport_s {
 
 	// AVI recording
 	void				(*TakeVideoFrame)						( int h, int w, byte* captureBuffer, byte *encodeBuffer, qboolean motionJpeg );
+	void				(*GetVideoFrameSize)					( int *width, int *height );	// what TakeVideoFrame captures; NULL: glconfig.vid*
+
+	// capture; NULL where unsupported
+	qboolean			(*SetCaptureTarget)						( int width, int height, int ssaa );	// render size (output*ssaa); 0,0,0 releases
+	void				(*GetCaptureLimits)						( int *maxWidth, int *maxHeight );
+	qboolean			(*CaptureFrame)							( byte *buffer, int bufSize, int pixelFormat, qboolean clearAfter, int tag );	// qfalse: refused
+	qboolean			(*CapturePoll)							( int *width, int *height, int *pixelFormat, int *tag, qboolean wait );	// oldest grab; *width 0 = failed
+	void				(*SetPresent)							( qboolean present );
 
 	// G2 stuff
 	void				(*InitSkins)							( void );

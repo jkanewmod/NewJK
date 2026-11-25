@@ -675,6 +675,18 @@ void R_ScreenShot_f ( void ) {
 RB_TakeVideoFrameCmd
 ==================
 */
+// newjk: the size of the image vk_read_pixels reads: the capture image (r_ext_supersample) or the render target
+void RE_GetVideoFrameSize( int *width, int *height )
+{
+	if ( vk.fboActive && vk.capture.image ) {
+		*width = gls.captureWidth;
+		*height = gls.captureHeight;
+	} else {
+		*width = glConfig.vidWidth;
+		*height = glConfig.vidHeight;
+	}
+}
+
 const void *RB_TakeVideoFrameCmd( const void *data )
 {
 	const videoFrameCommand_t *cmd;
@@ -682,12 +694,18 @@ const void *RB_TakeVideoFrameCmd( const void *data )
 	size_t		memcount, linelen;
 	int			padwidth, avipadwidth, padlen, avipadlen;
 	int			packAlign;
+	int			width, height;
 
 	cmd = (const videoFrameCommand_t*)data;
 
+	// newjk: never read past the source image
+	RE_GetVideoFrameSize( &width, &height );
+	width = MIN( width, cmd->width );
+	height = MIN( height, cmd->height );
+
 	packAlign = 1;
 
-	linelen = cmd->width * 3;
+	linelen = width * 3;
 
 	// Alignment stuff for glReadPixels
 	padwidth = PAD(linelen, packAlign);
@@ -698,18 +716,18 @@ const void *RB_TakeVideoFrameCmd( const void *data )
 
 	cBuf = (byte*)PADP(cmd->captureBuffer, packAlign);
 
-	vk_read_pixels(cBuf, cmd->width, cmd->height);
+	vk_read_pixels(cBuf, width, height);
 
-	memcount = padwidth * cmd->height;
+	memcount = padwidth * height;
 
 	// newjk: unconditional, as above
 	R_GammaCorrect(cBuf, memcount);
 
 	if (cmd->motionJpeg)
 	{
-		memcount = RE_SaveJPGToBuffer(cmd->encodeBuffer, linelen * cmd->height,
+		memcount = RE_SaveJPGToBuffer(cmd->encodeBuffer, linelen * height,
 			r_aviMotionJpegQuality->integer,
-			cmd->width, cmd->height, cBuf, padlen);
+			width, height, cBuf, padlen);
 		ri.CL_WriteAVIVideoFrame(cmd->encodeBuffer, memcount);
 	}
 	else
@@ -739,7 +757,7 @@ const void *RB_TakeVideoFrameCmd( const void *data )
 			srcptr += padlen;
 		}
 
-		ri.CL_WriteAVIVideoFrame(cmd->encodeBuffer, avipadwidth * cmd->height);
+		ri.CL_WriteAVIVideoFrame(cmd->encodeBuffer, avipadwidth * height);
 	}
 
 	return (const void*)(cmd + 1);
@@ -1267,6 +1285,11 @@ void RE_Shutdown( qboolean destroyWindow, qboolean restarting ) {
 	if (destroyWindow) {
 		vk_shutdown();
 
+		// the library is unloaded after this, and the cache and the ghoul2 info array with it
+		CModelCache->DeleteAll();
+		extern void Ghoul2InfoArray_Free( void );
+		Ghoul2InfoArray_Free();
+
 		Com_Memset(&glState, 0, sizeof(glState));
 
 		if (destroyWindow && !restarting) {
@@ -1447,6 +1470,7 @@ static void R_ApplySafeVideoStartup( void )
 	ri.Cvar_Set( "r_ext_multisample", "0" );
 }
 
+// capture stubs
 /*
 @@@@@@@@@@@@@@@@@@@@@
 GetRefAPI
@@ -1544,6 +1568,13 @@ Q_EXPORT refexport_t* QDECL GetRefAPI( int apiVersion, refimport_t *rimp ) {
 
 	// AVI recording
 	re.TakeVideoFrame						= RE_TakeVideoFrame;
+	re.GetVideoFrameSize					= RE_GetVideoFrameSize;
+
+	re.SetCaptureTarget						= RE_SetCaptureTarget;
+	re.GetCaptureLimits						= RE_GetCaptureLimits;
+	re.CaptureFrame							= RE_CaptureFrame;
+	re.CapturePoll							= RE_CapturePoll;
+	re.SetPresent							= RE_SetPresent;
 
 	// G2 stuff
 	re.InitSkins							= R_InitSkins;

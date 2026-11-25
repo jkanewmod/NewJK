@@ -86,6 +86,7 @@ extern cvar_t *com_unfocused;
 extern cvar_t *com_maxfps;
 extern cvar_t *com_maxfpsMinimized;
 extern cvar_t *com_maxfpsUnfocused;
+extern cvar_t *cl_hiddenWindow;	// NULL on a dedicated server
 
 sysEvent_t	Sys_GetEvent( void );
 
@@ -234,6 +235,8 @@ window_t	WIN_Init( const windowDesc_t *desc, glconfig_t *glConfig );
 void		WIN_Present( window_t *window );
 void		WIN_SetGamma( glconfig_t *glConfig, byte red[256], byte green[256], byte blue[256] );
 void		WIN_Shutdown( void );
+typedef struct monitorInfo_s monitorInfo_t;
+int			WIN_GetMonitors( monitorInfo_t *out, int max );
 void *		WIN_GL_GetProcAddress( const char *proc );
 qboolean	WIN_GL_ExtensionSupported( const char *extension );
 
@@ -251,3 +254,6 @@ qboolean	WIN_VK_IsMinimized(void);
 // at least one physical device? Never creates a window/surface. Safe to call before
 // deciding whether to load the Vulkan renderer at all.
 qboolean	WIN_VK_ProbeSupport(void);
+
+// asks the desktop for attention until the window is focused; no-op for a hidden window
+void		WIN_FlashWindow(void);

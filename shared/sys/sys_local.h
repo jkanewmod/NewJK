@@ -30,6 +30,9 @@ void 		IN_Restart( void );
 
 void		Sys_PlatformInit( void );
 void		Sys_PlatformExit( void );
+#ifdef _WIN32
+void		Sys_DisableErrorBoxes( void );
+#endif
 qboolean	Sys_GetPacket( netadr_t *net_from, msg_t *net_message );
 char		*Sys_ConsoleInput( void );
 void 		Sys_QueEvent( int time, sysEventType_t type, int value, int value2, int ptrLength, void *ptr );

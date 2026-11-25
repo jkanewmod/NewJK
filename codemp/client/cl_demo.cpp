@@ -140,7 +140,7 @@ void CL_ReadDemoMessage( void ) {
 	CL_ParseServerMessage( &buf );
 }
 
-#define DEMOSCAN_PEEK_BYTES		(1024)
+#define DEMOSCAN_WINDOW			( 256 * 1024 )		// > MAX_MSGLEN + 8: a whole message is always in the window
 
 demoRaw_t	demoRaw;
 
@@ -180,47 +180,69 @@ static qboolean CL_ScanReadGamestateInfo( msg_t *buf, char *outMap, int outMapSi
 	return haveMap;
 }
 
+// the scan reads the file through one window, sequentially: a read per window, no seeks
+typedef struct {
+	fileHandle_t	f;
+	int				fileBase;		// file offset of buf[0]
+	int				len, pos;
+	byte			buf[DEMOSCAN_WINDOW + 64];		// slack: the bit reader may look a few bytes past a message
+} scanReader_t;
+
+// at least n unread bytes in the window, or qfalse at the end of the file
+static qboolean SR_Ensure( scanReader_t *sr, int n ) {
+	int got;
+
+	if ( sr->len - sr->pos >= n ) {
+		return qtrue;
+	}
+	if ( sr->pos > 0 ) {
+		memmove( sr->buf, sr->buf + sr->pos, sr->len - sr->pos );
+		sr->fileBase += sr->pos;
+		sr->len -= sr->pos;
+		sr->pos = 0;
+	}
+	got = FS_Read( sr->buf + sr->len, DEMOSCAN_WINDOW - sr->len, sr->f );
+	if ( got > 0 ) {
+		sr->len += got;
+	}
+	return (qboolean)( sr->len - sr->pos >= n );
+}
+
 static qboolean CL_ScanDemoFile( const char *demoPath, demoRaw_t *r ) {
-	fileHandle_t	f = 0;
-	static byte		bufData[MAX_MSGLEN];
+	static scanReader_t	sr;
 
 	DR_Free( r );
 	DR_Init( r );
 
-	FS_FOpenFileRead( demoPath, &f, qtrue );
-	if ( !f ) {
+	memset( &sr, 0, sizeof( sr ) );
+	FS_FOpenFileRead( demoPath, &sr.f, qtrue );
+	if ( !sr.f ) {
 		return qfalse;
 	}
 
 	while ( 1 ) {
-		int			seq, len, peek, cmd, serverTime = 0;
+		int			len, cmd, serverTime = 0;
 		msg_t		buf;
 		qboolean	gotTime = qfalse;
-		int			recordStart = FS_FTell( f );
+		int			recordStart;
 
-		if ( FS_Read( &seq, 4, f ) != 4 || FS_Read( &len, 4, f ) != 4 ) {
+		if ( !SR_Ensure( &sr, 8 ) ) {
 			break;
 		}
+		recordStart = sr.fileBase + sr.pos;
+		memcpy( &len, sr.buf + sr.pos + 4, sizeof( len ) );
 		len = LittleLong( len );
-		if ( len == -1 || len <= 0 || len > MAX_MSGLEN ) {
-			break;
-		}
-		peek = ( len > DEMOSCAN_PEEK_BYTES ) ? len : DEMOSCAN_PEEK_BYTES;
-		if ( peek > len ) {
-			peek = len;
-		}
-		if ( FS_Read( bufData, peek, f ) != peek ) {
-			break;
-		}
-		if ( len > peek && FS_Seek( f, len - peek, FS_SEEK_CUR ) ) {
+		sr.pos += 8;
+		if ( len == -1 || len <= 0 || len > MAX_MSGLEN || !SR_Ensure( &sr, len ) ) {
 			break;
 		}
 
-		MSG_Init( &buf, bufData, sizeof( bufData ) );
-		buf.cursize = peek;
+		MSG_Init( &buf, sr.buf + sr.pos, len );
+		buf.cursize = len;
 		buf.readcount = 0;
 		MSG_Bitstream( &buf );
 		MSG_ReadLong( &buf );
+		sr.pos += len;
 
 		while ( buf.readcount <= buf.cursize ) {
 			cmd = MSG_ReadByte( &buf );
@@ -260,7 +282,7 @@ static qboolean CL_ScanDemoFile( const char *demoPath, demoRaw_t *r ) {
 		}
 	}
 
-	FS_FCloseFile( f );
+	FS_FCloseFile( sr.f );
 	return (qboolean)( r->numSnaps > 0 && r->numGs > 0 );
 }
 
@@ -540,6 +562,9 @@ void CL_PlayDemo_f( void ) {
 	char		name[MAX_OSPATH], extension[32];
 	char		*arg;
 	int			demoFileLen = 0;
+#ifdef _DEBUG
+	int			t0 = Sys_Milliseconds(), tScan, tCache, tIndex;
+#endif
 
 	Cvar_Set("demoname", "");
 
@@ -668,13 +693,26 @@ void CL_PlayDemo_f( void ) {
 
 	Q_strncpyz( cls.servername, arg, sizeof( cls.servername ) );
 
+	// the connect screen now, so the scan and index work below happens behind it
+	Key_SetCatcher( 0 );
+	SCR_UpdateScreen();
+#ifdef _DEBUG
+	Com_Printf( "Demo loading screen drawn\n" );
+#endif
+
 	CL_DemoKeyframesFree();
 	CL_DemoApiReset();
 	CL_DemoCmdLogSetFileSize( demoFileLen );
 
+#ifdef _DEBUG
+	tScan = Sys_Milliseconds();
+#endif
 	if ( !CL_ScanDemoFile( name, &demoRaw ) ) {
 		DR_Free( &demoRaw );
 	}
+#ifdef _DEBUG
+	tScan = Sys_Milliseconds() - tScan;
+#endif
 	if ( demoRaw.capped ) {
 		Com_Printf( "Demo has more than %d map loads; playback ends at the last one indexed\n", DEMOAPI_MAX_GAMESTATES );
 	}
@@ -683,10 +721,20 @@ void CL_PlayDemo_f( void ) {
 
 	// the cache and the forward decoder exist before anything is decoded, so the game module's first
 	// frames (which run during the load itself) find the service ready rather than absent
+#ifdef _DEBUG
+	tCache = Sys_Milliseconds();
+#endif
 	CL_DemoCacheAlloc();
 	CL_DemoApiOpen( name );
-
+#ifdef _DEBUG
+	tCache = Sys_Milliseconds() - tCache;
+	tIndex = Sys_Milliseconds();
+#endif
 	CL_DemoPrescanIndex( name );
+#ifdef _DEBUG
+	tIndex = Sys_Milliseconds() - tIndex;
+	Com_Printf( "Demo opened in %dms (scan %d, cache %d, index %d) at %d\n", Sys_Milliseconds() - t0, tScan, tCache, tIndex, t0 );
+#endif
 
 	// read demo messages until connected
 	while ( cls.state >= CA_CONNECTED && cls.state < CA_PRIMED ) {

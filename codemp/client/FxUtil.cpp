@@ -30,6 +30,7 @@ struct SEffectList
 	CEffect *mEffect;
 	int		mKillTime;
 	bool	mPortal;
+	bool	mMomentary;	// lives until time next advances
 };
 
 #define PI		3.14159f
@@ -39,6 +40,7 @@ SEffectList		*nextValidEffect;
 SFxHelper		theFxHelper;
 
 int				activeFx = 0;
+bool			fxAddMomentary = false;
 int				drawnFx;
 qboolean		fxInitialized = qfalse;
 
@@ -179,6 +181,29 @@ static SEffectList *FX_GetValidEffect()
 }
 
 //-------------------------
+// FX_ExpireMomentary
+//-------------------------
+void FX_ExpireMomentary( void )
+{
+	int			i;
+	SEffectList	*ef;
+	int			numFx = activeFx;
+
+	for ( i = 0, ef = effectList; i < MAX_EFFECTS && numFx; i++, ef++ )
+	{
+		if ( ef->mEffect != 0 )
+		{
+			--numFx;
+			if ( ef->mMomentary )
+			{
+				ef->mEffect->ClearFlags( FX_DEATH_RUNS_FX | FX_KILL_ON_IMPACT );
+				FX_FreeMember( ef );
+			}
+		}
+	}
+}
+
+//-------------------------
 // FX_Add
 //
 // Adds all fx to the view
@@ -210,7 +235,23 @@ void FX_Add( bool portal )
 			}
 			else
 			{
-				if ( ef->mEffect->Update() == false )
+				bool	alive;
+
+				if ( ef->mMomentary )
+				{
+					// always drawn as just spawned
+					float	frac = theFxHelper.mTimeFrac;
+
+					theFxHelper.mTimeFrac = 0.0f;
+					alive = ef->mEffect->Update();
+					theFxHelper.mTimeFrac = frac;
+				}
+				else
+				{
+					alive = ef->mEffect->Update();
+				}
+
+				if ( alive == false )
 				{
 					// We've been marked for death
 					FX_FreeMember( ef );
@@ -245,6 +286,7 @@ void FX_AddPrimitive( CEffect **pEffect, int killTime )
 	item->mEffect = *pEffect;
 	item->mKillTime = theFxHelper.mTime + killTime;
 	item->mPortal = gEffectsInPortal;	//global set in AddScheduledEffects
+	item->mMomentary = fxAddMomentary;
 
 	activeFx++;
 

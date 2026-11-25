@@ -273,7 +273,7 @@ CHANNEL MIXING
 
 ===============================================================================
 */
-static void S_PaintChannelFrom16( channel_t *ch, const sfx_t *sfx, int count, int sampleOffset, int bufferOffset )
+static void S_PaintChannelFrom16( channel_t *ch, const sfx_t *sfx, int count, int sampleOffset, int bufferOffset, portable_samplepair_t *dest )
 {
 	portable_samplepair_t	*pSamplesDest;
 	int iData;
@@ -282,10 +282,14 @@ static void S_PaintChannelFrom16( channel_t *ch, const sfx_t *sfx, int count, in
 	int iLeftVol	= ch->leftvol  * snd_vol;
 	int iRightVol	= ch->rightvol * snd_vol;
 
-	pSamplesDest	= &paintbuffer[ bufferOffset ];
+	pSamplesDest	= &dest[ bufferOffset ];
 
 	for ( int i=0 ; i<count ; i++ )
 	{
+		// a doppler-scaled read reaches the sound's end before count does
+		if ( (int)ofst >= sfx->iSoundLengthInSamples ) {
+			break;
+		}
 		iData = sfx->pSoundData[ (int)ofst ];
 
 		pSamplesDest[i].left  += (iData * iLeftVol )>>8;
@@ -299,7 +303,7 @@ static void S_PaintChannelFrom16( channel_t *ch, const sfx_t *sfx, int count, in
 }
 
 
-void S_PaintChannelFromMP3( channel_t *ch, const sfx_t *sc, int count, int sampleOffset, int bufferOffset )
+void S_PaintChannelFromMP3( channel_t *ch, const sfx_t *sc, int count, int sampleOffset, int bufferOffset, portable_samplepair_t *dest )
 {
 	int data;
 	int leftvol, rightvol;
@@ -314,7 +318,7 @@ void S_PaintChannelFromMP3( channel_t *ch, const sfx_t *sc, int count, int sampl
 	rightvol = ch->rightvol*snd_vol;
 	sfx = tempMP3Buffer;
 
-	samp = &paintbuffer[ bufferOffset ];
+	samp = &dest[ bufferOffset ];
 
 
 	while ( count & 3 ) {
@@ -349,18 +353,18 @@ void S_PaintChannelFromMP3( channel_t *ch, const sfx_t *sc, int count, int sampl
 
 // subroutinised to save code dup (called twice)	-ste
 //
-void ChannelPaint(channel_t *ch, sfx_t *sc, int count, int sampleOffset, int bufferOffset)
+void ChannelPaint(channel_t *ch, sfx_t *sc, int count, int sampleOffset, int bufferOffset, portable_samplepair_t *dest)
 {
 	switch (sc->eSoundCompressionMethod)
 	{
 		case ct_16:
 
-			S_PaintChannelFrom16		(ch, sc, count, sampleOffset, bufferOffset);
+			S_PaintChannelFrom16		(ch, sc, count, sampleOffset, bufferOffset, dest);
 			break;
 
 		case ct_MP3:
 
-			S_PaintChannelFromMP3		(ch, sc, count, sampleOffset, bufferOffset);
+			S_PaintChannelFromMP3		(ch, sc, count, sampleOffset, bufferOffset, dest);
 			break;
 
 		default:
@@ -392,7 +396,9 @@ std::unique_ptr<char[]> GetKeyValue(const char *input, const char *key) {
 	return nullptr;
 }
 
-void S_PaintChannels( int endtime ) {
+// table is painted from *paintedtime to endtime into dest; muted zeroes every volume; transferToDma = the speaker
+// paint (music, the test tone, the output mute, the DMA buffer and the AVI audio)
+void S_PaintChannelsCore( channel_t *table, int *paintedtime, int endtime, portable_samplepair_t *dest, qboolean muted, qboolean transferToDma ) {
 	int 	i;
 	int 	end;
 	channel_t *ch;
@@ -432,24 +438,48 @@ void S_PaintChannels( int endtime ) {
 	}
 
 	int weapon_vol = (int)(weapon_vol_static * s_volumeMaster->value), weapon_vol_local = (int)(weapon_vol_local_static * s_volumeMaster->value);
-	if (s_mute->integer || (com_minimized->integer && !s_unfocused->integer) || (com_unfocused->integer && !s_unfocused->integer))
+	if ( !transferToDma ) {
+		/*
+			capture: the classes keep their ratios, the loudest at a fixed level with headroom (a full-scale mix clips
+			in fights); the listening level (s_volumeMaster, and how high all classes are set) does not apply
+		*/
+		const float ref = 0.15f * 256;
+		const float n = s_volume->value, v = s_volumeVoice->value, a = s_volumeAnnouncer->string[0] ? s_volumeAnnouncer->value : n;
+		const float w = weapon_vol_static / 256.0f, wl = weapon_vol_local_static / 256.0f;
+		const float top = Q_max( Q_max( n, v ), Q_max( a, Q_max( w, wl ) ) );
+
+		if ( top <= 0.0f ) {
+			snd_vol = normal_vol = voice_vol = announcer_vol = weapon_vol = weapon_vol_local = (int)ref;
+		} else {
+			snd_vol = normal_vol = (int)( n / top * ref );
+			voice_vol = (int)( v / top * ref );
+			announcer_vol = (int)( a / top * ref );
+			weapon_vol = (int)( w / top * ref );
+			weapon_vol_local = (int)( wl / top * ref );
+		}
+	}
+	if (muted)
 		snd_vol = normal_vol = voice_vol = announcer_vol = weapon_vol = weapon_vol_local = 0;
 
-//Com_Printf ("%i to %i\n", s_paintedtime, endtime);
-	while ( s_paintedtime < endtime ) {
+//Com_Printf ("%i to %i\n", *paintedtime, endtime);
+	while ( *paintedtime < endtime ) {
+		const int painted = *paintedtime;
+
 		// if paintbuffer is smaller than DMA buffer
 		// we may need to fill it multiple times
 		end = endtime;
-		if ( endtime - s_paintedtime > PAINTBUFFER_SIZE ) {
-			end = s_paintedtime + PAINTBUFFER_SIZE;
+		if ( endtime - painted > PAINTBUFFER_SIZE ) {
+			end = painted + PAINTBUFFER_SIZE;
 		}
 
 		// clear the paint buffer to either music or zeros
-		if ( s_rawend < s_paintedtime ) {
+		if ( !transferToDma ) {
+			memset(dest, 0, (end - painted) * sizeof(portable_samplepair_t));
+		} else if ( s_rawend < painted ) {
 			if ( s_rawend ) {
 				//Com_DPrintf ("background sound underrun\n");
 			}
-			memset(paintbuffer, 0, (end - s_paintedtime) * sizeof(portable_samplepair_t));
+			memset(paintbuffer, 0, (end - painted) * sizeof(portable_samplepair_t));
 		} else {
 			// copy from the streaming sound source
 			int		s;
@@ -457,25 +487,28 @@ void S_PaintChannels( int endtime ) {
 
 			stop = (end < s_rawend) ? end : s_rawend;
 
-			for ( i = s_paintedtime ; i < stop ; i++ ) {
+			for ( i = painted ; i < stop ; i++ ) {
 				s = i&(MAX_RAW_SAMPLES-1);
-				paintbuffer[i-s_paintedtime] = s_rawsamples[s];
+				paintbuffer[i-painted] = s_rawsamples[s];
 			}
 //		if (i != end)
 //			Com_Printf ("partial stream\n");
 //		else
 //			Com_Printf ("full stream\n");
 			for ( ; i < end ; i++ ) {
-				paintbuffer[i-s_paintedtime].left =
-				paintbuffer[i-s_paintedtime].right = 0;
+				paintbuffer[i-painted].left =
+				paintbuffer[i-painted].right = 0;
 			}
 		}
 
 		// paint in the channels.
-		ch = s_channels;
+		ch = table;
 		for ( i = 0; i < MAX_CHANNELS ; i++, ch++ ) {
 			if ( !ch->thesfx || (ch->leftvol<0.25 && ch->rightvol<0.25 )) {
 				continue;
+			}
+			if ( !transferToDma && !ch->thesfx->bInMemory ) {
+				continue;	// the capture table outlived the sound's data
 			}
 
 			if (ch->entchannel == CHAN_VOICE || ch->entchannel == CHAN_VOICE_ATTEN || ch->entchannel == CHAN_VOICE_GLOBAL) {
@@ -500,7 +533,7 @@ void S_PaintChannels( int endtime ) {
 				snd_vol = normal_vol;
 			}
 
-			ltime = s_paintedtime;
+			ltime = painted;
 			sc = ch->thesfx;
 
 			// we might have to make 2 passes if it is
@@ -521,7 +554,7 @@ void S_PaintChannels( int endtime ) {
 				}
 
 				if ( count > 0 ) {
-					ChannelPaint(ch, sc, count, sampleOffset, ltime - s_paintedtime);
+					ChannelPaint(ch, sc, count, sampleOffset, ltime - painted, dest);
 					ltime += count;
 				}
 			} while ( ltime < end && ch->loopSound );
@@ -563,8 +596,18 @@ void S_PaintChannels( int endtime ) {
 			}
 		}
 */
-		// transfer out according to DMA format
-		S_TransferPaintBuffer( end );
-		s_paintedtime = end;
+		if ( transferToDma ) {
+			if ( CL_CaptureMuteSpeakers() ) {
+				Com_Memset( paintbuffer, 0, ( end - painted ) * sizeof( paintbuffer[0] ) );
+			}
+			// transfer out according to DMA format
+			S_TransferPaintBuffer( end );
+		}
+		*paintedtime = end;
 	}
+}
+
+void S_PaintChannels( int endtime ) {
+	S_PaintChannelsCore( s_channels, &s_paintedtime, endtime, paintbuffer, (qboolean)( s_mute->integer
+		|| (com_minimized->integer && !s_unfocused->integer) || (com_unfocused->integer && !s_unfocused->integer) ), qtrue );
 }

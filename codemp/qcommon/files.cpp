@@ -273,7 +273,6 @@ static const char *const FS_PBR_SIBLING_SUFFIXES[] = {
 #ifndef DEDICATED
 extern cvar_t *cl_renderer;
 extern cvar_t *r_pbrTextures;
-#define FS_REND2_RENDER_LIBRARY "rd-rend2"
 #endif
 
 typedef union qfile_gus {
@@ -1471,7 +1470,7 @@ static qboolean FS_ShouldBlockPBRAssets( void ) {
 		case 0: return qtrue;	// never load PBR-authored assets, on any renderer
 		case 2: return qfalse;	// always load them, on any renderer
 		default:				// 1 (default): only on rd-rend2
-			return (qboolean)( !cl_renderer || Q_stricmp( cl_renderer->string, FS_REND2_RENDER_LIBRARY ) );
+			return (qboolean)( !cl_renderer || cl_renderer->integer != 2 );
 	}
 }
 #else

@@ -772,6 +772,7 @@ int			Com_Filter(char *filter, char *name, int casesensitive);
 int			Com_FilterPath(char *filter, char *name, int casesensitive);
 int			Com_RealTime(qtime_t *qtime);
 qboolean	Com_SafeMode( void );
+qboolean	Com_CommandLineHasSet( const char *name );
 void		Com_RunAndTimeServerPacket(netadr_t *evFrom, msg_t *buf);
 
 void		Com_StartupVariable( const char *match );
@@ -805,6 +806,7 @@ extern	cvar_t	*com_G2Report;
 
 extern	cvar_t	*com_affinity;
 extern	cvar_t	*com_busyWait;
+extern	cvar_t	*com_noConfigWrite;
 
 // both client and server must agree to pause
 extern	cvar_t	*cl_paused;
@@ -818,6 +820,7 @@ extern	int		time_backend;		// renderer backend time
 extern	int		com_frameTime;
 
 extern	int		com_frameMsecRaw;
+extern	int		com_captureMinMsec;		// -1 none, else the capture clock's minimum frame msec
 
 extern	qboolean	com_errorEntered;
 

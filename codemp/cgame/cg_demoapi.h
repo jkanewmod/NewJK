@@ -114,6 +114,7 @@ typedef struct demoApiEventCursor_s {
 #define DEMOCLOCK_VIDEO				0x1
 #define DEMOCLOCK_TIMEDEMO			0x2
 #define DEMOCLOCK_FIXED				0x4
+#define DEMOCLOCK_CAPTURE			0x8
 
 typedef struct demoApiClock_s {
 	float	frameMsec;			// this frame, before timescale

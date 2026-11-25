@@ -463,6 +463,7 @@ endif(WIN32)
 		"${MPDir}/client/cl_lan.h"
 		"${MPDir}/client/cl_demo.cpp"
 		"${MPDir}/client/cl_demo_api.cpp"
+		"${MPDir}/client/cl_capture.cpp"
 		"${MPDir}/client/cl_demo_cache.cpp"
 		"${MPDir}/client/cl_demo_decode.cpp"
 		"${MPDir}/client/cl_demo_local.h"
@@ -493,6 +494,7 @@ endif(WIN32)
 		"${MPDir}/client/snd_local.h"
 		"${MPDir}/client/snd_mem.cpp"
 		"${MPDir}/client/snd_mix.cpp"
+		"${MPDir}/client/snd_capture.cpp"
 		"${MPDir}/client/snd_mp3.cpp"
 		"${MPDir}/client/snd_mp3.h"
 		"${MPDir}/client/snd_music.cpp"
@@ -569,6 +571,7 @@ endif(WIN32)
 			"${MPDir}/win32/icon.ico"
 			"${MPDir}/win32/resource.h"
 			"${MPDir}/win32/openjk.rc"
+			"${MPDir}/win32/newjk.manifest"
 			)
 
 		set(MPEngineFiles ${MPEngineFiles} ${MPEngineWin32Files})
@@ -652,6 +655,10 @@ endif(WIN32)
 
 	set_target_properties(${MPEngine} PROPERTIES INCLUDE_DIRECTORIES "${MPEngineIncludeDirectories}")
 	set_target_properties(${MPEngine} PROPERTIES PROJECT_LABEL "MP Client")
+	if(MSVC AND NOT WIN64)
+		# 4 GB of address space instead of 2 GB on 64-bit Windows
+		set_property(TARGET ${MPEngine} APPEND_STRING PROPERTY LINK_FLAGS " /LARGEADDRESSAWARE")
+	endif()
 	target_link_libraries(${MPEngine} ${MPEngineLibraries})
 endif(BuildMPEngine)
 
@@ -744,6 +751,9 @@ if(BuildMPDed)
 
 	set_target_properties(${MPDed} PROPERTIES INCLUDE_DIRECTORIES "${MPDedIncludeDirectories}")
 	set_target_properties(${MPDed} PROPERTIES PROJECT_LABEL "MP Dedicated Server")
+	if(MSVC AND NOT WIN64)
+		set_property(TARGET ${MPDed} APPEND_STRING PROPERTY LINK_FLAGS " /LARGEADDRESSAWARE")
+	endif()
 	target_link_libraries(${MPDed} ${MPDedLibraries})
 endif(BuildMPDed)
 

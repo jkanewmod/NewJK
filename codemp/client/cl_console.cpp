@@ -1016,14 +1016,12 @@ void Con_DrawSolidConsole( float frac ) {
 	if (!rendererLine[0] || rendererLineModCount != cl_renderer->modificationCount) {
 		rendererLineModCount = cl_renderer->modificationCount;
 		const char *rendererLabel;
-		if (!Q_stricmp(cl_renderer->string, "rd-vanilla"))
-			rendererLabel = "Vanilla";
-		else if (!Q_stricmp(cl_renderer->string, "rd-vulkan"))
+		if (cl_renderer->integer == 1)
 			rendererLabel = "Vulkan";
-		else if (!Q_stricmp(cl_renderer->string, "rd-rend2"))
+		else if (cl_renderer->integer == 2)
 			rendererLabel = "Rend2";
 		else
-			rendererLabel = cl_renderer->string;
+			rendererLabel = "Vanilla";
 		Q_strncpyz(rendererLine, va("%s Renderer", rendererLabel), sizeof(rendererLine));
 		rendererLen = strlen(rendererLine);
 	}
@@ -1146,7 +1144,7 @@ void Con_DrawConsole( void ) {
 		Con_DrawSolidConsole( con.displayFrac );
 	} else {
 		// draw notify lines
-		if ( cls.state == CA_ACTIVE ) {
+		if ( cls.state == CA_ACTIVE && !CL_CaptureOwnsNotify() ) {
 			Con_DrawNotify ();
 		}
 	}

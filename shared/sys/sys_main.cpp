@@ -40,6 +40,7 @@ cvar_t *com_unfocused;
 cvar_t *com_maxfps;
 cvar_t *com_maxfpsMinimized;
 cvar_t *com_maxfpsUnfocused;
+cvar_t *cl_hiddenWindow;
 
 /*
 =================
@@ -164,6 +165,13 @@ void Sys_Init( void ) {
 #endif
 	com_maxfpsUnfocused = Cvar_Get( "com_maxfpsUnfocused", "0", CVAR_ARCHIVE );
 	com_maxfpsMinimized = Cvar_Get( "com_maxfpsMinimized", "50", CVAR_ARCHIVE );
+#ifndef DEDICATED
+	cl_hiddenWindow = Cvar_Get( "cl_hiddenWindow", "0", CVAR_INIT, "Keep the window hidden and windowed; only com_maxfps caps the frame rate" );
+#ifdef _WIN32
+	if ( Com_CommandLineHasSet( "com_noErrorDialog" ) )
+		Sys_DisableErrorBoxes();
+#endif
+#endif
 }
 
 static void NORETURN Sys_Exit( int ex ) {
@@ -185,6 +193,18 @@ static void NORETURN Sys_Exit( int ex ) {
 }
 
 #if !defined(DEDICATED)
+// skipping the message box keeps an unattended process from blocking on it
+static qboolean Sys_ShowErrorBox( const char *message )
+{
+	if ( Com_CommandLineHasSet( "com_noErrorDialog" ) )
+	{
+		fprintf( stderr, "%s\nNo error dialog (com_noErrorDialog)\n", message );
+		fflush( stderr );
+		return qtrue;
+	}
+	return (qboolean)( SDL_ShowSimpleMessageBox( SDL_MESSAGEBOX_ERROR, "Error", message, NULL ) >= 0 );
+}
+
 static void Sys_ErrorDialog( const char *error )
 {
 	time_t rawtime;
@@ -193,11 +213,18 @@ static void Sys_ErrorDialog( const char *error )
 
 	time( &rawtime );
 	strftime( timeStr, sizeof( timeStr ), "%Y-%m-%d_%H-%M-%S", localtime( &rawtime ) ); // or gmtime
+	// a portable install (the default) has no per-user homepath
+	const char *homePath = Sys_DefaultHomePath();
+	if ( !homePath || !homePath[0] )
+		homePath = Cvar_VariableString( "fs_homepath" );
+	if ( !homePath[0] )
+		homePath = ".";
+
 	Com_sprintf( crashLogPath, sizeof( crashLogPath ),
 					"%s%ccrashlog-%s.txt",
-					Sys_DefaultHomePath(), PATH_SEP, timeStr );
+					homePath, PATH_SEP, timeStr );
 
-	Sys_Mkdir( Sys_DefaultHomePath() );
+	Sys_Mkdir( homePath );
 
 	FILE *fp = fopen( crashLogPath, "w" );
 	if ( fp )
@@ -206,7 +233,7 @@ static void Sys_ErrorDialog( const char *error )
 		fclose( fp );
 
 		const char *errorMessage = va( "%s\n\nThe crash log was written to %s", error, crashLogPath );
-		if ( SDL_ShowSimpleMessageBox( SDL_MESSAGEBOX_ERROR, "Error", errorMessage, NULL ) < 0 )
+		if ( !Sys_ShowErrorBox( errorMessage ) )
 		{
 			fprintf( stderr, "%s", errorMessage );
 		}
@@ -219,7 +246,7 @@ static void Sys_ErrorDialog( const char *error )
 
 		const char *errorMessage = va( "%s\nCould not write the crash log file, but we printed it to stderr.\n"
 										"Try running the game using a command line interface.", error );
-		if ( SDL_ShowSimpleMessageBox( SDL_MESSAGEBOX_ERROR, "Error", errorMessage, NULL ) < 0 )
+		if ( !Sys_ShowErrorBox( errorMessage ) )
 		{
 			// We really have hit rock bottom here :(
 			fprintf( stderr, "%s", errorMessage );
@@ -786,7 +813,11 @@ int main ( int argc, char* argv[] )
 			}
 #endif
 
+#if defined(_JK2EXE)
 			if ( com_minimized->integer )
+#else
+			if ( com_minimized->integer && com_captureMinMsec < 0 && !( cl_hiddenWindow && cl_hiddenWindow->integer ) )
+#endif
 			{
 				shouldSleep = true;
 			}

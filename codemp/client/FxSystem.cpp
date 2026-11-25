@@ -44,6 +44,7 @@ SFxHelper::SFxHelper() :
 	mTimeFrac(0.0f),
 	mFrameTimeF(0.0f),
 	mFrameNum(0),
+	mMoment(0),
 	refdef(0)
 {
 }
@@ -105,6 +106,10 @@ void SFxHelper::AdjustTime( int frametime )
 		}
 
 		mRealTime = mFrameTimeF * 0.001f;
+
+		if ( mFrameTimeF > 0.0f ) {
+			mMoment++;
+		}
 
 
 /*		mFrameTime = frametime;

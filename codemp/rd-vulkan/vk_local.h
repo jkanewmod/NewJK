@@ -676,6 +676,7 @@ typedef struct vk_tess_s {
 #endif
 	VkFence				rendering_finished_fence;
 	qboolean			waitForFence;
+	uint64_t			serial;			// newjk: vk.frameSerial of this buffer's last submit
 	
 	VkBuffer			vertex_buffer;
 	byte				*vertex_buffer_ptr; // pointer to mapped vertex buffer
@@ -715,6 +716,17 @@ typedef struct vk_tess_s {
 	uint32_t			bones_ubo_offset;
 	uint32_t			fogs_ubo_offset;
 } vk_tess_t;
+
+// newjk: frame grab ring
+#define VK_CAPTURE_RING	4
+
+typedef enum {
+	CAPSLOT_FREE,
+	CAPSLOT_QUEUED,		// reserved, its render command not yet executed
+	CAPSLOT_RECORDED,	// copy recorded, frame not yet submitted
+	CAPSLOT_SUBMITTED,
+	CAPSLOT_FAILED		// its frame never reached the GPU; polls as width 0
+} vkCaptureSlotState_t;
 
 // Vk_Instance contains engine-specific vulkan resources that persist entire renderer lifetime.
 // This structure is initialized/deinitialized by vk_initialize/vk_shutdown functions correspondingly.
@@ -1119,6 +1131,39 @@ typedef struct {
 		uint32_t descriptor_size;
 	} debug;
 
+	// newjk: offscreen capture target, RE_SetCaptureTarget
+	struct {
+		qboolean	active;
+		uint32_t	width, height;			// render size, glConfig.vid* while active
+		uint32_t	outWidth, outHeight;	// output size, gls.capture* while active
+		uint32_t	savedVidWidth, savedVidHeight, savedCapW, savedCapH;
+		int			savedBlitFilter;
+	} captureTarget;
+	uint32_t maxTargetWidth, maxTargetHeight;
+
+	// newjk: frame grabs, a ring of host-visible buffers in grab order (RE_CaptureFrame/RE_CapturePoll)
+	struct {
+		VkBuffer		buffer;
+		VkDeviceMemory	memory;
+		byte			*mapped;
+		VkDeviceSize	size;
+		qboolean		coherent;
+		vkCaptureSlotState_t state;
+		byte			*dst;
+		int				dstSize;
+		int				pixelFormat;	// requested
+		int				tag;
+		uint32_t		width, height;
+		int				cmdIndex;		// the command buffer it was recorded into
+		uint64_t		serial;			// the submit that carries it
+	} captureRing[VK_CAPTURE_RING];
+	int			captureRingHead, captureRingTail;	// next to reserve, oldest outstanding
+	uint32_t	captureRingGeneration;	// ++ whenever outstanding grabs are dropped
+	uint64_t	frameSerial;		// ++ at every submit in vk_end_frame
+	uint64_t	completedSerial;	// highest serial whose fence was waited on in vk_begin_frame
+
+	qboolean	presentSuppressed;	// newjk: RE_SetPresent( qfalse ) for the coming frame
+
 } Vk_Instance;
 
 extern Vk_Instance	vk;				// shouldn't be cleared during ref re-init
@@ -1129,6 +1174,7 @@ qboolean	vk_surface_format_color_depth( VkFormat format, int* r, int* g, int* b 
 void		vk_set_clearcolor( void );
 void		vk_create_window( void );
 void		vk_initialize( void );
+void		vk_print_render_config( void );
 void		vk_shutdown( void );
 void		vk_init_library( void );
 void		vk_deinit_library( void );
@@ -1150,6 +1196,8 @@ void		vk_update_post_process_pipelines( void );
 
 // swapchain
 void		vk_restart_swapchain( const char *funcname );
+qboolean	RE_SetCaptureTarget( int width, int height, int ssaa );
+void		RE_GetCaptureLimits( int *maxWidth, int *maxHeight );
 qboolean	vk_surface_size_changed( void );
 void		vk_set_black_bars( void );
 void		vk_destroy_swapchain( void );
@@ -1202,7 +1250,7 @@ uint32_t	vk_find_memory_type( uint32_t memory_type_bits, VkMemoryPropertyFlags p
 uint32_t	vk_find_memory_type_lazy( uint32_t memory_type_bits, VkMemoryPropertyFlags properties, VkMemoryPropertyFlags *outprops );
 
 // attachment
-void		vk_create_attachments( void );
+VkResult	vk_create_attachments( void );
 void		vk_destroy_attachments( void );
 void		vk_update_attachment_descriptors( void );
 void		vk_clear_color_attachments( const vec4_t color );
@@ -1264,6 +1312,13 @@ void		vk_record_buffer_memory_barrier( VkCommandBuffer cb, VkBuffer buffer,
 #endif
 // post-processing
 void		vk_begin_post_blend_render_pass( VkRenderPass renderpass, qboolean clearValues );
+void		vk_capture_frame( int slotIndex, qboolean clearAfter );
+int			vk_capture_native_format( void );
+qboolean	vk_capture_alloc_slot( int slotIndex );
+void		vk_capture_free_ring( qboolean all );
+void		vk_capture_abandon_ring( void );
+void		vk_capture_sweep( void );
+void		RE_SetPresent( qboolean present );
 
 // bloom
 void		vk_begin_bloom_extract_render_pass( void );

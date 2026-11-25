@@ -26,11 +26,13 @@ along with this program; if not, see <http://www.gnu.org/licenses/>.
 #include "cl_lan.h"
 #include "botlib/botlib.h"
 #include "snd_ambient.h"
+#include "snd_local.h"
 #include "FXExport.h"
 #include "FxUtil.h"
 #include "cgame/cg_demoscan.h"
 
 extern IHeapAllocator *G2VertSpaceClient;
+extern void CL_SetWindowTitle( const char *s );
 extern botlib_export_t *botlib_export;
 
 // ui interface
@@ -147,6 +149,14 @@ void UIVM_CommandHelp( const char *commandName, char *helpBuffer, size_t helpBuf
 	if ( uivm->isLegacy ) {
 		VM_Call( uivm, UI_CMD_HELP, reinterpret_cast< intptr_t >( commandName ), reinterpret_cast< intptr_t >( helpBuffer ), helpBufferSize );
 	}
+}
+
+// qfalse: the ui vetoed the quit
+qboolean UIVM_QuitRequest( qboolean windowClose ) {
+	if ( uivm && cls.uiStarted && uivm->isLegacy ) {
+		return (qboolean)( VM_Call( uivm, UI_QUIT_REQUEST, windowClose ) != UI_QUIT_VETO );
+	}
+	return qtrue;
 }
 
 
@@ -949,7 +959,9 @@ intptr_t CL_UISystemCalls( intptr_t *args ) {
 		return S_RegisterSound( (const char *)VMA(1) );
 
 	case UI_S_STARTLOCALSOUND:
+		s_startFlags = SND_NOCAPTURE;
 		S_StartLocalSound( args[1], args[2] );
+		s_startFlags = 0;
 		return 0;
 
 	case UI_KEY_KEYNUMTOSTRINGBUF:
@@ -1299,6 +1311,34 @@ intptr_t CL_UISystemCalls( intptr_t *args ) {
 
 	case UI_DEMOSCAN_CONTROL:
 		return CL_DemoScan_Control( args[1], args[2], args[3] );
+
+	case UI_CAPTURE_GETCAPS:
+		return CL_CaptureGetCaps( (captureCaps_t *)VMA(1) );
+
+	case UI_SETWINDOWTITLE:
+		CL_SetWindowTitle( (const char *)VMA(1) );
+		return 0;
+
+	case UI_SETRENDERER:
+		return CL_RequestRenderer( (const char *)VMA(1) );
+
+	case UI_FLASHWINDOW:
+		WIN_FlashWindow();
+		return 0;
+
+	case UI_R_DRAWSTRETCHRAW: {
+		// client indexes the renderer's scratch images (16 in rd-vanilla); every renderer drops on a size not a power of 2
+		const int cols = args[5], rows = args[6], client = args[8];
+
+		if ( re && re->DrawStretchRaw && VMA(7) && client >= 0 && client < 16 && cols > 0 && cols <= 2048 && rows > 0 && rows <= 2048
+			&& !( cols & ( cols - 1 ) ) && !( rows & ( rows - 1 ) ) ) {
+			re->DrawStretchRaw( args[1], args[2], args[3], args[4], cols, rows, (const byte *)VMA(7), client, (qboolean)args[9] );
+		}
+		return 0;
+	}
+
+	case UI_GET_MONITORS:
+		return WIN_GetMonitors( (monitorInfo_t *)VMA(1), args[2] );
 
 	default:
 		Com_Error( ERR_DROP, "Bad UI system trap: %ld", (long int) args[0] );

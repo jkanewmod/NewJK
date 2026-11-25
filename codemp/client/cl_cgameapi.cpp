@@ -28,6 +28,7 @@ along with this program; if not, see <http://www.gnu.org/licenses/>.
 #include "cgame/cg_demoscan.h"
 #include "botlib/botlib.h"
 #include "snd_ambient.h"
+#include "snd_local.h"
 #include "FXExport.h"
 #include "FxUtil.h"
 
@@ -852,10 +853,10 @@ static void CGVM_Cmd_RemoveCommand( const char *cmd_name ) {
 extern void CL_SetWindowTitle(const char *s);
 
 // rend2-only - see cg_public.h's R_SetNextEntityNum comment. Gated engine-side, using the
-// same cl_renderer->string comparison as the "Rend2 Renderer" console label, because this is
+// same cl_renderer comparison as the "Rend2 Renderer" console label, because this is
 // where the active renderer is known at dispatch time.
 static void CL_SetNextEntityNum( int entityNum ) {
-	if ( re && !Q_stricmp( cl_renderer->string, "rd-rend2" ) ) {
+	if ( re && cl_renderer->integer == 2 ) {
 		re->SetNextEntityNum( entityNum );
 	}
 }
@@ -1339,6 +1340,47 @@ intptr_t CL_CgameSystemCalls( intptr_t *args ) {
 	case CG_DEMO_EVENTS:
 		return CL_DemoApiEvents( (demoApiEventCursor_t *)VMA(1), (entityState_t *)VMA(2) );
 
+	case CG_CAPTURE_GETCAPS:
+		return CL_CaptureGetCaps( (captureCaps_t *)VMA(1) );
+
+	case CG_CAPTURE_SETTARGET:
+		return CL_CaptureSetTarget( (const captureTarget_t *)VMA(1) );
+
+	case CG_CAPTURE_SETCLOCK:
+		return CL_CaptureSetClock( (const captureClock_t *)VMA(1) );
+
+	case CG_CAPTURE_GRABFRAME:
+		return CL_CaptureGrabFrame( (byte *)VMA(1), args[2], args[3] );
+
+	case CG_CAPTURE_POLLFRAME:
+		return CL_CapturePollFrame( (captureFrameInfo_t *)VMA(1), (qboolean)args[2] );
+
+	case CG_SETRENDERER:
+		return CL_RequestRenderer( (const char *)VMA(1) );
+
+	case CG_FLASHWINDOW:
+		WIN_FlashWindow();
+		return 0;
+
+	case CG_CAPTURE_MIXAUDIO:
+		return CL_CaptureMixAudio( (short *)VMA(1), args[2], (int *)VMA(3), args[4] );
+
+	case CG_CAPTURE_AUDIOCONTROL:
+		return CL_CaptureAudioControl( args[1], args[2] );
+
+	case CG_S_STARTLOCALSOUND_EX:
+		s_startFlags = args[3];
+		S_StartLocalSound( args[1], args[2] );
+		s_startFlags = 0;
+		return 0;
+
+	case CG_DEMO_FLUSHRECORDING:
+		if ( clc.demorecording && clc.demofile ) {
+			FS_Flush( clc.demofile );
+			return qtrue;
+		}
+		return qfalse;
+
 	case CG_KEY_SETCONSUMED:
 		CL_DemoSetConsumedKeys( (const int *)VMA(1), args[2] );
 		return 0;
@@ -1479,6 +1521,9 @@ intptr_t CL_CgameSystemCalls( intptr_t *args ) {
 		FX_PlayEffectID(args[1], (float *)VMA(2), (float *)VMA(3), args[4], args[5], qtrue );
 		return 0;
 
+	case CG_FX_PLAY_EFFECT_ID_EX:
+		return FX_PlayEffectIDEx( args[1], (float *)VMA(2), (float *)VMA(3), args[4], args[5], args[6] );
+
 	case CG_FX_PLAY_ENTITY_EFFECT_ID:
 		FX_PlayEntityEffectID(args[1], (float *)VMA(2), (vec3_t *)VMA(3), args[4], args[5], args[6], args[7], args[8]);
 		return 0;
@@ -1533,6 +1578,7 @@ intptr_t CL_CgameSystemCalls( intptr_t *args ) {
 	case CG_FX_PLAY_ENTITY_EFFECT:
 	case CG_FX_PLAY_EFFECT_ID:
 	case CG_FX_PLAY_PORTAL_EFFECT_ID:
+	case CG_FX_PLAY_EFFECT_ID_EX:
 	case CG_FX_PLAY_ENTITY_EFFECT_ID:
 	case CG_FX_PLAY_BOLTED_EFFECT_ID:
 	case CG_FX_ADD_SCHEDULED_EFFECTS:

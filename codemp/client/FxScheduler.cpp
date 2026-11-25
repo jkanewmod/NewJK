@@ -47,6 +47,8 @@ CMediaHandles &CMediaHandles::operator=(const CMediaHandles &that )
 CFxScheduler::CFxScheduler()
 {
 	mNextFree2DEffect = 0;
+	mEmitClasses = 0;
+	mEmitMinLife = 0;
 	memset( &mEffectTemplates, 0, sizeof( mEffectTemplates ));
 	memset( &mLoopedEffectArray, 0, sizeof( mLoopedEffectArray ));
 }
@@ -415,6 +417,70 @@ static int compareFilenames(const void *a, const void *b) {
 	return Q_stricmp((const char *)a, (const char *)b);
 }
 
+// how a per-frame emitter (PlayEffectEmit) draws this primitive
+static void FX_ClassifyForEmit( CPrimitiveTemplate *prim )
+{
+	const int	fades = FX_ALPHA_LINEAR | FX_ALPHA_PARM_MASK | FX_RGB_LINEAR | FX_RGB_PARM_MASK | FX_SIZE_LINEAR | FX_SIZE_PARM_MASK;
+	const int	cylFades = FX_LENGTH_LINEAR | FX_LENGTH_PARM_MASK | FX_SIZE2_LINEAR | FX_SIZE2_PARM_MASK;
+	bool		visual, still;
+
+	prim->mEmitClass = FXEMIT_DYNAMIC;
+	prim->mEmitLife = ( prim->mLife.GetMin() + prim->mLife.GetMax() ) * 0.5f;
+
+	switch ( prim->mType )
+	{
+	case Particle:
+	case Line:
+	case Tail:
+	case Cylinder:
+	case Electricity:
+	case OrientedParticle:
+	case Light:
+		visual = true;
+		break;
+	default:
+		visual = false;
+		break;
+	}
+
+	// these run another effect or wait; they keep real lifetimes
+	if ( !visual || prim->mSpawnDelay.GetMax() >= 1.0f
+		|| ( prim->mFlags & ( FX_DEATH_RUNS_FX | FX_IMPACT_RUNS_FX | FX_EMIT_FX | FX_KILL_ON_IMPACT ) )
+		|| ( prim->mType != Electricity && ( prim->mFlags & FX_APPLY_PHYSICS ) ) )
+	{
+		return;
+	}
+
+	if ( prim->mLife.GetMax() < FXEMIT_INTERVAL )
+	{
+		prim->mEmitClass = FXEMIT_SHORT;
+		return;
+	}
+
+	if ( prim->mType == Tail || prim->mType == Electricity || ( prim->mFlags & fades ) )
+	{
+		return;
+	}
+	if ( prim->mType == Cylinder && ( prim->mFlags & cylFades ) )
+	{
+		return;
+	}
+
+	still = prim->mVelX.GetMin() == 0.0f && prim->mVelX.GetMax() == 0.0f
+		&& prim->mVelY.GetMin() == 0.0f && prim->mVelY.GetMax() == 0.0f
+		&& prim->mVelZ.GetMin() == 0.0f && prim->mVelZ.GetMax() == 0.0f
+		&& prim->mAccelX.GetMin() == 0.0f && prim->mAccelX.GetMax() == 0.0f
+		&& prim->mAccelY.GetMin() == 0.0f && prim->mAccelY.GetMax() == 0.0f
+		&& prim->mAccelZ.GetMin() == 0.0f && prim->mAccelZ.GetMax() == 0.0f
+		&& prim->mGravity.GetMin() == 0.0f && prim->mGravity.GetMax() == 0.0f
+		&& prim->mRotationDelta.GetMin() == 0.0f && prim->mRotationDelta.GetMax() == 0.0f;
+
+	if ( still || prim->mType == Line || prim->mType == Light )
+	{
+		prim->mEmitClass = FXEMIT_CONSTANT;
+	}
+}
+
 int CFxScheduler::ParseEffect( const char *file, CGPGroup *base )
 {
 	CGPGroup			*primitiveGroup;
@@ -502,6 +568,8 @@ int CFxScheduler::ParseEffect( const char *file, CGPGroup *base )
 						prim->ParseCount(va("%d 1", min)); // allow zero or negative minimum i guess
 				}
 			}
+
+			FX_ClassifyForEmit( prim );
 
 			// Add our primitive template to the effect list
 			AddPrimitiveToEffect( effect, prim );
@@ -846,6 +914,7 @@ void CFxScheduler::PlayEffect( int id, vec3_t origin, matrix3_t axis, const int 
 	int						count = 0, delay = 0;
 	float					factor = 0.0f, fxscale;
 	bool					forceScheduling = false;
+	bool					wasMomentary = fxAddMomentary;	// an effect played from inside another
 
 	if ( id < 1 || id >= FX_MAX_EFFECTS || !mEffectTemplates[id].mInUse )
 	{
@@ -883,7 +952,14 @@ void CFxScheduler::PlayEffect( int id, vec3_t origin, matrix3_t axis, const int 
 
 	// slow motion: an effect played on every rendered frame (missile trails, confusion) spawns at
 	// most once per effect millisecond, as with a whole-millisecond clock; one-shots still play
-	if ( theFxHelper.mFrameTimeF < 1.0f )
+	if ( mEmitClasses )
+	{
+		if ( theFxHelper.mFrameTimeF <= 0.0f )
+		{
+			return;
+		}
+	}
+	else if ( theFxHelper.mFrameTimeF < 1.0f )
 	{
 		static int		playedFrame[FX_MAX_EFFECTS];
 		static double	playedAt[FX_MAX_EFFECTS];
@@ -915,6 +991,23 @@ void CFxScheduler::PlayEffect( int id, vec3_t origin, matrix3_t axis, const int 
 	{
 		totalPrimitives++;
 		prim = fx->mPrimitives[i];
+
+		if ( mEmitClasses )
+		{
+			if ( prim->mType == FxRunner )
+			{
+				if ( prim->mSpawnDelay.GetMax() >= 1.0f && !( mEmitClasses & FXEMIT_DYNAMIC ) )
+				{
+					continue;
+				}
+			}
+			else if ( !( prim->mEmitClass & mEmitClasses )
+				|| ( prim->mEmitClass == FXEMIT_CONSTANT && prim->mEmitLife < mEmitMinLife ) )
+			{
+				continue;
+			}
+			fxAddMomentary = ( prim->mEmitClass != FXEMIT_DYNAMIC && prim->mType != FxRunner );
+		}
 
 		prim->mSoundRadius = rad;
 		prim->mSoundVolume = vol;
@@ -1055,12 +1148,59 @@ void CFxScheduler::PlayEffect( int id, vec3_t origin, matrix3_t axis, const int 
 		}
 	}
 
+	fxAddMomentary = wasMomentary;
+
 	// We track effect templates and primitive templates separately.
 	if ( fx->mCopy )
 	{
 		// We don't use dynamic memory allocation, so just mark us as dead
 		fx->mInUse = false;
 	}
+}
+
+/*
+An effect played on every frame by something moving, drawn so that any frame rate and playback
+speed shows what one play every FXEMIT_INTERVAL ms would: the caller plays the short and constant
+primitives every frame (they live until time next advances) and the rest once per interval, as of
+the time given. Returns the longest constant life, which is how far back the caller repeats them.
+*/
+int CFxScheduler::PlayEffectEmit( int id, vec3_t org, vec3_t fwd, int classes, int minLife, int asOf )
+{
+	int		realTime = theFxHelper.mTime;
+	float	realFrac = theFxHelper.mTimeFrac;
+	float	longest = 0.0f;
+
+	if ( id < 1 || id >= FX_MAX_EFFECTS || !mEffectTemplates[id].mInUse || !classes )
+	{
+		return 0;
+	}
+
+	for ( int i = 0; i < mEffectTemplates[id].mPrimitiveCount; i++ )
+	{
+		CPrimitiveTemplate *prim = mEffectTemplates[id].mPrimitives[i];
+
+		if ( prim->mEmitClass == FXEMIT_CONSTANT && prim->mEmitLife > longest )
+		{
+			longest = prim->mEmitLife;
+		}
+	}
+
+	if ( asOf > 0 && asOf <= realTime )
+	{
+		theFxHelper.mTime = asOf;
+		theFxHelper.mTimeFrac = 0.0f;
+	}
+	mEmitClasses = classes;
+	mEmitMinLife = minLife;
+
+	PlayEffect( id, org, fwd );
+
+	mEmitClasses = 0;
+	fxAddMomentary = false;
+	theFxHelper.mTime = realTime;
+	theFxHelper.mTimeFrac = realFrac;
+
+	return (int)longest;
 }
 
 //------------------------------------------------------

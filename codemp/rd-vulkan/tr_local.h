@@ -2297,6 +2297,7 @@ float		R_SumOfUsedImages( qboolean bUseFormat );
 void		R_InitSkins( void );
 skin_t		*R_GetSkinByHandle( qhandle_t hSkin );
 const void	*RB_TakeVideoFrameCmd( const void *data );
+void		RE_GetVideoFrameSize( int *width, int *height );
 float		R_ClampDenorm( float v );
 void		RE_HunkClearCrap( void );
 
@@ -2767,8 +2768,17 @@ typedef enum {
 	RC_WORLD_EFFECTS,
 	RC_AUTO_MAP,
 	RC_VIDEOFRAME,
-	RC_CLEARCOLOR
+	RC_CLEARCOLOR,
+	RC_CAPTUREFRAME		// newjk
 } renderCommand_t;
+
+// newjk: grab the frame into ring slot `slot` (reserved by RE_CaptureFrame)
+typedef struct captureFrameCommand_s {
+	int			commandId;
+	int			slot;
+	uint32_t	generation;		// vk.captureRingGeneration when queued
+	qboolean	clearAfter;
+} captureFrameCommand_t;
 
 // all of the information needed by the back end must be
 // contained in a backEndData_t.
@@ -2805,6 +2815,9 @@ void RE_RotatePic2( float x, float y, float w, float h,
 void RE_BeginFrame( stereoFrame_t stereoFrame );
 void RE_EndFrame( int *frontEndMsec, int *backEndMsec );
 void RE_TakeVideoFrame( int width, int height, byte *captureBuffer, byte *encodeBuffer, qboolean motionJpeg );
+qboolean RE_CaptureFrame( byte *buffer, int bufSize, int pixelFormat, qboolean clearAfter, int tag );
+qboolean RE_CapturePoll( int *width, int *height, int *pixelFormat, int *tag, qboolean wait );
+const void *RB_CaptureFrame( const void *data );
 
 /*
 Ghoul2 Insert Start

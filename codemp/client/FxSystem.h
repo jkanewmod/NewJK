@@ -34,6 +34,8 @@ extern cvar_t	*fx_freeze;
 extern cvar_t	*fx_countScale;
 extern cvar_t	*fx_nearCull;
 
+extern bool		fxAddMomentary;	// primitives added now live until time next advances
+
 class SFxHelper
 {
 public:
@@ -46,6 +48,7 @@ public:
 	float	mTimeFrac;
 	float	mFrameTimeF;
 	int		mFrameNum;
+	int		mMoment;		// counts the calls that advanced time
 	refdef_t*	refdef;
 #ifdef _DEBUG
 	int		mMainRefs;

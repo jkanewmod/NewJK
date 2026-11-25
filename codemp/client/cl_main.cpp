@@ -502,6 +502,8 @@ void CL_ShutdownAll( qboolean shutdownRef ) {
 	if(CL_VideoRecording())
 		CL_CloseAVI();
 
+	CL_CaptureReset();
+
 	if(clc.demorecording)
 		CL_StopRecord_f();
 
@@ -689,6 +691,7 @@ void CL_Disconnect( qboolean showMainMenu ) {
 		clc.demofile = 0;
 	}
 	CL_DemoRelease();
+	CL_CaptureReset();
 
 	if ( cls.uiStarted && showMainMenu ) {
 		UIVM_SetActiveMenu( UIMENU_NONE );
@@ -1130,8 +1133,11 @@ only take effect on startup, and if applying them kills the graphics device the 
 a console to change them back from.
 
 The marker is set to '1' before the renderer is first brought up and back to '0' once the client has
-rendered for a while. Finding '1' at startup means the previous launch never got that far, so we ask
-the renderer to fall back to safe values.
+rendered for a while, or on a clean quit after it has drawn. Finding '1' at startup means the previous
+launch never got that far, so we ask the renderer to fall back to safe values.
+
+It sits beside the game folders, not in one: the game folder changes on connect, and a marker cleared
+in another folder than it was armed in stays armed.
 
 This lives in the client rather than the renderer for a specific reason: CL_ShutdownRef calls
 Sys_UnloadDll, so the renderer library is genuinely unloaded and reloaded on every vid_restart, and
@@ -1139,7 +1145,7 @@ any "have I done this yet" state kept in renderer statics silently resets with i
 never unloaded.
 
 MSEC_BEFORE_CLEAR only needs to be past the point where a doomed configuration would already have
-died, while staying short enough that an early quit does not look like a failure.
+died.
 =================
 */
 #define VIDEO_STARTUP_MARKER	"videostartup.dat"
@@ -1147,9 +1153,15 @@ died, while staying short enough that an early quit does not look like a failure
 
 static qboolean cl_videoMarkerArmed = qfalse;
 static qboolean cl_videoMarkerCleared = qfalse;
+static int cl_videoRendererUpSince = 0;
 
 static void CL_WriteVideoStartupMarker( char value ) {
-	fileHandle_t f = FS_FOpenFileWrite( VIDEO_STARTUP_MARKER );
+	fileHandle_t f;
+
+	if ( com_noConfigWrite && com_noConfigWrite->integer )
+		return;
+
+	f = FS_SV_FOpenFileWrite( VIDEO_STARTUP_MARKER );
 
 	if ( !f )
 		return;
@@ -1161,46 +1173,55 @@ static void CL_WriteVideoStartupMarker( char value ) {
 // Called once, before the renderer is first loaded. Must run before the renderer registers its
 // cvars, so that r_safeVideoStartup is already set when it does.
 void CL_ArmVideoStartupMarker( void ) {
-	void	*buffer = NULL;
-	long	len;
+	fileHandle_t	f = 0;
+	char			value = '0';
 
 	if ( cl_videoMarkerArmed )
 		return;
 
 	cl_videoMarkerArmed = qtrue;
 
-	len = FS_ReadFile( VIDEO_STARTUP_MARKER, &buffer );
+	if ( FS_SV_FOpenFileRead( VIDEO_STARTUP_MARKER, &f ) > 0 && f ) {
+		FS_Read( &value, 1, f );
+	}
+	if ( f ) {
+		FS_FCloseFile( f );
+	}
 
-	if ( len > 0 && buffer ) {
-		if ( *(const char *)buffer == '1' ) {
-			Com_Printf( S_COLOR_YELLOW "\nThe previous startup never finished drawing - the video "
-				"settings most likely stopped the\ngraphics device from starting. Falling back to "
-				"safe values for this launch.\n\n" );
+	if ( value == '1' ) {
+		Com_Printf( S_COLOR_YELLOW "\nThe previous startup never finished drawing - the video "
+			"settings most likely stopped the\ngraphics device from starting. Falling back to "
+			"safe values for this launch.\n\n" );
 
-			// the renderer owns which of its cvars are the demanding ones, so it applies them
-			Cvar_Set( "r_safeVideoStartup", "1" );
-		}
-		FS_FreeFile( buffer );
+		// the renderer owns which of its cvars are the demanding ones, so it applies them
+		Cvar_Set( "r_safeVideoStartup", "1" );
 	}
 
 	CL_WriteVideoStartupMarker( '1' );
 }
 
 static void CL_CheckVideoStartupMarker( void ) {
-	static int rendererUpSince = 0;
-
 	if ( cl_videoMarkerCleared || !cls.rendererStarted )
 		return;
 
-	if ( !rendererUpSince ) {
-		rendererUpSince = Sys_Milliseconds();
+	if ( !cl_videoRendererUpSince ) {
+		cl_videoRendererUpSince = Sys_Milliseconds();
 		return;
 	}
 
 	// Elapsed time, not a frame count: frames stall while the window is unfocused or minimized, and
 	// a user who launched minimized and quit would otherwise look like a failed startup and get
 	// their settings reset for no reason.
-	if ( Sys_Milliseconds() - rendererUpSince < MSEC_BEFORE_CLEAR )
+	if ( Sys_Milliseconds() - cl_videoRendererUpSince < MSEC_BEFORE_CLEAR )
+		return;
+
+	cl_videoMarkerCleared = qtrue;
+	CL_WriteVideoStartupMarker( '0' );
+}
+
+// a quit the player asked for, after frames were drawn, is not a failed startup however early it comes
+void CL_VideoStartupQuit( void ) {
+	if ( !cl_videoMarkerArmed || cl_videoMarkerCleared || !cl_videoRendererUpSince )
 		return;
 
 	cl_videoMarkerCleared = qtrue;
@@ -1249,6 +1270,8 @@ void CL_Vid_Restart_f( void ) {
 	if( CL_VideoRecording( ) ) {
 		CL_CloseAVI( );
 	}
+
+	CL_CaptureReset();
 
 	if(clc.demorecording)
 		CL_StopRecord_f();
@@ -2277,7 +2300,13 @@ void CL_Frame ( int msec ) {
 		extern int		cl_demoFrameNum, cl_demoFrameFlags;
 
 		cl_demoFrameNum++;
-		if ( takeVideoFrame ) {
+		if ( cl_capture.clockActive ) {
+			float exact;
+
+			msec = CL_CaptureFrameMsec( &exact );
+			cl_demoFrameMsec = exact;
+			cl_demoFrameFlags = DEMOCLOCK_CAPTURE;
+		} else if ( takeVideoFrame ) {
 			cl_demoFrameMsec = 1000.0f / Q_max( cl_aviFrameRate->value, 1.0f );
 			cl_demoFrameFlags = DEMOCLOCK_VIDEO;
 		} else if ( cl_timedemo && cl_timedemo->integer ) {
@@ -2298,7 +2327,7 @@ void CL_Frame ( int msec ) {
 	// decide the simulation time
 	cls.frametime = msec;
 
-	if ( clc.demoplaying && !demoApiServiceDemo && !takeVideoFrame && !com_fixedtime->integer ) {
+	if ( clc.demoplaying && !demoApiServiceDemo && !takeVideoFrame && !cl_capture.clockActive && !com_fixedtime->integer ) {
 		// classic playback only: a game module driving the demo keeps its own clock, so real time keeps the ui, console and ambient clocks moving at any timescale
 		int rawMsec = com_frameMsecRaw;
 		float scaled;
@@ -2362,8 +2391,15 @@ void CL_Frame ( int msec ) {
 	// once we have been rendering for a while, this launch is proven survivable
 	CL_CheckVideoStartupMarker();
 
+	// the capture clock may show only every nth frame
+	if ( re && re->SetPresent ) {
+		re->SetPresent( CL_CapturePresentThisFrame() );
+	}
+
 	// update the screen
 	SCR_UpdateScreen();
+
+	CL_FreeStaleAVIBuffers();
 
 	// update audio
 	S_Update();
@@ -2556,14 +2592,28 @@ static IHeapAllocator *GetG2VertSpaceServer( void ) {
 	return G2VertSpaceServer;
 }
 
-// Accepts shorthand/legacy values for cl_renderer and resolves them to a canonical
+// cl_renderer holds 0 (vanilla), 1 (vulkan) or 2 (rend2)
+#define DEFAULT_RENDERER "1"
+
+static const char *CL_RendererValue( const char *library ) {
+	return !strcmp( library, VULKAN_RENDER_LIBRARY ) ? "1" : !strcmp( library, REND2_RENDER_LIBRARY ) ? "2" : "0";
+}
+
+const char *CL_RendererLibrary( void ) {
+	if ( !cl_renderer ) {
+		return DEFAULT_RENDER_LIBRARY;
+	}
+	return cl_renderer->integer == 1 ? VULKAN_RENDER_LIBRARY : cl_renderer->integer == 2 ? REND2_RENDER_LIBRARY : DEFAULT_RENDER_LIBRARY;
+}
+
+// Accepts the numbers, names and legacy library names for cl_renderer and resolves them to a
 // renderer library name. Returns NULL if the value isn't recognized at all.
-static const char *CL_NormalizeRendererName( const char *value ) {
+const char *CL_NormalizeRendererName( const char *value ) {
 	struct { const char *alias; const char *canonical; } aliases[] = {
 		{ "0",                    DEFAULT_RENDER_LIBRARY },
 		{ "vanilla",              DEFAULT_RENDER_LIBRARY },
-		{ "default",              DEFAULT_RENDER_LIBRARY },
-		{ "",                     DEFAULT_RENDER_LIBRARY },
+		{ "default",              VULKAN_RENDER_LIBRARY },
+		{ "",                     VULKAN_RENDER_LIBRARY },
 		{ DEFAULT_RENDER_LIBRARY, DEFAULT_RENDER_LIBRARY },
 		{ "1",                    VULKAN_RENDER_LIBRARY },
 		{ "vulkan",               VULKAN_RENDER_LIBRARY },
@@ -2596,10 +2646,44 @@ static const char *CL_NormalizeRendererName( const char *value ) {
 	return NULL;
 }
 
+// latched switch to another renderer; the restart is queued, never run from inside a frame
+qboolean CL_RequestRenderer( const char *name ) {
+	const char *canonical = name ? CL_NormalizeRendererName( name ) : NULL;
+
+	if ( !canonical ) {
+		return qfalse;
+	}
+	if ( !Q_stricmp( canonical, CL_RendererLibrary() ) ) {
+		Cvar_User_Set( "cl_renderer", CL_RendererValue( canonical ) );	// drops a pending latched change
+		return qtrue;
+	}
+	Cvar_User_Set( "cl_renderer", CL_RendererValue( canonical ) );
+	{
+		static int queuedFrame = -1;
+
+		// one restart for requests in the same frame (cgame and ui, or a double click)
+		if ( queuedFrame != cls.framecount ) {
+			queuedFrame = cls.framecount;
+			Cbuf_ExecuteText( EXEC_INSERT, "vid_restart\n" );
+		}
+	}
+	return qtrue;
+}
+
 // See CL_SetRealResolution's declaration in refimport_t (tr_public.h) for why this exists.
 static void CL_SetRealResolution( int width, int height ) {
 	cls.realVidWidth = width;
 	cls.realVidHeight = height;
+}
+
+static int cl_vulkanSupported = -1;
+
+// probed once per process, at the first renderer init
+qboolean CL_VulkanSupported( void ) {
+	if ( cl_vulkanSupported < 0 ) {
+		cl_vulkanSupported = WIN_VK_ProbeSupport() ? 1 : 0;
+	}
+	return (qboolean)cl_vulkanSupported;
 }
 
 void CL_InitRef( void ) {
@@ -2619,20 +2703,19 @@ void CL_InitRef( void ) {
 	// (e.g. rd-vanilla/rd-rend2, which don't decouple real vs. internal resolution).
 	cls.realVidWidth = cls.realVidHeight = 0;
 
-	cl_renderer = Cvar_Get( "cl_renderer", DEFAULT_RENDER_LIBRARY, CVAR_ARCHIVE|CVAR_LATCH|CVAR_PROTECTED, "Which renderer library to use" );
+	cl_renderer = Cvar_Get( "cl_renderer", DEFAULT_RENDERER, CVAR_ARCHIVE|CVAR_LATCH|CVAR_PROTECTED, "Renderer: 0 vanilla (OpenGL), 1 Vulkan, 2 rend2" );
 
-	// Resolve shorthand (0/1) and casing/alias variants to the canonical DLL name,
-	// and write the canonical name back so archived configs stay human-readable.
-	// Cvar_Set forces the write immediately (bypassing CVAR_LATCH), so cl_renderer->string
-	// is already canonical below.
+	// Resolve names and library names (older configs) to the number and write it back.
+	// Cvar_Set forces the write immediately (bypassing CVAR_LATCH), so cl_renderer
+	// already holds the number below.
 	{
 		const char *canonical = CL_NormalizeRendererName( cl_renderer->string );
 		if ( !canonical ) {
-			Com_Printf( S_COLOR_YELLOW "WARNING: unknown cl_renderer value \"%s\", falling back to \"%s\"\n", cl_renderer->string, DEFAULT_RENDER_LIBRARY );
-			canonical = DEFAULT_RENDER_LIBRARY;
+			Com_Printf( S_COLOR_YELLOW "WARNING: unknown cl_renderer value \"%s\", using the default\n", cl_renderer->string );
+			canonical = VULKAN_RENDER_LIBRARY;
 		}
-		if ( strcmp( canonical, cl_renderer->string ) )
-			Cvar_Set( "cl_renderer", canonical );
+		if ( strcmp( CL_RendererValue( canonical ), cl_renderer->string ) )
+			Cvar_Set( "cl_renderer", CL_RendererValue( canonical ) );
 	}
 
 	// rd-vulkan's own init doesn't fail cleanly on old/unsupported hardware (a failed
@@ -2640,18 +2723,18 @@ void CL_InitRef( void ) {
 	// with an invalid VkInstance -- see vk_create_instance() in vk_instance.cpp). Catch that
 	// here instead, with a cheap headless probe, before the renderer library is even loaded --
 	// this is what turns "crashes on an old GPU" into "silently uses the default renderer".
-	// Only runs when Vulkan was actually requested, so it costs nothing otherwise.
-	if ( !strcmp( cl_renderer->string, VULKAN_RENDER_LIBRARY ) && !WIN_VK_ProbeSupport() ) {
+	// Runs once per process whichever renderer is selected; the result is cached for GETCAPS.
+	if ( !CL_VulkanSupported() && !strcmp( CL_RendererLibrary(), VULKAN_RENDER_LIBRARY ) ) {
 		Com_Printf( S_COLOR_YELLOW "Vulkan is not supported on this system, falling back to \"%s\"\n", DEFAULT_RENDER_LIBRARY );
-		Cvar_ForceReset( "cl_renderer" );
+		Cvar_Set( "cl_renderer", "0" );
 	}
 
-	Com_sprintf( dllName, sizeof( dllName ), "%s_" ARCH_STRING DLL_EXT, cl_renderer->string );
+	Com_sprintf( dllName, sizeof( dllName ), "%s_" ARCH_STRING DLL_EXT, CL_RendererLibrary() );
 
-	if( !(rendererLib = Sys_LoadDll( dllName, qfalse )) && strcmp( cl_renderer->string, cl_renderer->resetString ) )
+	if( !(rendererLib = Sys_LoadDll( dllName, qfalse )) && strcmp( CL_RendererLibrary(), DEFAULT_RENDER_LIBRARY ) )
 	{
 		Com_Printf( "failed: trying to load fallback renderer\n" );
-		Cvar_ForceReset( "cl_renderer" );
+		Cvar_Set( "cl_renderer", "0" );
 
 		Com_sprintf( dllName, sizeof( dllName ), DEFAULT_RENDER_LIBRARY "_" ARCH_STRING DLL_EXT );
 		rendererLib = Sys_LoadDll( dllName, qfalse );
@@ -2930,6 +3013,11 @@ static void CL_GenerateQKey(void)
 			if( len > 0 ) {
 				Com_Printf( "QKEY file size != %d, regenerating\n",
 					QKEY_SIZE );
+			}
+
+			if ( com_noConfigWrite && com_noConfigWrite->integer ) {
+				Com_Printf( "QKEY not written (com_noConfigWrite)\n" );
+				return;
 			}
 
 			Com_Printf( "QKEY building random string\n" );

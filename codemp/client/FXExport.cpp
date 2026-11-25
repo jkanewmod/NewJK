@@ -118,7 +118,26 @@ qboolean FX_FreeSystem( void )
 	return (qboolean)FX_Free( true );
 }
 
+void FX_ExpireMomentary( void );
+
 void FX_AdjustTime( int time )
 {
+	int moment = theFxHelper.mMoment;
+
 	theFxHelper.AdjustTime(time);
+	if ( theFxHelper.mMoment != moment )
+	{
+		FX_ExpireMomentary();
+	}
+}
+
+int FX_PlayEffectIDEx( int id, vec3_t org, vec3_t fwd, int classes, int minLife, int asOf )
+{
+#ifdef __FXCHECKER
+	if (Q_isnan(org[0]) || Q_isnan(org[1]) || Q_isnan(org[2]))
+	{
+		assert(0);
+	}
+#endif
+	return theFxScheduler.PlayEffectEmit( id, org, fwd, classes, minLife, asOf );
 }

@@ -26,6 +26,7 @@ along with this program; if not, see <http://www.gnu.org/licenses/>.
 #include "rd-common/tr_types.h"
 #include "sys/sys_local.h"
 #include "sdl_icon.h"
+#include "ui/ui_public.h"
 #ifdef _WIN32
 #include <ShellScalingApi.h>
 #endif
@@ -62,6 +63,17 @@ cvar_t	*r_displayRefresh;
 cvar_t	*r_cgameControlsAlwaysOnTop;
 cvar_t	*r_alwaysOnTop;
 cvar_t	*r_blackBars;
+cvar_t	*cl_monitor;
+
+static int monitorApplied = 0;				// the cl_monitor value the window was last placed for
+
+// where the window was when vid_restart destroyed it
+static struct {
+	qboolean	valid;
+	qboolean	windowed;
+	int			display;
+	int			x, y;
+} lastWindow;
 
 // Window surface cvars
 cvar_t	*r_stencilbits;
@@ -149,6 +161,9 @@ Minimize the game so that user is back at the desktop
 void WIN_VK_MinimizeFix(void);
 void GLimp_Minimize(void)
 {
+	if ( cl_hiddenWindow->integer )
+		return;	// minimizing shows a hidden window on Windows
+
 	SDL_MinimizeWindow( screen );
 	// mark minimized immediately; Vulkan must stop presenting before the swapchain is
 	// rebuilt, and the SDL event arrives too late for that
@@ -197,6 +212,9 @@ void WIN_Present( window_t *window )
 			}
 		}
 	}
+
+	if ( r_fullscreen->modified && cl_hiddenWindow->integer )
+		r_fullscreen->modified = qfalse;	// a hidden window stays windowed
 
 	if ( r_fullscreen->modified )
 	{
@@ -359,7 +377,7 @@ static bool GLimp_DetectAvailableModes(void)
 }
 
 #ifdef _WIN32
-static void GetDisplayDPI(float &dpi, float &defaultDpi) {
+static void GetDisplayDPI(int displayIndex, float &dpi, float &defaultDpi) {
 	const float systemDefaultDpi =
 #ifdef __APPLE__
 		72.0f;
@@ -368,8 +386,6 @@ static void GetDisplayDPI(float &dpi, float &defaultDpi) {
 #else
 		static_assert(false, "GetDisplayDPI: no system default DPI for this platform.");
 #endif
-
-	const int displayIndex = 0; // i guess
 
 	if (SDL_GetDisplayDPI(displayIndex, NULL, &dpi, NULL) != 0)
 		dpi = systemDefaultDpi; // fall back to the known default if SDL_GetDisplayDPI fails
@@ -414,6 +430,77 @@ static SDL_GLContext GLimp_CreateContext( SDL_Window *window, const windowDesc_t
 	return SDL_GL_CreateContext( window );
 }
 
+// cl_monitor 0 is the primary; the rest are the other displays in SDL order
+static int WIN_PrimaryDisplay( void )
+{
+#ifdef _WIN32
+	// the primary monitor is the one at the desktop origin
+	const int num = SDL_GetNumVideoDisplays();
+	for ( int i = 0; i < num; i++ )
+	{
+		SDL_Rect bounds;
+		if ( SDL_GetDisplayBounds( i, &bounds ) == 0 && bounds.x == 0 && bounds.y == 0 )
+			return i;
+	}
+#endif
+	// SDL lists the primary output first on X11
+	return 0;
+}
+
+static int WIN_MonitorToDisplay( int monitor )
+{
+	const int num = SDL_GetNumVideoDisplays();
+	if ( monitor < 0 || monitor >= num )
+		return -1;
+
+	const int primary = WIN_PrimaryDisplay();
+	if ( monitor == 0 )
+		return primary;
+	return monitor <= primary ? monitor - 1 : monitor;
+}
+
+// out-of-range values warn and use the primary
+static int WIN_ResolveMonitor( int monitor )
+{
+	const int display = WIN_MonitorToDisplay( monitor );
+	if ( display >= 0 )
+		return display;
+
+	Com_Printf( S_COLOR_YELLOW "cl_monitor %d: no such monitor (%d connected), using the primary monitor\n",
+		monitor, SDL_GetNumVideoDisplays() );
+	return WIN_PrimaryDisplay();
+}
+
+int WIN_GetMonitors( monitorInfo_t *out, int max )
+{
+	if ( !SDL_WasInit( SDL_INIT_VIDEO ) || !out || max <= 0 )
+		return 0;
+
+	const int num = SDL_GetNumVideoDisplays();
+	const int windowDisplay = screen ? SDL_GetWindowDisplayIndex( screen ) : -1;
+	int count = 0;
+
+	for ( int monitor = 0; monitor < num && count < max; monitor++ )
+	{
+		const int display = WIN_MonitorToDisplay( monitor );
+		monitorInfo_t *info = &out[count++];
+		const char *name = SDL_GetDisplayName( display );
+		SDL_DisplayMode mode;
+
+		Com_Memset( info, 0, sizeof( *info ) );
+		Q_strncpyz( info->name, VALIDSTRING( name ) ? name : va( "Monitor %d", monitor ), sizeof( info->name ) );
+		if ( SDL_GetDesktopDisplayMode( display, &mode ) == 0 )
+		{
+			info->width = mode.w;
+			info->height = mode.h;
+			info->refresh = mode.refresh_rate;
+		}
+		info->current = ( display == windowDisplay );
+	}
+
+	return count;
+}
+
 /*
 ===============
 GLimp_SetMode
@@ -426,7 +513,7 @@ static rserr_t GLimp_SetMode(glconfig_t *glConfig, const windowDesc_t *windowDes
 	int samples;
 	int i = 0;
 	SDL_Surface *icon = NULL;
-	Uint32 flags = SDL_WINDOW_SHOWN;
+	Uint32 flags = cl_hiddenWindow->integer ? SDL_WINDOW_HIDDEN : SDL_WINDOW_SHOWN;
 	SDL_DisplayMode desktopMode;
 	int display = 0;
 	int x = SDL_WINDOWPOS_UNDEFINED, y = SDL_WINDOWPOS_UNDEFINED;
@@ -469,6 +556,39 @@ static rserr_t GLimp_SetMode(glconfig_t *glConfig, const windowDesc_t *windowDes
 			Com_DPrintf( "SDL_GetWindowDisplayIndex() failed: %s\n", SDL_GetError() );
 		}
 	}
+
+	/*
+	cl_monitor (latched) places the window at launch and after vid_restart applies a new value.
+	a window dragged to another monitor stays there through vid_restart, which destroys and
+	recreates it
+	*/
+	qboolean placeOnMonitor = qfalse;
+	const bool monitorChanged = cl_monitor->integer != monitorApplied;
+	if ( screen == NULL || monitorChanged )
+	{
+		const int target = WIN_ResolveMonitor( cl_monitor->integer );
+
+		if ( screen == NULL && !monitorChanged && lastWindow.valid && ( lastWindow.display != target || cl_monitor->integer != 0 )
+			&& lastWindow.display < SDL_GetNumVideoDisplays() )
+		{
+			display = lastWindow.display;
+			if ( lastWindow.windowed && !fullscreen )
+			{
+				x = lastWindow.x;
+				y = lastWindow.y;
+			}
+			else
+				x = y = SDL_WINDOWPOS_CENTERED_DISPLAY( display );
+			placeOnMonitor = qtrue;
+		}
+		else if ( monitorChanged || cl_monitor->integer != 0 || target != 0 )
+		{
+			display = target;
+			x = y = SDL_WINDOWPOS_CENTERED_DISPLAY( display );
+			placeOnMonitor = qtrue;
+		}
+	}
+	monitorApplied = cl_monitor->integer;
 
 	if( display >= 0 && SDL_GetDesktopDisplayMode( display, &desktopMode ) == 0 )
 	{
@@ -549,7 +669,7 @@ static rserr_t GLimp_SetMode(glconfig_t *glConfig, const windowDesc_t *windowDes
 #ifdef _WIN32
 	if (fullscreen) { // fix fullscreen dpi scaling
 		float dpi, defaultDpi;
-		GetDisplayDPI(dpi, defaultDpi);
+		GetDisplayDPI(display, dpi, defaultDpi);
 
 		windowDpiScaledWidth = int(windowWidth * dpi / defaultDpi);
 		windowDpiScaledHeight = int(windowHeight * dpi / defaultDpi);
@@ -572,7 +692,7 @@ static rserr_t GLimp_SetMode(glconfig_t *glConfig, const windowDesc_t *windowDes
 		Com_Printf( "...black bars: %d %d window\n", windowWidth, windowHeight );
 
 	// Center window
-	if( r_centerWindow->integer && !fullscreen && !blackBarsBordered )
+	if( r_centerWindow->integer && !fullscreen && !blackBarsBordered && !placeOnMonitor )
 	{
 		x = ( desktopMode.w / 2 ) - ( windowWidth / 2 );
 		y = ( desktopMode.h / 2 ) - ( windowHeight / 2 );
@@ -587,7 +707,8 @@ static rserr_t GLimp_SetMode(glconfig_t *glConfig, const windowDesc_t *windowDes
 
 	if( screen != NULL )
 	{
-		SDL_GetWindowPosition( screen, &x, &y );
+		if ( !placeOnMonitor )
+			SDL_GetWindowPosition( screen, &x, &y );
 		Com_DPrintf( "Existing window at %dx%d before being destroyed\n", x, y );
 		SDL_DestroyWindow( screen );
 		screen = NULL;
@@ -860,9 +981,12 @@ static rserr_t GLimp_SetMode(glconfig_t *glConfig, const windowDesc_t *windowDes
 		return RSERR_UNKNOWN;
 	}
 
-	// fix mouse when unfocused/minimized
-	SDL_MinimizeWindow(screen);
-	SDL_RestoreWindow(screen);
+	// fix mouse when unfocused/minimized; skipped for a hidden window, which these would show
+	if ( !cl_hiddenWindow->integer )
+	{
+		SDL_MinimizeWindow(screen);
+		SDL_RestoreWindow(screen);
+	}
 
 	return RSERR_OK;
 }
@@ -903,6 +1027,12 @@ static qboolean GLimp_StartDriverAndSetMode(glconfig_t *glConfig, const windowDe
 	if (SDL_GetNumVideoDisplays() <= 0)
 	{
 		Com_Error( ERR_FATAL, "SDL_GetNumVideoDisplays() FAILED (%s)", SDL_GetError() );
+	}
+
+	if ( cl_hiddenWindow->integer )
+	{
+		fullscreen = qfalse;
+		noborder = qfalse;
 	}
 
 	if (fullscreen && Cvar_VariableIntegerValue( "in_nograb" ) )
@@ -954,6 +1084,7 @@ window_t WIN_Init( const windowDesc_t *windowDesc, glconfig_t *glConfig )
 	r_cgameControlsAlwaysOnTop = Cvar_Get( "r_cgameControlsAlwaysOnTop",	"0",		CVAR_ROM | CVAR_TEMP );
 	r_alwaysOnTop		= Cvar_Get( "r_alwaysOnTop",		"0",		CVAR_ARCHIVE );
 	r_blackBars			= Cvar_Get( "r_blackBars",			"0",		CVAR_ARCHIVE_ND|CVAR_LATCH, "Black bars instead of stretching when the resolution's aspect ratio differs from the monitor's:\n 0 - off\n 1 - in fullscreen\n 2 - in fullscreen and windowed\n" );
+	cl_monitor			= Cvar_Get( "cl_monitor",			"0",		CVAR_ARCHIVE_ND | CVAR_LATCH, "Monitor the game appears on: 0 is the primary monitor, 1 and up the others\n" );
 	Cvar_CheckRange( r_displayRefresh, 0, 240, qtrue );
 	Cvar_CheckRange( r_blackBars, 0, 2, qtrue );
 
@@ -1029,6 +1160,15 @@ void WIN_Shutdown( void )
 	Cmd_RemoveCommand("minimize");
 
 	IN_Shutdown();
+
+	lastWindow.valid = qfalse;
+	if ( screen )
+	{
+		lastWindow.display = SDL_GetWindowDisplayIndex( screen );
+		lastWindow.windowed = (qboolean)!( SDL_GetWindowFlags( screen ) & SDL_WINDOW_FULLSCREEN );
+		SDL_GetWindowPosition( screen, &lastWindow.x, &lastWindow.y );
+		lastWindow.valid = (qboolean)( lastWindow.display >= 0 );
+	}
 
 	SDL_QuitSubSystem( SDL_INIT_VIDEO );
 	screen = NULL;
@@ -1117,6 +1257,9 @@ void WIN_VK_MinimizeFix(void) {
 // re-checks the window flags before trusting com_minimized, and clears it once the window
 // is back, so a stale flag cannot stall presentation forever
 qboolean WIN_VK_IsMinimized(void) {
+	if ( cl_hiddenWindow->integer )
+		return qtrue;	// nothing to present to
+
 	if ( com_minimized->integer )
 	{
 		//double check
@@ -1227,6 +1370,13 @@ void CL_SetWindowTitle(const char *s) {
 	SDL_SetWindowTitle(screen, VALIDSTRING(s) ? s : CLIENT_WINDOW_TITLE);
 }
 
+void WIN_FlashWindow(void) {
+#if SDL_VERSION_ATLEAST(2, 0, 16)
+	if (screen && !cl_hiddenWindow->integer)
+		SDL_FlashWindow(screen, SDL_FLASH_UNTIL_FOCUSED);
+#endif
+}
+
 void SetAlwaysOnTop(bool cgameStarted) {
 	static bool initialized = false;
 	static bool lastCgameStarted = false;
@@ -1244,7 +1394,7 @@ void SetAlwaysOnTop(bool cgameStarted) {
 }
 
 void FixFocusLoss(bool cgameStarted) {
-	if (!cgameStarted)
+	if (!cgameStarted || cl_hiddenWindow->integer)
 		return;
 
 	if (r_cgameControlsAlwaysOnTop->integer) {

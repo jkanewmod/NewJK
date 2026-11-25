@@ -64,8 +64,10 @@ void QDECL vk_debug( const char *msg, ... ) {
 	ri.Printf( PRINT_DEVELOPER, S_COLOR_CYAN "%s\n", text );
 
 	fp = fopen("./vk_log.log", "a");
-	fprintf(fp, "%s", text);
-	fclose(fp);
+	if ( fp ) {	// the working directory can be read-only (an install under Program Files)
+		fprintf(fp, "%s", text);
+		fclose(fp);
+	}
 #endif
 	return;
 }

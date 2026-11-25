@@ -22,6 +22,7 @@ along with this program; if not, see <http://www.gnu.org/licenses/>.
 */
 
 #include "tr_local.h"
+#include "cgame/cg_capture.h"
 
 /*
 	Snapshot of the last completed frame's draw surface count, taken just before the counters
@@ -112,7 +113,8 @@ void R_IssueRenderCommands( qboolean runPerformanceCounters ) {
 	// clear it out, in case this is a sync and not a buffer flip
 	cmdList->used = 0;
 
-	if (backEnd.screenshotMask == 0) {
+	// newjk: a capture target renders whether or not the window shows it
+	if (backEnd.screenshotMask == 0 && !vk.captureTarget.active) {
 		if (ri.VK_IsMinimized())
 			// newjk: jump to the cleanup below rather than returning - the fullbright entity
 			// lighting swapped in this frame must be restored on every exit path
@@ -140,6 +142,8 @@ void R_IssueRenderCommands( qboolean runPerformanceCounters ) {
 	}
 
 cleanup:
+	vk_capture_sweep();	// newjk
+
 	for (auto &x : fullbrightEnts) {
 		VectorCopy(x.ambientLight, x.ent->ambientLight);
 		VectorCopy(x.directedLight, x.ent->directedLight);
@@ -525,6 +529,164 @@ void RE_TakeVideoFrame( int width, int height, byte *captureBuffer, byte *encode
 	cmd->captureBuffer = captureBuffer;
 	cmd->encodeBuffer = encodeBuffer;
 	cmd->motionJpeg = motionJpeg;
+}
+
+/*
+	newjk: queues a grab of this frame at this point of the command list (the cgame/ui boundary when
+	called from cgame's draw) into the next ring slot. Grabs complete in order; RE_CapturePoll hands
+	them back with their tag. qfalse when there is no capture target, the ring is full, the buffer is
+	too small or the capture image cannot be read as 8-bit RGBA.
+*/
+qboolean RE_CaptureFrame( byte *buffer, int bufSize, int pixelFormat, qboolean clearAfter, int tag )
+{
+	captureFrameCommand_t *cmd;
+	const int slot = vk.captureRingHead;
+	const int native = vk_capture_native_format();
+	int need;
+
+	if ( !tr.registered || !vk.captureTarget.active || vk.deviceLost || !buffer )
+		return qfalse;
+	if ( !native ) {
+		ri.Printf( PRINT_DEVELOPER, "RE_CaptureFrame: capture format %d is not 8-bit RGBA\n", (int)vk.capture_format );
+		return qfalse;
+	}
+	if ( pixelFormat < CAPTURE_PIXFMT_ANY || pixelFormat > CAPTURE_PIXFMT_RGB24 )
+		return qfalse;
+
+	need = gls.captureWidth * gls.captureHeight * ( pixelFormat == CAPTURE_PIXFMT_RGB24 ? 3 : 4 );
+	if ( bufSize < need )
+		return qfalse;
+	if ( vk.captureRing[slot].state != CAPSLOT_FREE ) {
+		ri.Printf( PRINT_DEVELOPER, "RE_CaptureFrame: ring full\n" );
+		return qfalse;
+	}
+
+	cmd = (captureFrameCommand_t *)R_GetCommandBuffer( sizeof( *cmd ) );
+	if ( !cmd )
+		return qfalse;
+	cmd->commandId = RC_CAPTUREFRAME;
+	cmd->slot = slot;
+	cmd->generation = vk.captureRingGeneration;
+	cmd->clearAfter = clearAfter;
+
+	vk.captureRing[slot].state = CAPSLOT_QUEUED;
+	vk.captureRing[slot].dst = buffer;
+	vk.captureRing[slot].dstSize = bufSize;
+	vk.captureRing[slot].pixelFormat = ( pixelFormat == CAPTURE_PIXFMT_ANY ) ? native : pixelFormat;
+	vk.captureRing[slot].tag = tag;
+	vk.captureRing[slot].width = gls.captureWidth;
+	vk.captureRing[slot].height = gls.captureHeight;
+	vk.captureRing[slot].serial = 0;
+	vk.captureRingHead = ( slot + 1 ) % VK_CAPTURE_RING;
+	return qtrue;
+}
+
+static void R_CaptureCopyPixels( const byte *src, byte *dst, int pixels, int native, int pixelFormat )
+{
+	int i;
+
+	if ( pixelFormat == native ) {
+		Com_Memcpy( dst, src, pixels * 4 );
+	}
+	else if ( pixelFormat == CAPTURE_PIXFMT_RGB24 ) {
+		const int r = ( native == CAPTURE_PIXFMT_BGRA32 ) ? 2 : 0;
+
+		for ( i = 0; i < pixels; i++, src += 4, dst += 3 ) {
+			dst[0] = src[r];
+			dst[1] = src[1];
+			dst[2] = src[2 - r];
+		}
+	}
+	else {	// RGBA <-> BGRA
+		for ( i = 0; i < pixels; i++, src += 4, dst += 4 ) {
+			dst[0] = src[2];
+			dst[1] = src[1];
+			dst[2] = src[0];
+			dst[3] = src[3];
+		}
+	}
+}
+
+/*
+	newjk: the oldest outstanding grab, top-down rows in the format it was requested in (ANY = the
+	capture image's own). qfalse while its frame has not finished on the GPU; wait blocks for it once it
+	was submitted, never before. A grab whose frame never reached the GPU returns qtrue with *width 0.
+*/
+qboolean RE_CapturePoll( int *width, int *height, int *pixelFormat, int *tag, qboolean wait )
+{
+	const int slot = vk.captureRingTail;
+	const int native = vk_capture_native_format();
+	qboolean ready = qfalse, failed = qfalse;
+
+	switch ( vk.captureRing[slot].state ) {
+	case CAPSLOT_FREE:
+	case CAPSLOT_QUEUED:
+	case CAPSLOT_RECORDED:
+		return qfalse;
+	case CAPSLOT_FAILED:
+		failed = qtrue;
+		break;
+	default:
+		break;
+	}
+
+	if ( !failed && vk.deviceLost )
+		failed = qtrue;
+
+	if ( !failed ) {
+		const uint64_t serial = vk.captureRing[slot].serial;
+
+		if ( vk.completedSerial >= serial ) {
+			ready = qtrue;
+		}
+		else {
+			int i;
+
+			// the fence is this grab's only while its buffer has not been reused
+			for ( i = 0; i < NUM_COMMAND_BUFFERS; i++ ) {
+				if ( vk.tess[i].serial == serial && vk.tess[i].waitForFence ) {
+					VkResult res = qvkWaitForFences( vk.device, 1, &vk.tess[i].rendering_finished_fence, VK_FALSE, wait ? 10000000000ULL : 0 );
+
+					if ( res == VK_SUCCESS ) {
+						ready = qtrue;
+					}
+					else if ( res == VK_ERROR_DEVICE_LOST ) {
+						vk_set_device_lost( "vkWaitForFences" );
+						failed = qtrue;
+					}
+					break;
+				}
+			}
+		}
+		if ( !ready && !failed )
+			return qfalse;
+	}
+
+	*width = *height = 0;
+	*pixelFormat = vk.captureRing[slot].pixelFormat;
+	*tag = vk.captureRing[slot].tag;
+
+	if ( !failed ) {
+		const int pixels = vk.captureRing[slot].width * vk.captureRing[slot].height;
+
+		if ( !vk.captureRing[slot].coherent ) {
+			VkMappedMemoryRange range;
+
+			Com_Memset( &range, 0, sizeof( range ) );
+			range.sType = VK_STRUCTURE_TYPE_MAPPED_MEMORY_RANGE;
+			range.memory = vk.captureRing[slot].memory;
+			range.size = VK_WHOLE_SIZE;
+			qvkInvalidateMappedMemoryRanges( vk.device, 1, &range );
+		}
+		R_CaptureCopyPixels( vk.captureRing[slot].mapped, vk.captureRing[slot].dst, pixels, native, vk.captureRing[slot].pixelFormat );
+		*width = vk.captureRing[slot].width;
+		*height = vk.captureRing[slot].height;
+	}
+
+	vk.captureRing[slot].state = CAPSLOT_FREE;
+	vk.captureRing[slot].dst = NULL;
+	vk.captureRingTail = ( slot + 1 ) % VK_CAPTURE_RING;
+	return qtrue;
 }
 
 qboolean R_CanMinimize( void )

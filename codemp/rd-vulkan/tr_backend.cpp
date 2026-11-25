@@ -1390,6 +1390,41 @@ static const void *RB_ClearColor( const void *data )
 }
 
 /*
+	newjk: RC_CAPTUREFRAME. Failed grabs are marked so, never dropped: the poll reports them.
+*/
+const void *RB_CaptureFrame( const void *data )
+{
+	const captureFrameCommand_t *cmd = (const captureFrameCommand_t *)data;
+	const int slot = cmd->slot;
+
+	RB_EndSurface();
+
+	// the ring was dropped after this grab was queued
+	if ( cmd->generation != vk.captureRingGeneration || vk.captureRing[slot].state != CAPSLOT_QUEUED )
+		return (const void *)( cmd + 1 );
+
+	if ( vk.deviceLost || vk.frame_count == 0 || !vk.captureTarget.active || !vk.capture.image
+		|| vk.renderPassIndex == RENDER_PASS_SCREENMAP
+		|| vk.captureRing[slot].width != gls.captureWidth || vk.captureRing[slot].height != gls.captureHeight
+		|| !vk_capture_alloc_slot( slot ) ) {
+		vk.captureRing[slot].state = CAPSLOT_FAILED;
+		return (const void *)( cmd + 1 );
+	}
+
+	if ( vk.bloomActive ) {
+		vk.cmd->last_pipeline = VK_NULL_HANDLE;
+		vk_bloom();
+	}
+
+	vk_capture_frame( slot, cmd->clearAfter );
+
+	vk.captureRing[slot].state = CAPSLOT_RECORDED;
+	vk.captureRing[slot].cmdIndex = vk.cmd_index;
+
+	return (const void *)( cmd + 1 );
+}
+
+/*
 ====================
 RB_ExecuteRenderCommands
 ====================
@@ -1442,6 +1477,9 @@ void RB_ExecuteRenderCommands( const void *data ) {
 			break;
 		case RC_CLEARCOLOR:
 			data = RB_ClearColor(data);
+			break;
+		case RC_CAPTUREFRAME:	// newjk
+			data = RB_CaptureFrame( data );
 			break;
 		case RC_END_OF_LIST:
 		default:

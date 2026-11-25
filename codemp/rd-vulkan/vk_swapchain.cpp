@@ -23,13 +23,19 @@ along with this program; if not, see <http://www.gnu.org/licenses/>.
 
 #include "tr_local.h"
 
+static void vk_restore_window_target( void );
+
 void vk_restart_swapchain( const char *funcname )
 {
     uint32_t i;
+    VkResult res;
     ri.Printf( PRINT_WARNING, "%s(): restarting swapchain...\n", funcname );
     vk_debug( "Restarting swapchain \n" );
 
     vk_wait_idle();
+
+    // newjk: every submit has finished, and the fences recreated below say nothing about them
+    vk.completedSerial = vk.frameSerial;
 
     for ( i = 0; i < NUM_COMMAND_BUFFERS; i++ ) {
         qvkResetCommandBuffer( vk.tess[i].command_buffer, 0 );
@@ -52,12 +58,165 @@ void vk_restart_swapchain( const char *funcname )
 
     vk_create_sync_primitives();
     vk_create_swapchain( vk.physical_device, vk.device, vk.surface, vk.present_format, &vk.swapchain );
-    vk_create_attachments();
+    // newjk: a capture target that no longer fits falls back to the window target
+    res = vk_create_attachments();
+    if ( res != VK_SUCCESS && !vk.deviceLost && vk.captureTarget.active ) {
+        ri.Printf( PRINT_WARNING, "Capture target %ux%u: %s, using the window target\n", vk.captureTarget.width, vk.captureTarget.height, vk_result_string( res ) );
+        vk_destroy_attachments();
+        vk_restore_window_target();
+        vk_set_black_bars();
+        res = vk_create_attachments();
+        vk_print_render_config();
+    }
+    if ( res != VK_SUCCESS && !vk.deviceLost )
+        ri.Error( ERR_FATAL, "Vulkan: could not recreate the render targets (%s)", vk_result_string( res ) );
     vk_create_render_passes();
     vk_create_framebuffers();
 
     vk_update_attachment_descriptors();
     vk_update_post_process_pipelines();
+}
+
+// newjk: rebuilds everything sized from glConfig.vid* and gls.capture*; the swapchain stays
+static VkResult vk_recreate_render_targets( void )
+{
+	VkResult res;
+
+	vk_destroy_pipelines( qfalse );
+	vk_destroy_framebuffers();
+	vk_destroy_render_passes();
+	vk_destroy_attachments();
+
+	res = vk_create_attachments();
+	if ( res != VK_SUCCESS )
+		return res;
+
+	vk_set_black_bars();
+	vk_create_render_passes();
+	vk_create_framebuffers();
+
+	vk_update_attachment_descriptors();
+	vk_update_post_process_pipelines();
+	return VK_SUCCESS;
+}
+
+static void vk_restore_window_target( void )
+{
+	glConfig.vidWidth = vk.captureTarget.savedVidWidth;
+	glConfig.vidHeight = vk.captureTarget.savedVidHeight;
+	gls.captureWidth = vk.captureTarget.savedCapW;
+	gls.captureHeight = vk.captureTarget.savedCapH;
+	vk.blitFilter = vk.captureTarget.savedBlitFilter;
+	vk.captureTarget.active = qfalse;
+	vk.captureTarget.width = vk.captureTarget.height = 0;
+	vk.captureTarget.outWidth = vk.captureTarget.outHeight = 0;
+}
+
+/*
+	newjk: renders into an offscreen target of width x height (the output times ssaa) instead of the
+	window's; the capture image holds the output size. 0,0,0 goes back to the window target. qfalse
+	when the size is out of limits or does not fit in memory, in which case the window target is in use.
+*/
+qboolean RE_SetCaptureTarget( int width, int height, int ssaa )
+{
+	const qboolean releaseAsked = (qboolean)( width == 0 && height == 0 );
+	qboolean release = releaseAsked;
+	VkResult res;
+	uint32_t i;
+
+	if ( release && !vk.captureTarget.active )
+		return qtrue;
+
+	if ( !release ) {
+		if ( ( ssaa != 1 && ssaa != 2 ) || width <= 0 || height <= 0 || ( width % ssaa ) || ( height % ssaa ) ) {
+			release = qtrue;
+		}
+		else if ( (uint32_t)width > vk.maxTargetWidth || (uint32_t)height > vk.maxTargetHeight ) {
+			ri.Printf( PRINT_WARNING, "Capture target %dx%d exceeds the device limit of %ux%u\n",
+				width, height, vk.maxTargetWidth, vk.maxTargetHeight );
+			release = qtrue;
+		}
+		else if ( vk.captureTarget.active && vk.captureTarget.width == (uint32_t)width && vk.captureTarget.height == (uint32_t)height
+			&& vk.captureTarget.outWidth == (uint32_t)( width / ssaa ) && vk.captureTarget.outHeight == (uint32_t)( height / ssaa ) ) {
+			return qtrue;
+		}
+
+		// a refused target leaves the window target in use, as qfalse promises
+		if ( release && !vk.captureTarget.active )
+			return qfalse;
+	}
+
+	// nothing can be rebuilt now; on release the client's buffers must still be forgotten (a cgame unload may follow)
+	if ( !vk.active || !vk.fboActive || vk.frame_count || vk.deviceLost ) {
+		if ( release ) {
+			vk_capture_abandon_ring();
+			vk_restore_window_target();
+		}
+		return releaseAsked;
+	}
+
+	res = qvkDeviceWaitIdle( vk.device );
+	if ( res == VK_ERROR_DEVICE_LOST ) {
+		vk_set_device_lost( "vkDeviceWaitIdle" );
+		if ( release )
+			vk_restore_window_target();
+		return releaseAsked;
+	}
+
+	for ( i = 0; i < NUM_COMMAND_BUFFERS; i++ ) {
+		qvkResetCommandBuffer( vk.tess[i].command_buffer, 0 );
+	}
+
+	// outstanding grabs belong to the old target
+	vk_capture_free_ring( qtrue );
+
+	if ( !vk.captureTarget.active ) {
+		vk.captureTarget.savedVidWidth = glConfig.vidWidth;
+		vk.captureTarget.savedVidHeight = glConfig.vidHeight;
+		vk.captureTarget.savedCapW = gls.captureWidth;
+		vk.captureTarget.savedCapH = gls.captureHeight;
+		vk.captureTarget.savedBlitFilter = vk.blitFilter;
+	}
+
+	if ( release ) {
+		vk_restore_window_target();
+	}
+	else {
+		vk.captureTarget.active = qtrue;
+		vk.captureTarget.width = width;
+		vk.captureTarget.height = height;
+		vk.captureTarget.outWidth = width / ssaa;
+		vk.captureTarget.outHeight = height / ssaa;
+		glConfig.vidWidth = width;
+		glConfig.vidHeight = height;
+		gls.captureWidth = vk.captureTarget.outWidth;
+		gls.captureHeight = vk.captureTarget.outHeight;
+		// the capture pass's 2:1 downsample is one bilinear tap per output pixel, the 2x2 average
+		vk.blitFilter = GL_LINEAR;
+	}
+
+	res = vk_recreate_render_targets();
+	if ( res != VK_SUCCESS ) {
+		if ( vk.deviceLost )
+			return qfalse;
+
+		ri.Printf( PRINT_WARNING, "Capture target %dx%d: %s, using the window target\n", width, height, vk_result_string( res ) );
+		vk_restore_window_target();
+		res = vk_recreate_render_targets();
+		if ( res != VK_SUCCESS && !vk.deviceLost )
+			ri.Error( ERR_FATAL, "Vulkan: could not recreate the window render target (%s)", vk_result_string( res ) );
+		vk_print_render_config();
+		return qfalse;
+	}
+
+	vk_print_render_config();
+	return (qboolean)( releaseAsked || !release );
+}
+
+void RE_GetCaptureLimits( int *maxWidth, int *maxHeight )
+{
+	*maxWidth = (int)vk.maxTargetWidth;
+	*maxHeight = (int)vk.maxTargetHeight;
 }
 
 // newjk: whether the window's surface is now a different size from the current swapchain
@@ -108,9 +267,12 @@ void vk_create_swapchain( VkPhysicalDevice physical_device, VkDevice device,
 
     image_extent = surface_caps.currentExtent;
     if ( image_extent.width == 0xffffffff && image_extent.height == 0xffffffff ) {
-        // newjk: the surface leaves the size to us (Wayland); r_blackBars needs the native window size
-        const uint32_t width = window.blackBars ? (uint32_t)window.drawableWidth : (uint32_t)glConfig.vidWidth;
-        const uint32_t height = window.blackBars ? (uint32_t)window.drawableHeight : (uint32_t)glConfig.vidHeight;
+        // newjk: the surface leaves the size to us (Wayland); r_blackBars needs the native window size,
+        // and a capture target never sizes the window
+        const uint32_t vidWidth = vk.captureTarget.active ? vk.captureTarget.savedVidWidth : (uint32_t)glConfig.vidWidth;
+        const uint32_t vidHeight = vk.captureTarget.active ? vk.captureTarget.savedVidHeight : (uint32_t)glConfig.vidHeight;
+        const uint32_t width = window.blackBars ? (uint32_t)window.drawableWidth : vidWidth;
+        const uint32_t height = window.blackBars ? (uint32_t)window.drawableHeight : vidHeight;
         image_extent.width = MIN( surface_caps.maxImageExtent.width, MAX( surface_caps.minImageExtent.width, width ) );
         image_extent.height = MIN( surface_caps.maxImageExtent.height, MAX( surface_caps.minImageExtent.height, height ) );
     }

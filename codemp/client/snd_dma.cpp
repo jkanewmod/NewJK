@@ -347,21 +347,6 @@ const GUID EAX_REVERB_EFFECT = { 0xcf95c8f, 0xa3cc, 0x4849, { 0xb0, 0xb6, 0x83, 
 \**************************************************************************************************/
 #endif /* USE_OPENAL */
 
-// instead of clearing a whole channel_t struct, we're going to skip the MP3SlidingDecodeBuffer[] buffer in the middle...
-//
-#ifndef offsetof
-#include <stddef.h>
-#endif
-static inline void Channel_Clear(channel_t *ch)
-{
-	// memset (ch, 0, sizeof(*ch));
-
-	memset(ch,0,offsetof(channel_t,MP3SlidingDecodeBuffer));
-
-	byte *const p = (byte *)ch + offsetof(channel_t,MP3SlidingDecodeBuffer) + sizeof(ch->MP3SlidingDecodeBuffer);
-
-	memset(p,0,(sizeof(*ch) - offsetof(channel_t,MP3SlidingDecodeBuffer)) - sizeof(ch->MP3SlidingDecodeBuffer));
-}
 
 // ====================================================================
 // User-setable variables
@@ -704,6 +689,7 @@ void S_Shutdown( void )
 		return;
 	}
 
+	S_CaptureStop();
 	S_FreeAllSFXMem();
 	S_UnCacheDynamicMusic();
 
@@ -1124,14 +1110,20 @@ S_PickChannel
 */
 channel_t *S_PickChannel(int entnum, int entchannel)
 {
-    int			ch_idx;
-	channel_t	*ch, *firstToDie;
-	qboolean	foundChan = qfalse;
-
 #ifdef USE_OPENAL
 	if (s_UseOpenAL)
 		return S_OpenALPickChannel(entnum, entchannel);
 #endif
+
+	return S_PickChannelIn( s_channels, entnum, entchannel );
+}
+
+channel_t *S_PickChannelIn( channel_t *table, int entnum, int entchannel )
+{
+    int			ch_idx;
+	channel_t	*ch, *firstToDie;
+	qboolean	foundChan = qfalse;
+	const qboolean show = (qboolean)( table == s_channels && s_show->integer == 1 );
 
 	if ( entchannel<0 ) {
 		Com_Error (ERR_DROP, "S_PickChannel: entchannel<0");
@@ -1139,11 +1131,11 @@ channel_t *S_PickChannel(int entnum, int entchannel)
 
 	// Check for replacement sound, or find the best one to replace
 
-    firstToDie = &s_channels[0];
+    firstToDie = &table[0];
 
 	for ( int pass = 0; (pass < ((entchannel == CHAN_AUTO || entchannel == CHAN_LESS_ATTEN)?1:2)) && !foundChan; pass++ )
 	{
-		for (ch_idx = 0, ch = &s_channels[0]; ch_idx < MAX_CHANNELS ; ch_idx++, ch++ )
+		for (ch_idx = 0, ch = &table[0]; ch_idx < MAX_CHANNELS ; ch_idx++, ch++ )
 		{
 			if ( entchannel == CHAN_AUTO || entchannel == CHAN_LESS_ATTEN || entchannel == CHAN_AUTO_WEAPON || entchannel == CHAN_AUTO_WEAPON_LOCAL || pass > 0 )
 			{//if we're on the second pass, just find the first open chan
@@ -1157,7 +1149,7 @@ channel_t *S_PickChannel(int entnum, int entchannel)
 			else if ( ch->entnum == entnum && S_CheckChannelStomp( ch->entchannel, entchannel ) )
 			{
 				// always override sound from same entity
-				if ( s_show->integer == 1 && ch->thesfx ) {
+				if ( show && ch->thesfx ) {
 					Com_Printf( S_COLOR_YELLOW"...overrides %s\n", ch->thesfx->sSoundName );
 					ch->thesfx = 0;	//just to clear the next error msg
 				}
@@ -1182,7 +1174,7 @@ channel_t *S_PickChannel(int entnum, int entchannel)
 		}
 	}
 
-	if ( s_show->integer == 1 && firstToDie->thesfx ) {
+	if ( show && firstToDie->thesfx ) {
 		Com_Printf( S_COLOR_RED"***kicking %s\n", firstToDie->thesfx->sSoundName );
 	}
 
@@ -1538,6 +1530,8 @@ void S_StartAmbientSound( const vec3_t origin, int entityNum, unsigned char volu
 	{
 		memset(&ch->MP3StreamHeader,0,						sizeof(ch->MP3StreamHeader));
 	}
+
+	S_CaptureOnChannelStart( ch, s_startFlags );
 }
 
 /*
@@ -1549,6 +1543,8 @@ Mutes sound on specified channel for specified entity.
 */
 void S_MuteSound(int entityNum, int entchannel)
 {
+	S_CaptureMute( entityNum, entchannel );
+
 	//I guess this works.
 	channel_t *ch = S_PickChannel( entityNum, entchannel );
 
@@ -1565,6 +1561,22 @@ void S_MuteSound(int entityNum, int entchannel)
 
 	ch->leftvol = 0;
 	ch->rightvol = 0;
+}
+
+// the capture table's sound on that entity channel, if any (never another channel's)
+void S_CaptureMute( int entityNum, int entchannel )
+{
+	if ( !s_captureActive ) {
+		return;
+	}
+	for ( int i = 0; i < MAX_CHANNELS; i++ ) {
+		channel_t *ch = &s_captureChannels[i];
+
+		if ( ch->thesfx && !ch->loopSound && ch->entnum == entityNum && S_CheckChannelStomp( ch->entchannel, entchannel ) ) {
+			Channel_Clear( ch );
+			return;
+		}
+	}
 }
 
 /*
@@ -1684,6 +1696,8 @@ void S_StartSound(const vec3_t origin, int entityNum, int entchannel, sfxHandle_
 	{
 		memset(&ch->MP3StreamHeader,0,						sizeof(ch->MP3StreamHeader));
 	}
+
+	S_CaptureOnChannelStart( ch, s_startFlags );
 }
 
 /*
@@ -1745,6 +1759,8 @@ float S_GetSampleLengthInMilliSeconds( sfxHandle_t sfxHandle)
 	return (f * 1000);
 }
 
+int S_GetDeviceRate( void ) { return s_soundStarted ? dma.speed : 0; }
+
 
 /*
 ==================
@@ -1805,6 +1821,7 @@ void S_CIN_StopSound(sfxHandle_t sfxHandle)
 	channel_t *ch = s_channels;
 	int i;
 
+	S_CaptureStopSfx( sfx );
 	for ( i = 0; i < MAX_CHANNELS ; i++, ch++ )
 	{
 		if ( !ch->thesfx || (ch->leftvol<0.25 && ch->rightvol<0.25 )) {
@@ -1875,6 +1892,7 @@ void S_StopSounds(void)
 	// clear out the lip synching override array
 	memset(s_entityWavVol, 0,sizeof(s_entityWavVol));
 
+	S_CaptureClear();
 	S_ClearSoundBuffer ();
 }
 
@@ -2538,6 +2556,36 @@ static int S_CheckAmplitude(channel_t	*ch, const unsigned int s_oldpaintedtime )
 	assert( s_entityWavVol_back[ch->entnum] );
 	return (s_entityWavVol_back[ ch->entnum]);
 }
+void S_SpatializeChannel( channel_t *ch )
+{
+	vec3_t origin;
+
+	// anything coming from the view entity will always be full volume; a sentinel listener
+	// (free camera) must not pull every effect sound, which carries ENTITYNUM_NONE, along
+	if (ch->entnum == listener_number && !(ch->fixed_origin && listener_number >= ENTITYNUM_WORLD)) {
+		if (ch->entchannel == CHAN_ANNOUNCERLEFT) {
+			ch->leftvol = ch->master_vol;
+			ch->rightvol = 0;
+		}
+		else if (ch->entchannel == CHAN_ANNOUNCERRIGHT) {
+			ch->leftvol = 0;
+			ch->rightvol = ch->master_vol;
+		}
+		else {
+			ch->leftvol = ch->master_vol;
+			ch->rightvol = ch->master_vol;
+		}
+	} else {
+		if (ch->fixed_origin) {
+			VectorCopy( ch->origin, origin );
+		} else {
+			VectorCopy( s_entityPosition[ ch->entnum ], origin );
+		}
+
+		S_SpatializeOrigin (origin, (float)ch->master_vol, &ch->leftvol, &ch->rightvol, ch->entchannel);
+	}
+}
+
 /*
 ============
 S_Respatialize
@@ -2553,7 +2601,6 @@ void S_Respatialize( int entityNum, const vec3_t head, matrix3_t axis, int inwat
 #endif
 	int			i;
 	channel_t	*ch;
-	vec3_t		origin;
 
 	if ( !s_soundStarted || s_soundMuted ) {
 		return;
@@ -2667,30 +2714,7 @@ void S_Respatialize( int entityNum, const vec3_t head, matrix3_t axis, int inwat
 				continue;
 			}
 
-			// anything coming from the view entity will always be full volume; a sentinel listener
-			// (free camera) must not pull every effect sound, which carries ENTITYNUM_NONE, along
-			if (ch->entnum == listener_number && !(ch->fixed_origin && listener_number >= ENTITYNUM_WORLD)) {
-				if (ch->entchannel == CHAN_ANNOUNCERLEFT) {
-					ch->leftvol = ch->master_vol;
-					ch->rightvol = 0;
-				}
-				else if (ch->entchannel == CHAN_ANNOUNCERRIGHT) {
-					ch->leftvol = 0;
-					ch->rightvol = ch->master_vol;
-				}
-				else {
-					ch->leftvol = ch->master_vol;
-					ch->rightvol = ch->master_vol;
-				}
-			} else {
-				if (ch->fixed_origin) {
-					VectorCopy( ch->origin, origin );
-				} else {
-					VectorCopy( s_entityPosition[ ch->entnum ], origin );
-				}
-
-				S_SpatializeOrigin (origin, (float)ch->master_vol, &ch->leftvol, &ch->rightvol, ch->entchannel);
-			}
+			S_SpatializeChannel( ch );
 
 			//NOTE: Made it so that voice sounds keep playing, even out of range
 			//		so that tasks waiting for sound completion keep proper timing
@@ -2702,6 +2726,8 @@ void S_Respatialize( int entityNum, const vec3_t head, matrix3_t axis, int inwat
 
 		// add loopsounds
 		S_AddLoopSounds ();
+
+		S_CaptureRespatialize();
 #ifdef USE_OPENAL
 	}
 #endif
@@ -2718,12 +2744,16 @@ Returns qtrue if any new sounds were started since the last mix
 ========================
 */
 qboolean S_ScanChannelStarts( void ) {
+	return S_ScanChannelStartsIn( s_channels, s_paintedtime );
+}
+
+qboolean S_ScanChannelStartsIn( channel_t *table, int paintedtime ) {
 	channel_t		*ch;
 	int				i;
 	qboolean		newSamples;
 
 	newSamples = qfalse;
-	ch = s_channels;
+	ch = table;
 	for (i=0; i<MAX_CHANNELS ; i++, ch++) {
 		if ( !ch->thesfx ) {
 			continue;
@@ -2736,13 +2766,13 @@ qboolean S_ScanChannelStarts( void ) {
 		// set the sample count to it begins mixing
 		// into the very first sample
 		if ( ch->startSample == START_SAMPLE_IMMEDIATE ) {
-			ch->startSample = s_paintedtime;
+			ch->startSample = paintedtime;
 			newSamples = qtrue;
 			continue;
 		}
 
 		// if it is completely finished by now, clear it
-		if ( (int)(ch->startSample + ch->thesfx->iSoundLengthInSamples) <= s_paintedtime ) {
+		if ( (int)(ch->startSample + ch->thesfx->iSoundLengthInSamples) <= paintedtime ) {
 			ch->thesfx = NULL;
 			continue;
 		}
@@ -5279,7 +5309,7 @@ int SND_FreeOldestSound(sfx_t *pButNotThisOne /* = NULL */)
 					if (ch->thesfx == sfx)
 						break;	// damn, being used
 				}
-				if (iChannel == MAX_CHANNELS)
+				if (iChannel == MAX_CHANNELS && !S_CaptureUsesSfx( sfx ))
 				{
 					// this sfx_t struct wasn't used by any channels, so we can lose it...
 					//

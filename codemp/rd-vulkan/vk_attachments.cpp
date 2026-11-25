@@ -45,7 +45,8 @@ static void vk_clear_attachment_pool( void )
     num_attachments = 0;
 }
 
-static void vk_alloc_attachment_memory( void )
+// newjk: returns the allocation result instead of carrying on unbound, so a capture target can fall back
+static VkResult vk_alloc_attachment_memory( void )
 {
     VkImageViewCreateInfo view_desc;
     VkMemoryDedicatedAllocateInfoKHR alloc_info2;
@@ -56,9 +57,10 @@ static void vk_alloc_attachment_memory( void )
     uint32_t memoryTypeBits;
     uint32_t memoryTypeIndex;
     uint32_t i;
+    VkResult res;
 
     if (num_attachments == 0) {
-        return;
+        return VK_SUCCESS;
     }
 
     if (vk.image_memory_count >= ARRAY_LEN(vk.image_memory)) {
@@ -118,7 +120,15 @@ static void vk_alloc_attachment_memory( void )
     }
 
     // allocate and bind memory
-    VK_ALLOCATE_MEMORY_CHECK(vk.device, &alloc_info, &memory, "attachment memory");
+    res = VK_ALLOCATE_MEMORY(vk.device, &alloc_info, &memory, "attachment memory");
+    if ( res != VK_SUCCESS ) {
+        if ( res == VK_ERROR_DEVICE_LOST )
+            vk_set_device_lost( "vkAllocateMemory" );
+        else
+            vk_debug( "Vulkan: error %s returned by vkAllocateMemory (attachments)\n", vk_result_string( res ) );
+        num_attachments = 0;
+        return res;
+    }
 
     vk.image_memory[vk.image_memory_count++] = memory;
 
@@ -159,6 +169,7 @@ static void vk_alloc_attachment_memory( void )
     vk_end_command_buffer( command_buffer, __func__ );
 
     num_attachments = 0;
+    return VK_SUCCESS;
 }
 
 static void vk_get_image_memory_requirements( VkImage image, VkMemoryRequirements *memory_requirements )
@@ -283,9 +294,10 @@ static void create_depth_attachment( uint32_t width, uint32_t height, VkSampleCo
     vk_add_attachment_desc( *image, image_view, desc.usage, &memory_requirements, vk.depth_format, image_aspect_flags, VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL );
 }
 
-void vk_create_attachments( void )
+VkResult vk_create_attachments( void )
 {
     uint32_t i;
+    VkResult res;
 
     vk_clear_attachment_pool();
 
@@ -370,8 +382,8 @@ void vk_create_attachments( void )
                 &vk.msaa_image, &vk.msaa_image_view, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, qtrue );
         }
 
-        // SSAA
-        if ( r_ext_supersample->integer ) {
+        // SSAA; newjk: also the capture target's output
+        if ( r_ext_supersample->integer || vk.captureTarget.active ) {
             // capture buffer
             usage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT;
             create_color_attachment( gls.captureWidth, gls.captureHeight, VK_SAMPLE_COUNT_1_BIT, vk.capture_format,
@@ -391,7 +403,9 @@ void vk_create_attachments( void )
         &vk.depth_image, &vk.depth_image_view, 
         ( vk.fboActive && ( vk.bloomActive || vk.dglowActive ) ) ? qfalse : qtrue );
 
-    vk_alloc_attachment_memory();
+    res = vk_alloc_attachment_memory();
+    if ( res != VK_SUCCESS )
+        return res;
 
     for ( i = 0; i < vk.image_memory_count; i++ )
     {
@@ -425,6 +439,7 @@ void vk_create_attachments( void )
     VK_SET_OBJECT_NAME( vk.dglow_msaa_image, "msaa dglow attachment %i", VK_DEBUG_REPORT_OBJECT_TYPE_IMAGE_EXT );
     VK_SET_OBJECT_NAME( vk.dglow_msaa_image_view, "msaa dglow attachment view %i", VK_DEBUG_REPORT_OBJECT_TYPE_IMAGE_VIEW_EXT );
 
+    return VK_SUCCESS;
 }
 
 void vk_clear_depthstencil_attachments( qboolean clear_stencil ) {
@@ -566,7 +581,7 @@ void vk_destroy_attachments( void )
         }
     }
 
-    if ( vk.dglow_msaa_image_view ) {
+    if ( vk.dglow_msaa_image ) {	// newjk: the image, a failed allocation leaves no view
         qvkDestroyImage(vk.device, vk.dglow_msaa_image, NULL);
         qvkDestroyImageView(vk.device, vk.dglow_msaa_image_view, NULL);
         vk.dglow_msaa_image = VK_NULL_HANDLE;

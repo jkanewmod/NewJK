@@ -26,6 +26,7 @@ along with this program; if not, see <http://www.gnu.org/licenses/>.
 #define	CGAME_API_VERSION		2
 
 #include "cg_demoapi.h"
+#include "cg_capture.h"
 
 #define	CMD_BACKUP			512
 #define	CMD_MASK			(CMD_BACKUP - 1)
@@ -201,6 +202,12 @@ typedef struct ragCallbackTraceLine_s {
 } ragCallbackTraceLine_t;
 
 #define	MAX_CG_SHARED_BUFFER_SIZE		2048
+
+// CG_FX_PLAY_EFFECT_ID_EX: which of an effect's primitives to play
+#define FXEMIT_SHORT		1	// shorter-lived than the interval
+#define FXEMIT_CONSTANT		2	// longer-lived, never moving or changing
+#define FXEMIT_DYNAMIC		4	// everything else
+#define FXEMIT_INTERVAL		4	// ms
 
 typedef enum cgameImportLegacy_e {
 	CG_PRINT = 0,
@@ -468,7 +475,21 @@ typedef enum cgameImportLegacy_e {
 	CG_DEMOSCAN_CONTROL,		// ( int op, int jobId, int value ) -> depends on op
 
 	CG_KEY_SETCONSUMED,			// ( const int *keys, int count ): during demo playback their binds do not run
-	CG_DEMO_EVENTS				// ( demoApiEventCursor_t *cursor, entityState_t *out ) -> qboolean
+	CG_DEMO_EVENTS,				// ( demoApiEventCursor_t *cursor, entityState_t *out ) -> qboolean
+
+	// the capture service: cg_capture.h
+	CG_CAPTURE_GETCAPS = 5023,	// ( captureCaps_t *out ) -> qboolean
+	CG_CAPTURE_SETTARGET,		// ( const captureTarget_t *t ) -> qboolean; NULL releases
+	CG_CAPTURE_SETCLOCK,		// ( const captureClock_t *c ) -> qboolean; NULL = normal clock
+	CG_CAPTURE_GRABFRAME,		// ( byte *buffer, int bufSize, int pixelFormat ) -> qboolean
+	CG_CAPTURE_POLLFRAME,		// ( captureFrameInfo_t *out, int wait ) -> qboolean
+	CG_SETRENDERER,				// ( const char *name ) -> qboolean; sets cl_renderer, queues vid_restart
+	CG_FLASHWINDOW,				// ( void )
+	CG_CAPTURE_MIXAUDIO,		// ( short *pcm, int maxFrames, int *outFrames, int flags ) -> qboolean
+	CG_CAPTURE_AUDIOCONTROL,	// ( int op, int value ) -> int
+	CG_S_STARTLOCALSOUND_EX,	// ( sfxHandle_t sfx, int channelNum, int flags )
+	CG_DEMO_FLUSHRECORDING,		// ( void ) -> qboolean; writes out the demo being recorded
+	CG_FX_PLAY_EFFECT_ID_EX		// ( int id, vec3_t org, vec3_t fwd, int classes, int minLife, int asOf ) -> int
 } cgameImportLegacy_t;
 
 typedef enum cgameExportLegacy_e {

@@ -22,6 +22,7 @@ along with this program; if not, see <http://www.gnu.org/licenses/>.
 */
 
 #include "tr_local.h"
+#include "cgame/cg_capture.h"
 
 void vk_create_sync_primitives( void )
 {
@@ -169,7 +170,8 @@ void vk_create_render_passes()
     attachments[1].loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
     //attachments[1].stencilLoadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
     attachments[1].stencilLoadOp = glConfig.stencilBits ? VK_ATTACHMENT_LOAD_OP_CLEAR : VK_ATTACHMENT_LOAD_OP_DONT_CARE;
-    if ( vk.bloomActive || vk.dglowActive || vk.refractionActive ) {
+    // newjk: the capture target resumes the main pass after a grab
+    if ( vk.bloomActive || vk.dglowActive || vk.refractionActive || vk.captureTarget.active ) {
         attachments[1].storeOp = VK_ATTACHMENT_STORE_OP_STORE; // keep it for post-bloom/dynamic-glow pass
         //attachments[1].stencilStoreOp = VK_ATTACHMENT_STORE_OP_STORE;
         attachments[1].stencilStoreOp = glConfig.stencilBits ? VK_ATTACHMENT_STORE_OP_STORE : VK_ATTACHMENT_STORE_OP_DONT_CARE;
@@ -217,7 +219,7 @@ void vk_create_render_passes()
 #endif
 
 
-        if ( vk.bloomActive || vk.dglowActive || vk.refractionActive ) {
+        if ( vk.bloomActive || vk.dglowActive || vk.refractionActive || vk.captureTarget.active ) {
             attachments[2].storeOp = VK_ATTACHMENT_STORE_OP_STORE; // keep it for post-bloom/dynamic-glow pass
         }
         else {
@@ -329,6 +331,14 @@ void vk_create_render_passes()
             if (vk.msaaActive) {
                 attachments[2].loadOp = VK_ATTACHMENT_LOAD_OP_LOAD;
                 attachments[2].storeOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
+            }
+
+            // newjk: a frame grab after bloom resumes from this pass's contents
+            if ( vk.captureTarget.active ) {
+                attachments[1].storeOp = VK_ATTACHMENT_STORE_OP_STORE;
+                attachments[1].stencilStoreOp = VK_ATTACHMENT_STORE_OP_STORE;
+                if ( vk.msaaActive )
+                    attachments[2].storeOp = VK_ATTACHMENT_STORE_OP_STORE;
             }
 
             VK_CHECK( qvkCreateRenderPass( device, &desc, NULL, &vk.render_pass.bloom.blend ) );
@@ -886,6 +896,12 @@ void vk_destroy_framebuffers( void )
             vk.framebuffers.dglow.blur[i] = VK_NULL_HANDLE;
         }
     }
+
+    // newjk: destroyed with the others
+    if ( vk.framebuffers.refraction.extract != VK_NULL_HANDLE ) {
+        qvkDestroyFramebuffer( vk.device, vk.framebuffers.refraction.extract, NULL );
+        vk.framebuffers.refraction.extract = VK_NULL_HANDLE;
+    }
 }
 
 static qboolean vk_find_screenmap_drawsurfs( void )
@@ -1092,7 +1108,8 @@ void vk_refraction_extract( void ) {
 		region.srcOffsets[1].z = 1;
 		region.dstSubresource = region.srcSubresource;
 		region.dstOffsets[0] = { 0, 0, 0 };
-		region.dstOffsets[1] = { glConfig.vidWidth / REFRACTION_EXTRACT_SCALE, glConfig.vidHeight / REFRACTION_EXTRACT_SCALE, 1 };
+		// newjk: the extract image is sized from the resolve target, smaller than vid under supersampling
+		region.dstOffsets[1] = { (int32_t)( gls.captureWidth / REFRACTION_EXTRACT_SCALE ), (int32_t)( gls.captureHeight / REFRACTION_EXTRACT_SCALE ), 1 };
 
 		qvkCmdBlitImage( vk.cmd->command_buffer, srcImage,
 			VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, dstImage,
@@ -1176,6 +1193,21 @@ void vk_set_device_lost( const char *funcname )
 		"********************\n", funcname );
 }
 
+/*
+	newjk: whether this frame skips acquire, the gamma pass to the swapchain, the present semaphores and
+	the present itself. The frame still renders and submits into the offscreen targets, so grabs and
+	screenshots work. Without fbo the swapchain image is the main target, so only minimizing skips.
+*/
+static qboolean vk_skip_present( void )
+{
+	return (qboolean)( ri.VK_IsMinimized() || ( vk.presentSuppressed && vk.fboActive ) );
+}
+
+void RE_SetPresent( qboolean present )
+{
+	vk.presentSuppressed = (qboolean)!present;
+}
+
 void vk_begin_frame( void )
 {
 	VkCommandBufferBeginInfo begin_info;
@@ -1210,9 +1242,11 @@ void vk_begin_frame( void )
 			}
 		}
 		VK_CHECK( qvkResetFences( vk.device, 1, &vk.cmd->rendering_finished_fence ) );
+		if ( vk.cmd->serial > vk.completedSerial )
+			vk.completedSerial = vk.cmd->serial;
     }
 
-	if ( !ri.VK_IsMinimized() && !vk.cmd->swapchain_image_acquired ) {
+	if ( !vk_skip_present() && !vk.cmd->swapchain_image_acquired ) {
 		qboolean retry = qfalse;
 _retry:
         res = qvkAcquireNextImageKHR( vk.device, vk.swapchain, 5 * 1000000000ULL, vk.cmd->image_acquired, VK_NULL_HANDLE, &vk.cmd->swapchain_image_index );
@@ -1243,7 +1277,7 @@ _retry:
 
     VK_CHECK( qvkBeginCommandBuffer( vk.cmd->command_buffer, &begin_info ) );
 
-	if ( vk.swapchain_images_inited[ vk.cmd->swapchain_image_index ] == qfalse ) {
+	if ( !vk_skip_present() && vk.swapchain_images_inited[ vk.cmd->swapchain_image_index ] == qfalse ) {
 		// perform initial swapchain image layout transition
 		vk.swapchain_images_inited[ vk.cmd->swapchain_image_index ] = qtrue;
 		vk_record_image_layout_transition( vk.cmd->command_buffer, vk.swapchain_images[ vk.cmd->swapchain_image_index ],
@@ -1485,7 +1519,7 @@ void vk_end_frame( void )
                 qvkCmdDraw(vk.cmd->command_buffer, 4, 1, 0, 0);
             }
 
-            if ( !ri.VK_IsMinimized() ) {
+            if ( !vk_skip_present() ) {
                 vk_end_render_pass();
 
                 vk.renderWidth = gls.windowWidth;
@@ -1530,7 +1564,7 @@ void vk_end_frame( void )
     submit_info.commandBufferCount = 1;
     submit_info.pCommandBuffers = &vk.cmd->command_buffer;
 
-    if ( !ri.VK_IsMinimized() ) {
+    if ( !vk_skip_present() ) {
 #ifdef USE_UPLOAD_QUEUE
 		if ( vk.image_uploaded != VK_NULL_HANDLE ) {
 			waits[0] = vk.cmd->image_acquired;
@@ -1597,6 +1631,19 @@ void vk_end_frame( void )
 
     vk.cmd->waitForFence = qtrue;
 
+    // newjk: grabs recorded into this buffer complete with this submit
+    vk.cmd->serial = ++vk.frameSerial;
+    {
+        uint32_t i;
+
+        for ( i = 0; i < VK_CAPTURE_RING; i++ ) {
+            if ( vk.captureRing[i].state == CAPSLOT_RECORDED && vk.captureRing[i].cmdIndex == vk.cmd_index ) {
+                vk.captureRing[i].state = CAPSLOT_SUBMITTED;
+                vk.captureRing[i].serial = vk.frameSerial;
+            }
+        }
+    }
+
     // presentation may take undefined time to complete, we can't measure it in a reliable way
     backEnd.pc.msec = ri.Milliseconds() - backEnd.pc.msec;
 
@@ -1612,8 +1659,19 @@ void vk_present_frame( void )
 	if ( vk.deviceLost )
 		return;
 
-	if ( ri.VK_IsMinimized() || !vk.cmd->swapchain_image_acquired )
+	if ( vk_skip_present() || !vk.cmd->swapchain_image_acquired ) {
+		vk.presentSuppressed = qfalse;
+		// newjk: a submitted frame still moves on to the next command buffer, or every frame waits
+		// on the previous one's fence
+		if ( vk.cmd->waitForFence ) {
+			vk.cmd_index++;
+			vk.cmd_index %= NUM_COMMAND_BUFFERS;
+			vk.cmd = &vk.tess[ vk.cmd_index ];
+		}
 		return;
+	}
+
+	vk.presentSuppressed = qfalse;
 
 	if ( !vk.cmd->waitForFence ) {
 		// nothing has been submitted this frame due to geometry buffer overflow?
@@ -1681,6 +1739,246 @@ static qboolean is_bgr( VkFormat format ) {
         return qtrue;
     default:
         return qfalse;
+    }
+}
+
+// newjk: CAPTURE_PIXFMT_RGBA32/BGRA32 for an 8-bit capture image, 0 when grabs cannot be read as 4 bytes a pixel
+int vk_capture_native_format( void )
+{
+    switch ( vk.capture_format ) {
+    case VK_FORMAT_R8G8B8A8_UNORM:
+    case VK_FORMAT_R8G8B8A8_SRGB:
+        return CAPTURE_PIXFMT_RGBA32;
+    case VK_FORMAT_B8G8R8A8_UNORM:
+    case VK_FORMAT_B8G8R8A8_SRGB:
+        return CAPTURE_PIXFMT_BGRA32;
+    default:
+        return 0;
+    }
+}
+
+static void vk_capture_destroy_slot_buffer( int slotIndex )
+{
+    if ( vk.captureRing[slotIndex].buffer != VK_NULL_HANDLE ) {
+        qvkDestroyBuffer( vk.device, vk.captureRing[slotIndex].buffer, NULL );
+        vk.captureRing[slotIndex].buffer = VK_NULL_HANDLE;
+    }
+    if ( vk.captureRing[slotIndex].memory != VK_NULL_HANDLE ) {
+        qvkFreeMemory( vk.device, vk.captureRing[slotIndex].memory, NULL );
+        vk.captureRing[slotIndex].memory = VK_NULL_HANDLE;
+    }
+    vk.captureRing[slotIndex].mapped = NULL;
+    vk.captureRing[slotIndex].size = 0;
+}
+
+// newjk: a host-visible buffer of the slot's size; the slot is reserved, so the GPU no longer uses the old one
+qboolean vk_capture_alloc_slot( int slotIndex )
+{
+    const VkDeviceSize size = (VkDeviceSize)vk.captureRing[slotIndex].width * vk.captureRing[slotIndex].height * 4;
+    VkBufferCreateInfo bi;
+    VkMemoryRequirements mr;
+    VkMemoryAllocateInfo ai;
+    VkMemoryPropertyFlags flags = 0;
+    VkResult res;
+
+    if ( vk.captureRing[slotIndex].buffer != VK_NULL_HANDLE && vk.captureRing[slotIndex].size == size )
+        return qtrue;
+
+    vk_capture_destroy_slot_buffer( slotIndex );
+
+    Com_Memset( &bi, 0, sizeof( bi ) );
+    bi.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+    bi.size = size;
+    bi.usage = VK_BUFFER_USAGE_TRANSFER_DST_BIT;
+    bi.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+    res = qvkCreateBuffer( vk.device, &bi, NULL, &vk.captureRing[slotIndex].buffer );
+    if ( res != VK_SUCCESS )
+        goto fail;
+
+    qvkGetBufferMemoryRequirements( vk.device, vk.captureRing[slotIndex].buffer, &mr );
+    Com_Memset( &ai, 0, sizeof( ai ) );
+    ai.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
+    ai.allocationSize = mr.size;
+    ai.memoryTypeIndex = vk_find_memory_type_lazy( mr.memoryTypeBits, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT | VK_MEMORY_PROPERTY_HOST_CACHED_BIT, &flags );
+    if ( ai.memoryTypeIndex == ~0U )
+        ai.memoryTypeIndex = vk_find_memory_type_lazy( mr.memoryTypeBits, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_CACHED_BIT, &flags );
+    if ( ai.memoryTypeIndex == ~0U )
+        ai.memoryTypeIndex = vk_find_memory_type_lazy( mr.memoryTypeBits, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT, &flags );
+    if ( ai.memoryTypeIndex == ~0U ) {
+        res = VK_ERROR_FEATURE_NOT_PRESENT;
+        goto fail;
+    }
+
+    res = qvkAllocateMemory( vk.device, &ai, NULL, &vk.captureRing[slotIndex].memory );
+    if ( res != VK_SUCCESS )
+        goto fail;
+    res = qvkBindBufferMemory( vk.device, vk.captureRing[slotIndex].buffer, vk.captureRing[slotIndex].memory, 0 );
+    if ( res != VK_SUCCESS )
+        goto fail;
+    res = qvkMapMemory( vk.device, vk.captureRing[slotIndex].memory, 0, VK_WHOLE_SIZE, 0, (void **)&vk.captureRing[slotIndex].mapped );
+    if ( res != VK_SUCCESS )
+        goto fail;
+
+    vk.captureRing[slotIndex].size = size;
+    vk.captureRing[slotIndex].coherent = ( flags & VK_MEMORY_PROPERTY_HOST_COHERENT_BIT ) ? qtrue : qfalse;
+    return qtrue;
+
+fail:
+    if ( res == VK_ERROR_DEVICE_LOST )
+        vk_set_device_lost( "capture buffer" );
+    else
+        ri.Printf( PRINT_WARNING, "Capture buffer %ux%u: %s\n", vk.captureRing[slotIndex].width, vk.captureRing[slotIndex].height, vk_result_string( res ) );
+    vk_capture_destroy_slot_buffer( slotIndex );
+    return qfalse;
+}
+
+// newjk: frees the ring's buffers; all abandons outstanding grabs too (the GPU must be idle)
+void vk_capture_free_ring( qboolean all )
+{
+    int i;
+
+    for ( i = 0; i < VK_CAPTURE_RING; i++ ) {
+        if ( all || vk.captureRing[i].state == CAPSLOT_FREE ) {
+            vk_capture_destroy_slot_buffer( i );
+            vk.captureRing[i].state = CAPSLOT_FREE;
+        }
+    }
+    if ( all ) {
+        vk.captureRingHead = vk.captureRingTail = 0;
+        vk.captureRingGeneration++;
+    }
+}
+
+// newjk: drops outstanding grabs and their destination pointers; the buffers stay, this frame's commands may use them
+void vk_capture_abandon_ring( void )
+{
+    int i;
+
+    for ( i = 0; i < VK_CAPTURE_RING; i++ ) {
+        vk.captureRing[i].state = CAPSLOT_FREE;
+        vk.captureRing[i].dst = NULL;
+    }
+    vk.captureRingHead = vk.captureRingTail = 0;
+    vk.captureRingGeneration++;
+}
+
+// newjk: after a command list ran, grabs that never reached a submit are failed
+void vk_capture_sweep( void )
+{
+    int i;
+
+    for ( i = 0; i < VK_CAPTURE_RING; i++ ) {
+        if ( vk.captureRing[i].state == CAPSLOT_QUEUED || vk.captureRing[i].state == CAPSLOT_RECORDED )
+            vk.captureRing[i].state = CAPSLOT_FAILED;
+    }
+}
+
+/*
+	newjk: grabs the frame as it is now (the cgame/ui boundary): ends the current pass, runs the capture
+	pass (gamma, downsample) into vk.capture.image, copies that into the slot's host buffer, then resumes
+	the main attachments with everything loaded so ui and console draw on top, outside the grab.
+*/
+void vk_capture_frame( int slotIndex, qboolean clearAfter )
+{
+    VkCommandBuffer cb = vk.cmd->command_buffer;
+    VkImageMemoryBarrier ib;
+    VkBufferMemoryBarrier bb;
+    VkBufferImageCopy region;
+    uint32_t i, numSets;
+
+    vk_end_render_pass();
+
+    vk_begin_render_pass( vk.render_pass.capture, vk.framebuffers.capture, qfalse, gls.captureWidth, gls.captureHeight );
+    qvkCmdBindPipeline( cb, VK_PIPELINE_BIND_POINT_GRAPHICS, vk.capture_pipeline );
+    qvkCmdBindDescriptorSets( cb, VK_PIPELINE_BIND_POINT_GRAPHICS, vk.pipeline_layout_post_process, 0, 1, &vk.color_descriptor, 0, NULL );
+    qvkCmdDraw( cb, 4, 1, 0, 0 );
+    vk_end_render_pass();
+
+    // capture pass writes -> copy reads
+    Com_Memset( &ib, 0, sizeof( ib ) );
+    ib.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+    ib.srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+    ib.dstAccessMask = VK_ACCESS_TRANSFER_READ_BIT;
+    ib.oldLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
+    ib.newLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
+    ib.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+    ib.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+    ib.image = vk.capture.image;
+    ib.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+    ib.subresourceRange.levelCount = 1;
+    ib.subresourceRange.layerCount = 1;
+    // the source stages include the capture pass's external dependency (fragment shader), so the two chain
+    qvkCmdPipelineBarrier( cb, VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT | VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT, 0, 0, NULL, 0, NULL, 1, &ib );
+
+    Com_Memset( &region, 0, sizeof( region ) );
+    region.imageSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+    region.imageSubresource.layerCount = 1;
+    region.imageExtent.width = gls.captureWidth;
+    region.imageExtent.height = gls.captureHeight;
+    region.imageExtent.depth = 1;
+    qvkCmdCopyImageToBuffer( cb, vk.capture.image, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, vk.captureRing[slotIndex].buffer, 1, &region );
+
+    // copy writes -> host reads
+    Com_Memset( &bb, 0, sizeof( bb ) );
+    bb.sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER;
+    bb.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+    bb.dstAccessMask = VK_ACCESS_HOST_READ_BIT;
+    bb.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+    bb.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+    bb.buffer = vk.captureRing[slotIndex].buffer;
+    bb.size = VK_WHOLE_SIZE;
+    qvkCmdPipelineBarrier( cb, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_HOST_BIT, 0, 0, NULL, 1, &bb, 0, NULL );
+
+    // copy reads -> a later capture pass in this frame (screenshot) writes
+    ib.srcAccessMask = VK_ACCESS_TRANSFER_READ_BIT;
+    ib.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+    // and the next capture pass's external dependency waits on the fragment shader stage
+    qvkCmdPipelineBarrier( cb, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT | VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, 0, 0, NULL, 0, NULL, 1, &ib );
+
+    // resume: refraction.extract is the main attachment set with everything loaded and stored
+    vk.renderPassIndex = RENDER_PASS_MAIN;
+    vk.renderWidth = glConfig.vidWidth;
+    vk.renderHeight = glConfig.vidHeight;
+    vk.renderScaleX = vk.renderScaleY = 1.0f;
+    vk_begin_render_pass( vk.render_pass.refraction.extract, vk.framebuffers.main[vk.cmd->swapchain_image_index], qfalse, vk.renderWidth, vk.renderHeight );
+
+    if ( clearAfter ) {
+        VkClearAttachment attachment;
+        VkClearRect rect;
+
+        Com_Memset( &attachment, 0, sizeof( attachment ) );
+        attachment.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+        attachment.colorAttachment = 0;
+        attachment.clearValue.color.float32[3] = 1.0f;
+        Com_Memset( &rect, 0, sizeof( rect ) );
+        rect.rect.extent.width = glConfig.vidWidth;
+        rect.rect.extent.height = glConfig.vidHeight;
+        rect.layerCount = 1;
+        qvkCmdClearAttachments( cb, 1, &attachment, 1, &rect );
+    }
+
+    // the capture pipeline clobbered the bound pipeline, set 0 and the push constants
+    vk.cmd->last_pipeline = VK_NULL_HANDLE;
+    vk.cmd->depth_range = DEPTH_RANGE_COUNT;
+    Com_Memset( &vk.cmd->scissor_rect, 0, sizeof( vk.cmd->scissor_rect ) );
+    vk_update_mvp( NULL );
+    numSets = ( vk.maxBoundDescriptorSets >= VK_DESC_COUNT ) ? VK_DESC_COUNT : 4;
+    for ( i = 0; i < numSets; i++ ) {
+        if ( vk.cmd->descriptor_set.current[i] == VK_NULL_HANDLE )
+            continue;
+        if ( i == VK_DESC_UNIFORM ) {
+            uint32_t offsets[VK_DESC_UNIFORM_COUNT], offset_count = 0;
+
+            offsets[offset_count++] = vk.cmd->descriptor_set.offset[i];
+            offsets[offset_count++] = vk.cmd->descriptor_set.offset[VK_DESC_UNIFORM_CAMERA_BINDING];
+            offsets[offset_count++] = vk.cmd->descriptor_set.offset[VK_DESC_UNIFORM_ENTITY_BINDING];
+            offsets[offset_count++] = vk.cmd->descriptor_set.offset[VK_DESC_UNIFORM_BONES_BINDING];
+            offsets[offset_count++] = vk.cmd->descriptor_set.offset[VK_DESC_UNIFORM_FOGS_BINDING];
+            offsets[offset_count++] = vk.cmd->descriptor_set.offset[VK_DESC_UNIFORM_GLOBAL_BINDING];
+            qvkCmdBindDescriptorSets( cb, VK_PIPELINE_BIND_POINT_GRAPHICS, vk.pipeline_layout, i, 1, &vk.cmd->descriptor_set.current[i], offset_count, offsets );
+        } else {
+            qvkCmdBindDescriptorSets( cb, VK_PIPELINE_BIND_POINT_GRAPHICS, vk.pipeline_layout, i, 1, &vk.cmd->descriptor_set.current[i], 0, NULL );
+        }
     }
 }
 

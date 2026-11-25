@@ -175,3 +175,6 @@ pip-log.txt
 *.o
 *.so
 build64rel
+
+# fetched ffmpeg (tools/ffmpeg/FetchFfmpeg.cmake)
+tools/ffmpeg/out/

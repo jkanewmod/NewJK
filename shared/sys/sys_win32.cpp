@@ -575,6 +575,11 @@ void Sys_PlatformInit( void ) {
 		timerResolution = 0;
 }
 
+// no system fault or critical-error boxes for an unattended process
+void Sys_DisableErrorBoxes( void ) {
+	SetErrorMode( SEM_FAILCRITICALERRORS | SEM_NOGPFAULTERRORBOX );
+}
+
 /*
 ================
 Sys_PlatformExit

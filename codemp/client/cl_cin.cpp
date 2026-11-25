@@ -42,6 +42,7 @@ along with this program; if not, see <http://www.gnu.org/licenses/>.
 #include "snd_local.h"
 #ifndef _WIN32
 #include <cmath>
+#endif
 
 // the cinematic clock under timescale; reverse demo playback holds the frame like a pause
 static int CIN_ScaledMilliseconds( void ) {
@@ -52,7 +53,6 @@ static int CIN_ScaledMilliseconds( void ) {
 	}
 	return (int)( Sys_Milliseconds() * scale );
 }
-#endif
 
 #define MAXSIZE				8
 #define MINSIZE				4

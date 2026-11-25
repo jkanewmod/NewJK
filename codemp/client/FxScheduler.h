@@ -180,6 +180,9 @@ public:
 	CFxRange		mLife;
 	int				mCullRange;
 
+	int				mEmitClass;		// FXEMIT_*, how a per-frame emitter draws this
+	float			mEmitLife;
+
 	CMediaHandles	mMediaHandles;
 	CMediaHandles	mImpactFxHandles;
 	CMediaHandles	mDeathFxHandles;
@@ -631,6 +634,10 @@ private:
 
 	PagedPoolAllocator<SScheduledEffect, 1024> mScheduledEffectsPool;
 
+	// set for the length of a PlayEffectEmit call
+	int		mEmitClasses;
+	int		mEmitMinLife;
+
 	// Private function prototypes
 	SEffectTemplate *GetNewEffectTemplate( int *id, const char *file );
 
@@ -652,6 +659,7 @@ public:
 	void	PlayEffect( int id, vec3_t org, vec3_t fwd, int vol = -1, int rad = -1, bool isPortal = false, int chan = -1 );				// builds arbitrary perp. right vector, does a cross product to define up
 	void	PlayEffect( int id, vec3_t origin, matrix3_t axis, const int boltInfo=-1, CGhoul2Info_v *ghoul2 = NULL,
 				int fxParm = -1, int vol = -1, int rad = -1, bool isPortal = false, int iLoopTime = false, bool isRelative = false, int chan = -1  );
+	int		PlayEffectEmit( int id, vec3_t org, vec3_t fwd, int classes, int minLife, int asOf );
 	void	PlayEffect( const char *file, vec3_t org, int vol = -1, int rad = -1, int chan = -1 );					// uses a default up axis
 	void	PlayEffect( const char *file, vec3_t org, vec3_t fwd, int vol = -1, int rad = -1, int chan = -1 );		// builds arbitrary perp. right vector, does a cross product to define up
 	void	PlayEffect( const char *file, vec3_t origin,

@@ -69,6 +69,7 @@ cvar_t	*cl_steam;
 cvar_t	*com_ansiColor = NULL;
 #endif
 cvar_t	*com_busyWait;
+cvar_t	*com_noConfigWrite;
 
 cvar_t *com_affinity;
 
@@ -80,6 +81,7 @@ int		time_backend;		// renderer backend time
 int			com_frameTime;
 int			com_frameNumber;
 int			com_frameMsecRaw;
+int			com_captureMinMsec = -1;
 
 qboolean	com_errorEntered = qfalse;
 qboolean	com_fullyInitialized = qfalse;
@@ -313,9 +315,22 @@ Both client and server can use this, and it will
 do the appropriate things.
 =============
 */
+#ifndef DEDICATED
+extern qboolean UIVM_QuitRequest( qboolean windowClose );
+extern void CL_VideoStartupQuit( void );
+#endif
+
 void Com_Quit_f( void ) {
+#ifndef DEDICATED
+	if ( !com_errorEntered && !UIVM_QuitRequest( (qboolean)!strcmp( Cmd_ArgsFrom( 1 ), "Closed window" ) ) ) {
+		return;
+	}
+#endif
 	// don't try to shutdown if we are in a recursive error
 	if ( !com_errorEntered ) {
+#ifndef DEDICATED
+		CL_VideoStartupQuit();
+#endif
 		SV_Shutdown ("Server quit\n");
 		CL_Shutdown ();
 		Com_Shutdown ();
@@ -430,6 +445,28 @@ qboolean Com_SafeMode( void ) {
 		}
 	}
 	return qfalse;
+}
+
+
+/*
+===================
+Com_CommandLineHasSet
+
+True when the command line sets the cvar to a nonzero value, by the rules of
+Com_StartupVariable; usable before cvars exist
+===================
+*/
+qboolean Com_CommandLineHasSet( const char *name ) {
+	qboolean	set = qfalse;
+
+	for ( int i = 0 ; i < com_numConsoleLines ; i++ ) {
+		Cmd_TokenizeString( com_consoleLines[i] );
+		if ( strcmp( Cmd_Argv(0), "set" ) || Q_stricmp( Cmd_Argv(1), name ) ) {
+			continue;
+		}
+		set = (qboolean)( atoi( Cmd_ArgsFrom( 2 ) ) != 0 );
+	}
+	return set;
 }
 
 
@@ -1289,6 +1326,8 @@ void Com_Init( char *commandLine ) {
 
 		com_affinity = Cvar_Get( "com_affinity", "0", CVAR_ARCHIVE );
 		com_busyWait = Cvar_Get( "com_busyWait", "0", CVAR_ARCHIVE );
+		com_noConfigWrite = Cvar_Get( "com_noConfigWrite", "0", CVAR_INIT, "Never write the config file" );
+		Cvar_Get( "com_noErrorDialog", "0", CVAR_INIT, "Print fatal errors without showing a dialog" );
 
 		com_bootlogo = Cvar_Get( "com_bootlogo", "0", CVAR_ARCHIVE, "Show intro movies" );
 
@@ -1357,6 +1396,10 @@ void Com_Init( char *commandLine ) {
 void Com_WriteConfigToFile( const char *filename ) {
 	fileHandle_t	f;
 
+	if ( com_noConfigWrite && com_noConfigWrite->integer ) {
+		Com_Printf( "%s not written (com_noConfigWrite)\n", filename );
+		return;
+	}
 	f = FS_FOpenFileWrite( filename );
 	if ( !f ) {
 		Com_Printf ("Couldn't write %s.\n", filename );
@@ -1385,6 +1428,10 @@ void Com_WriteConfiguration( void ) {
 	}
 
 	if ( !(cvar_modifiedFlags & CVAR_ARCHIVE ) ) {
+		return;
+	}
+
+	if ( com_noConfigWrite && com_noConfigWrite->integer ) {
 		return;
 	}
 	cvar_modifiedFlags &= ~CVAR_ARCHIVE;
@@ -1543,15 +1590,20 @@ void Com_Frame( void ) {
 		}
 
 		// Figure out how much time we have
-		if(!com_timedemo->integer)
+		if ( com_captureMinMsec >= 0 && !com_dedicated->integer )
+			minMsec = Q_max( com_captureMinMsec, 1 );	// capture clock: no fps caps, minimized or not
+		else if(!com_timedemo->integer)
 		{
 			if(com_dedicated->integer)
 				minMsec = SV_FrameMsec();
 			else
 			{
-				if(com_minimized->integer && com_maxfpsMinimized->integer > 0)
+				// a hidden window is never seen, so only com_maxfps applies
+				const qboolean hidden = (qboolean)( cl_hiddenWindow && cl_hiddenWindow->integer );
+
+				if(!hidden && com_minimized->integer && com_maxfpsMinimized->integer > 0)
 					minMsec = 1000 / com_maxfpsMinimized->integer;
-				else if(com_unfocused->integer && com_maxfpsUnfocused->integer > 0)
+				else if(!hidden && com_unfocused->integer && com_maxfpsUnfocused->integer > 0)
 					minMsec = 1000 / com_maxfpsUnfocused->integer;
 				else if(com_maxfps->integer > 0)
 					minMsec = 1000 / com_maxfps->integer;

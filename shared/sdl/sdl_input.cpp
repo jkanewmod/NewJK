@@ -430,7 +430,7 @@ IN_ActivateMouse
 */
 static void IN_ActivateMouse( void )
 {
-	if (!mouseAvailable || !SDL_WasInit( SDL_INIT_VIDEO ) )
+	if (!mouseAvailable || !SDL_WasInit( SDL_INIT_VIDEO ) || cl_hiddenWindow->integer )
 		return;
 
 	// fix mouse when unfocused/minimized

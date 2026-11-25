@@ -362,6 +362,21 @@ void vk_set_clearcolor( void ) {
 	Com_Memcpy( tr.clearColor, clr, sizeof( vec4_t ) );
 }
 
+// newjk: also printed on every capture target change, so console only
+void vk_print_render_config( void ) {
+	ri.Printf( PRINT_ALL, "[skipnotify]----- Render configuration -----\n" );
+	ri.Printf( PRINT_ALL, "[skipnotify]window:            %dx%d\n", gls.windowWidth, gls.windowHeight );
+	ri.Printf( PRINT_ALL, "[skipnotify]render target:     %dx%d (%.1f MP)%s\n", glConfig.vidWidth, glConfig.vidHeight,
+		( glConfig.vidWidth * (double)glConfig.vidHeight ) / 1000000.0,
+		( glConfig.vidWidth != gls.windowWidth || glConfig.vidHeight != gls.windowHeight ) ? "" : " (native)" );
+	ri.Printf( PRINT_ALL, "[skipnotify]resolve target:    %ux%u\n", gls.captureWidth, gls.captureHeight );
+	ri.Printf( PRINT_ALL, "[skipnotify]capture target:    %s\n", vk.captureTarget.active ? "on" : "off" );
+	ri.Printf( PRINT_ALL, "[skipnotify]r_renderScale:     %d\n", r_renderScale->integer );
+	ri.Printf( PRINT_ALL, "[skipnotify]r_ext_supersample: %d\n", r_ext_supersample->integer );
+	ri.Printf( PRINT_ALL, "[skipnotify]samples/pixel:     %dx MSAA\n", vkSamples );
+	ri.Printf( PRINT_ALL, "[skipnotify]--------------------------------\n\n" );
+}
+
 void vk_create_window( void ) {
 	//R_Set2DRatio();
 
@@ -443,6 +458,7 @@ void vk_initialize( void )
 {
 	VkPhysicalDeviceProperties props;
 	uint32_t i;
+	VkResult res;
 
 	vk_init_library();
 
@@ -596,20 +612,24 @@ void vk_initialize( void )
 	// sampled-image limits, which describe what can be read back rather than what can be rendered
 	// into; the two masks are permitted to differ, so the wrong one can report support for a
 	// configuration the hardware will refuse.
-	vkMaxSamples = MIN( props.limits.framebufferColorSampleCounts, props.limits.framebufferDepthSampleCounts );
+	// newjk: the counts both attachments support
+	vkMaxSamples = props.limits.framebufferColorSampleCounts & props.limits.framebufferDepthSampleCounts;
 
 	// vkMaxSamples is a bitmask of every supported count (e.g. 15 == 1|2|4|8), not a count.
 	// Derive the highest usable count once, so nothing downstream mistakes the mask for a number -
 	// that confusion is what printed the nonsensical "MSAA max: 15x".
+	// newjk: the highest set bit; the mask need not be contiguous (lavapipe reports 1|4)
 	vkMaxSampleCount = VK_SAMPLE_COUNT_1_BIT;
-	while ( ( vkMaxSampleCount << 1 ) & vkMaxSamples )
+	while ( ( vkMaxSampleCount << 1 ) <= vkMaxSamples )
 		vkMaxSampleCount <<= 1;
 
 	if ( vk.msaaActive ) {
 		vkSamples = MAX( log2pad( r_ext_multisample->integer, 1 ), VK_SAMPLE_COUNT_2_BIT );
-		// newjk: clamp against the real max count, not the bitmask
-		while ( vkSamples > vkMaxSampleCount )
+		// newjk: walk down to a count the device supports; none above 1x means no MSAA
+		while ( vkSamples > VK_SAMPLE_COUNT_1_BIT && ( vkSamples > vkMaxSampleCount || !( vkSamples & vkMaxSamples ) ) )
 			vkSamples >>= 1;
+		if ( vkSamples == VK_SAMPLE_COUNT_1_BIT )
+			vk.msaaActive = qfalse;
 	}
 	else {
 		vkSamples = VK_SAMPLE_COUNT_1_BIT;
@@ -629,6 +649,9 @@ void vk_initialize( void )
 	{
 		const uint32_t maxWidth  = MIN( props.limits.maxFramebufferWidth,  props.limits.maxImageDimension2D );
 		const uint32_t maxHeight = MIN( props.limits.maxFramebufferHeight, props.limits.maxImageDimension2D );
+
+		vk.maxTargetWidth = maxWidth;
+		vk.maxTargetHeight = maxHeight;
 
 		if ( (uint32_t)glConfig.vidWidth > maxWidth || (uint32_t)glConfig.vidHeight > maxHeight ) {
 			ri.Printf( PRINT_WARNING, "Render target %dx%d exceeds the device limit of %ux%u, clamping.\n",
@@ -652,16 +675,7 @@ void vk_initialize( void )
 	// State the configuration we actually ended up with. Previously only the window size was
 	// logged, so an internal target inflated by renderScale/supersample was invisible - working out
 	// what a session had really been rendering meant deriving it by hand from this source file.
-	ri.Printf( PRINT_ALL, "----- Render configuration -----\n" );
-	ri.Printf( PRINT_ALL, "window:            %dx%d\n", gls.windowWidth, gls.windowHeight );
-	ri.Printf( PRINT_ALL, "render target:     %dx%d (%.1f MP)%s\n", glConfig.vidWidth, glConfig.vidHeight,
-		( glConfig.vidWidth * (double)glConfig.vidHeight ) / 1000000.0,
-		( glConfig.vidWidth != gls.windowWidth || glConfig.vidHeight != gls.windowHeight ) ? "" : " (native)" );
-	ri.Printf( PRINT_ALL, "resolve target:    %ux%u\n", gls.captureWidth, gls.captureHeight );
-	ri.Printf( PRINT_ALL, "r_renderScale:     %d\n", r_renderScale->integer );
-	ri.Printf( PRINT_ALL, "r_ext_supersample: %d\n", r_ext_supersample->integer );
-	ri.Printf( PRINT_ALL, "samples/pixel:     %dx MSAA\n", vkSamples );
-	ri.Printf( PRINT_ALL, "--------------------------------\n\n" );
+	vk_print_render_config();
 
 	// Bloom
 	if ( vk.fboActive && r_bloom->integer )
@@ -681,6 +695,9 @@ void vk_initialize( void )
 	// Screenmap
 	// vkMaxSampleCount, not vkMaxSamples: MIN() against a bitmask is meaningless
 	vk.screenMapSamples = MIN(vkMaxSampleCount, VK_SAMPLE_COUNT_4_BIT);
+	// newjk: and one the device supports
+	while ( vk.screenMapSamples > VK_SAMPLE_COUNT_1_BIT && !( vk.screenMapSamples & vkMaxSamples ) )
+		vk.screenMapSamples >>= 1;
 	vk.screenMapWidth = (float)glConfig.vidWidth / 16.0;
 	vk.screenMapHeight = (float)glConfig.vidHeight / 16.0;	
 
@@ -722,7 +739,10 @@ void vk_initialize( void )
 	vk_create_swapchain( vk.physical_device, vk.device, vk.surface, vk.present_format, &vk.swapchain );
 	//vk_texture_mode( r_textureMode->string, qtrue );
 	vk_render_splash();
-	vk_create_attachments();
+	// newjk: nothing can draw without the render targets
+	res = vk_create_attachments();
+	if ( res != VK_SUCCESS && !vk.deviceLost )
+		ri.Error( ERR_FATAL, "Vulkan: could not create the render targets (%s)", vk_result_string( res ) );
 	vk_create_render_passes();
 	vk_create_framebuffers();
 
@@ -747,6 +767,7 @@ void vk_shutdown( void )
 	vk_destroy_pipelines( qtrue ); // reset counter
 	vk_destroy_render_passes();
 	vk_destroy_attachments();
+	vk_capture_free_ring( qtrue );	// newjk
 	vk_destroy_swapchain();
 
 	if (vk.pipelineCache != VK_NULL_HANDLE) {

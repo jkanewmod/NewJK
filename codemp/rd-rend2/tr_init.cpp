@@ -2378,6 +2378,10 @@ void RE_Shutdown( qboolean destroyWindow, qboolean restarting ) {
 
 	// shut down platform specific OpenGL stuff
 	if ( destroyWindow ) {
+		// the library is unloaded after this, and the cache and the ghoul2 info array with it
+		CModelCache->DeleteAll();
+		extern void Ghoul2InfoArray_Free( void );
+		Ghoul2InfoArray_Free();
 		ri.WIN_Shutdown();
 	}
 

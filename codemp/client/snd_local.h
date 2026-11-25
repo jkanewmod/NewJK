@@ -241,9 +241,41 @@ qboolean S_LoadSound( sfx_t *sfx );
 
 
 void S_PaintChannels(int endtime);
+void S_PaintChannelsCore( channel_t *table, int *paintedtime, int endtime, portable_samplepair_t *dest, qboolean muted, qboolean transferToDma );
 
 // picks a channel based on priorities, empty slots, number of channels
 channel_t *S_PickChannel(int entnum, int entchannel);
+channel_t *S_PickChannelIn( channel_t *table, int entnum, int entchannel );
+qboolean S_ScanChannelStartsIn( channel_t *table, int paintedtime );
+void S_SpatializeChannel( channel_t *ch );		// S_Respatialize's volumes for one non-loop channel
+
+// clears a channel without touching its MP3 sliding buffer
+static inline void Channel_Clear( channel_t *ch )
+{
+	memset( ch, 0, offsetof( channel_t, MP3SlidingDecodeBuffer ) );
+
+	byte *const p = (byte *)ch + offsetof( channel_t, MP3SlidingDecodeBuffer ) + sizeof( ch->MP3SlidingDecodeBuffer );
+
+	memset( p, 0, ( sizeof( *ch ) - offsetof( channel_t, MP3SlidingDecodeBuffer ) ) - sizeof( ch->MP3SlidingDecodeBuffer ) );
+}
+
+// the capture mixer (snd_capture.cpp): a mirror of the channel table painted on the capture clock
+extern channel_t	s_captureChannels[MAX_CHANNELS];
+extern int			s_capturePaintedtime;
+extern qboolean		s_captureActive;
+extern int			s_startFlags;		// SND_NOCAPTURE while a sound that stays out of the capture starts
+
+qboolean S_CaptureStart( void );
+void S_CaptureStop( void );
+void S_CaptureClear( void );
+int S_CaptureSeedFromSpeakers( void );
+int S_CaptureChannelCount( void );
+void S_CaptureOnChannelStart( const channel_t *speakerCh, int flags );
+void S_CaptureRespatialize( void );
+qboolean S_CaptureUsesSfx( const sfx_t *sfx );
+void S_CaptureStopSfx( const sfx_t *sfx );
+void S_CaptureMute( int entityNum, int entchannel );
+int S_CaptureMix( short *pcm, int maxFrames, int frameIndex, int fpsNum, int fpsDen, qboolean silent );
 
 // spatializes a channel
 void S_Spatialize(channel_t *ch);

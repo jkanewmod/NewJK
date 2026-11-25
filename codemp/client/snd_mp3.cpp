@@ -137,7 +137,7 @@ float MP3Stream_GetPlayingTimeInSeconds( LP_MP3STREAM lpMP3Stream )
 float MP3Stream_GetRemainingTimeInSeconds( LP_MP3STREAM lpMP3Stream )
 {
 	if (lpMP3Stream->iTimeQuery_UnpackedLength)	// fields initialised?
-		return (float)(((((double)(lpMP3Stream->iTimeQuery_UnpackedLength - (lpMP3Stream->iBytesDecodedTotal * (lpMP3Stream->iTimeQuery_SampleRate / dma.speed)))) / (double)lpMP3Stream->iTimeQuery_SampleRate) / (double)lpMP3Stream->iTimeQuery_Channels) / (double)lpMP3Stream->iTimeQuery_Width);
+		return (float)(((((double)(lpMP3Stream->iTimeQuery_UnpackedLength - (lpMP3Stream->iBytesDecodedTotal * ((double)lpMP3Stream->iTimeQuery_SampleRate / dma.speed)))) / (double)lpMP3Stream->iTimeQuery_SampleRate) / (double)lpMP3Stream->iTimeQuery_Channels) / (double)lpMP3Stream->iTimeQuery_Width);
 
 	return 0.0f;
 }
@@ -281,7 +281,7 @@ qboolean MP3Stream_InitFromFile( sfx_t* sfx, byte *pbSrcData, int iSrcDatalen, c
 		sfx->eSoundCompressionMethod = ct_MP3;
 		sfx->fVolRange = fMaxVol;
 		//sfx->width  = 2;
-		sfx->iSoundLengthInSamples = ((iMP3UnPackedSize / 2/*sfx->width*/) / (44100 / dma.speed)) / (bStereoDesired?2:1);
+		sfx->iSoundLengthInSamples = (int)((double)(iMP3UnPackedSize / 2/*sfx->width*/) * dma.speed / 44100.0) / (bStereoDesired?2:1);
 		//
 		// alloc mem for data and store it (raw MP3 in this case)...
 		//

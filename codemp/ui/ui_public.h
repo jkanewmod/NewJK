@@ -217,7 +217,22 @@ typedef enum uiImportLegacy_e {
 	UI_DEMOSCAN_POLL,			// ( demoScanResultHeader_t *out, int max ) -> how many finished
 	UI_DEMOSCAN_FETCH,			// ( int jobId, void *buf, int bufSize ) -> bytes copied; releases the job
 	UI_DEMOSCAN_CONTROL,		// ( int op, int jobId, int value )
+
+	UI_SETWINDOWTITLE = 5006,	// ( const char *title )
+	UI_CAPTURE_GETCAPS,			// ( captureCaps_t *out ) -> qboolean
+	UI_SETRENDERER,				// ( const char *name ) -> qboolean
+	UI_FLASHWINDOW,				// ( void )
+	UI_R_DRAWSTRETCHRAW,		// ( int x, int y, int w, int h, int cols, int rows, const byte *data, int client, qboolean dirty )
+	UI_GET_MONITORS,			// ( monitorInfo_t *out, int max ) -> how many monitors
 } uiImportLegacy_t;
+
+// one entry per monitor, in cl_monitor order (0 = primary)
+typedef struct monitorInfo_s {
+	char	name[64];
+	int		width, height;		// desktop resolution
+	int		refresh;			// Hz, 0 = unknown
+	int		current;			// the game window is on this monitor
+} monitorInfo_t;
 
 typedef enum uiExportLegacy_e {
 	UI_GETAPIVERSION = 0,
@@ -235,8 +250,11 @@ typedef enum uiExportLegacy_e {
 	// newmod start
 	UI_POST_CONNECT = 1000,
 	UI_CVAR_HELP,
-	UI_CMD_HELP
+	UI_CMD_HELP,
+	UI_QUIT_REQUEST
 } uiExportLegacy_t;
+
+#define UI_QUIT_VETO	0x51564554	// UI_QUIT_REQUEST's answer that keeps the game running
 
 typedef struct uiImport_s {
 	void			(*Print)								( const char *msg, ... );
